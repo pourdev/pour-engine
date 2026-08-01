@@ -28,8 +28,8 @@ export const GLOBAL_ARIA = new Set([
 export const ROLE_ARIA = {
   link: ['disabled', 'expanded', 'haspopup'],
   button: ['disabled', 'expanded', 'haspopup', 'pressed'],
-  checkbox: ['checked', 'disabled', 'errormessage', 'invalid', 'readonly', 'required'],
-  switch: ['checked', 'disabled', 'errormessage', 'invalid', 'readonly', 'required'],
+  checkbox: ['checked', 'disabled', 'errormessage', 'expanded', 'invalid', 'readonly', 'required'],
+  switch: ['checked', 'disabled', 'errormessage', 'expanded', 'invalid', 'readonly', 'required'],
   radio: ['checked', 'disabled', 'posinset', 'setsize'],
   option: ['selected', 'checked', 'disabled', 'posinset', 'setsize'],
   tab: ['selected', 'disabled', 'expanded', 'haspopup', 'posinset', 'setsize'],
