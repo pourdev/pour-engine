@@ -51,6 +51,18 @@ invoked before and after each rule — useful for live progress UI. Results
 include `violations`, `passes`, `incomplete`, `inapplicable`,
 `manualReview`, and per-rule timings.
 
+## Examples
+
+Minimal, console-only examples live in [`examples/`](examples/):
+
+- [`examples/browser.html`](examples/browser.html) — a page that audits
+  itself; the dependency-free ES modules load straight from a CDN, no
+  bundler.
+- [`examples/puppeteer.mjs`](examples/puppeteer.mjs) — audit any URL:
+  `node examples/puppeteer.mjs https://example.com`
+- [`examples/playwright.mjs`](examples/playwright.mjs) — the same with
+  Playwright.
+
 ## Philosophy
 
 - **Spec-first.** Every rule and helper was written from the W3C

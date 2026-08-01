@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>pour engine — browser example</title></head>
+<body>
+  <h1>pour engine in the browser</h1>
+  <p>Open the console: this page audits itself.</p>
+  <img src="missing-alt.png">          <!-- planted defect -->
+  <button></button>                    <!-- planted defect -->
+
+  <script type="module">
+    // The package is dependency-free ES modules, so it loads straight from
+    // a CDN — no bundler. (From npm instead: import from 'pour-engine'.)
+    import { run, name, version } from 'https://unpkg.com/pour-engine@1/engine/index.js';
+
+    const results = await run(document, { tags: ['wcag2a', 'wcag2aa'] });
+
+    console.log(`${name} ${version}`);
+    console.log(`${results.violations.length} rules failing, ${results.passes.length} passing, ${results.manualReview.length} criteria need a human`);
+    for (const violation of results.violations) {
+      for (const node of violation.nodes) {
+        console.log(`FAIL ${violation.id} (${violation.impact}) at ${node.target[0]}\n  ${node.failureSummary}`);
+      }
+    }
+  </script>
+</body>
+</html>
