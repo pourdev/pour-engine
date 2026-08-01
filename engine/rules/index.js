@@ -15,11 +15,14 @@ import imageAlt from './wcag/1.1.1-image-alt.js';
 import svgImgAlt from './wcag/1.1.1-svg-img-alt.js';
 import buttonName from './wcag/4.1.2-button-name.js';
 import linkName from './wcag/2.4.4-link-name.js';
-// Un-parked 2026-08-01 (was parked 2026-07-29): benchmarking against other
-// engines showed real 2.5.3 misses on mainstream sites, and the rule now
-// also covers labelable fields whose associated <label> text is missing
-// from an overriding aria-name.
-import labelInName from './wcag/2.5.3-label-in-name.js';
+// Re-parked by product decision (2026-08-01, David, after a one-day
+// un-parking): 2.5.3 is normative Level A but chiefly serves speech-input
+// users, and the findings volume isn't wanted in results for now. The SC is
+// classed 'manual' in wcag22.js so it lands in the human checklist instead
+// of being silently skipped. The rule itself (incl. the labelled-field
+// widening) stays maintained here — restore the import + registry entry to
+// bring it back.
+// import labelInName from './wcag/2.5.3-label-in-name.js';
 import formLabel from './wcag/1.3.1-form-label.js';
 import autocompleteValid from './wcag/1.3.5-autocomplete-valid.js';
 import orientationLock from './wcag/1.3.4-orientation.js';
@@ -110,7 +113,7 @@ export default [
   svgImgAlt,
   buttonName,
   linkName,
-  labelInName,
+  // labelInName, — re-parked 2026-08-01, see note at the import
   formLabel,
   autocompleteValid,
   orientationLock,

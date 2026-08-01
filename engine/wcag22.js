@@ -82,7 +82,7 @@ export default [
   sc('2.4.13', 'Focus Appearance', 'AAA', 'manual', '2.2'),
   sc('2.5.1', 'Pointer Gestures', 'A', 'manual', '2.1'),
   sc('2.5.2', 'Pointer Cancellation', 'A', 'manual', '2.1'),
-  sc('2.5.3', 'Label in Name', 'A', 'partial', '2.1'), // label-in-name un-parked 2026-08-01: catches aria-name/visible-label mismatches on controls and labelled fields; can't prove every naming path, so partial
+  sc('2.5.3', 'Label in Name', 'A', 'manual', '2.1'), // manual WHILE label-in-name is parked (re-parked 2026-08-01, see rules/index.js) — 'auto' with no active rule would make this SC vanish from results AND the manual checklist
   sc('2.5.4', 'Motion Actuation', 'A', 'manual', '2.1'),
   sc('2.5.5', 'Target Size (Enhanced)', 'AAA', 'partial', '2.1'),
   sc('2.5.6', 'Concurrent Input Mechanisms', 'AAA', 'manual', '2.1'),
