@@ -31,9 +31,6 @@ no tool can honestly claim conformance to an unfinished standard.
 npm install pour-engine
 ```
 
-> Not yet published to npm — `package.json` is marked `"private": true` while
-> this repository stays private. Remove that flag when open-sourcing.
-
 ```js
 import { run, name, version } from 'pour-engine';
 
