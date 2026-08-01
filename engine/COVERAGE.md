@@ -23,7 +23,7 @@ All 86 success criteria of WCAG 2.2, and how the native engine covers them.
 | 1.3.1 | [Info and Relationships](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html) | A | Partially automated | aria-required-children, aria-required-parent, definition-list, dlitem-parent, form-label, list-structure, listitem-parent, p-as-heading, table-headers |
 | 1.3.2 | [Meaningful Sequence](https://www.w3.org/WAI/WCAG22/Understanding/meaningful-sequence.html) | A | Manual review | — |
 | 1.3.3 | [Sensory Characteristics](https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html) | A | Manual review | — |
-| 1.3.4 | [Orientation](https://www.w3.org/WAI/WCAG22/Understanding/orientation.html) | AA | Manual review | — |
+| 1.3.4 | [Orientation](https://www.w3.org/WAI/WCAG22/Understanding/orientation.html) | AA | Partially automated | orientation-lock |
 | 1.3.5 | [Identify Input Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html) | AA | Partially automated | autocomplete-valid |
 | 1.3.6 | [Identify Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-purpose.html) | AAA | Manual review | — |
 | 1.4.1 | [Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) | A | Partially automated | link-in-text-block |
@@ -72,7 +72,7 @@ All 86 success criteria of WCAG 2.2, and how the native engine covers them.
 | 2.4.13 | [Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html) | AAA | Manual review | — |
 | 2.5.1 | [Pointer Gestures](https://www.w3.org/WAI/WCAG22/Understanding/pointer-gestures.html) | A | Manual review | — |
 | 2.5.2 | [Pointer Cancellation](https://www.w3.org/WAI/WCAG22/Understanding/pointer-cancellation.html) | A | Manual review | — |
-| 2.5.3 | [Label in Name](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html) | A | Manual review | — |
+| 2.5.3 | [Label in Name](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html) | A | Partially automated | label-in-name |
 | 2.5.4 | [Motion Actuation](https://www.w3.org/WAI/WCAG22/Understanding/motion-actuation.html) | A | Manual review | — |
 | 2.5.5 | [Target Size (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html) | AAA | Partially automated | target-size-enhanced |
 | 2.5.6 | [Concurrent Input Mechanisms](https://www.w3.org/WAI/WCAG22/Understanding/concurrent-input-mechanisms.html) | AAA | Manual review | — |
@@ -112,4 +112,4 @@ All 86 success criteria of WCAG 2.2, and how the native engine covers them.
 | 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-valid-refs, button-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 2 automated · 26 partially automated · 58 manual — with 71 rules.
+**Totals:** 2 automated · 28 partially automated · 56 manual — with 73 rules.

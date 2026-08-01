@@ -17,6 +17,12 @@ const BASES = [
   'input[type="button"]', 'input[type="submit"]', 'input[type="reset"]',
   '[role="button"]', '[role="link"]', '[role="menuitem"]', '[role="tab"]',
   '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
+  // Labelable form fields: their visible label is the associated <label>
+  // element, and an aria-name that omits its text breaks voice control just
+  // as surely as it does on a button (SC text scopes to any UI component
+  // whose label includes text, not only content-named controls).
+  'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"])',
+  'select', 'textarea',
 ];
 const COMPONENTS = BASES.flatMap((base) => [`${base}[aria-label]`, `${base}[aria-labelledby]`]).join(', ');
 
@@ -71,9 +77,23 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html',
   selector: COMPONENTS,
   evaluate(element, { accessibleName }) {
-    const rawVisible = element.tagName === 'INPUT'
-      ? (element.getAttribute('value') ?? '')
-      : visibleText(element.childNodes);
+    const tag = element.tagName.toLowerCase();
+    const buttonLike = tag === 'input' && ['button', 'submit', 'reset'].includes(element.type);
+    let rawVisible;
+    if (buttonLike) {
+      rawVisible = element.getAttribute('value') ?? '';
+    } else if (tag === 'input' || tag === 'select' || tag === 'textarea') {
+      // A field's visible label is its associated <label> (for= or wrapping,
+      // via the DOM `labels` list) — the part a voice-control user reads out.
+      // No visible label, nothing to match: label-less fields are
+      // form-label's finding, not a 2.5.3 mismatch.
+      rawVisible = [...(element.labels ?? [])]
+        .filter((label) => !visuallyErased(label))
+        .map((label) => visibleText(label.childNodes))
+        .join(' ');
+    } else {
+      rawVisible = visibleText(element.childNodes);
+    }
     const visible = rawVisible.replace(/\s+/g, ' ').trim();
     // Icon/symbol-only or nothing visible: there is no text label to match.
     if (!visible || !HAS_LETTERS.test(visible)) return { status: 'pass' };

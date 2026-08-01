@@ -37,7 +37,7 @@ export default [
   sc('1.3.1', 'Info and Relationships', 'A', 'partial'),
   sc('1.3.2', 'Meaningful Sequence', 'A', 'manual'),
   sc('1.3.3', 'Sensory Characteristics', 'A', 'manual'),
-  sc('1.3.4', 'Orientation', 'AA', 'manual', '2.1'),
+  sc('1.3.4', 'Orientation', 'AA', 'partial', '2.1'), // orientation-lock (2026-08-01) proves CSS root hides/rotations; script locks stay a human check
   sc('1.3.5', 'Identify Input Purpose', 'AA', 'partial', '2.1'), // partial: wrong tokens are provable; MISSING autocomplete on identity fields needs judgment
   sc('1.3.6', 'Identify Purpose', 'AAA', 'manual', '2.1'),
   sc('1.4.1', 'Use of Color', 'A', 'partial'), // link-in-text-block automates the link case
@@ -82,7 +82,7 @@ export default [
   sc('2.4.13', 'Focus Appearance', 'AAA', 'manual', '2.2'),
   sc('2.5.1', 'Pointer Gestures', 'A', 'manual', '2.1'),
   sc('2.5.2', 'Pointer Cancellation', 'A', 'manual', '2.1'),
-  sc('2.5.3', 'Label in Name', 'A', 'manual', '2.1'), // manual WHILE the label-in-name rule is parked (see rules/index.js) — 'auto' with no active rule made this SC vanish from both the results AND the manual checklist
+  sc('2.5.3', 'Label in Name', 'A', 'partial', '2.1'), // label-in-name un-parked 2026-08-01: catches aria-name/visible-label mismatches on controls and labelled fields; can't prove every naming path, so partial
   sc('2.5.4', 'Motion Actuation', 'A', 'manual', '2.1'),
   sc('2.5.5', 'Target Size (Enhanced)', 'AAA', 'partial', '2.1'),
   sc('2.5.6', 'Concurrent Input Mechanisms', 'AAA', 'manual', '2.1'),
