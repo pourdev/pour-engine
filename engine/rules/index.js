@@ -1,0 +1,179 @@
+// Rule registry. Add a rule: create the file in the right folder, import
+// it, add it here.
+//
+//   wcag/          — rules mapped to WCAG success criteria (spec-required;
+//                    tagged with wcag* criterion tags)
+//   best-practice/ — opt-in extras tagged 'best-practice': ARIA Authoring
+//                    Practices, WAI tutorial guidance, and our "overdoing
+//                    it" redundancy family. Never tagged as WCAG.
+
+// --- WCAG ---
+import documentTitle from './wcag/2.4.2-document-title.js';
+import htmlLang from './wcag/3.1.1-html-lang.js';
+import validLangParts from './wcag/3.1.2-valid-lang-parts.js';
+import imageAlt from './wcag/1.1.1-image-alt.js';
+import svgImgAlt from './wcag/1.1.1-svg-img-alt.js';
+import buttonName from './wcag/4.1.2-button-name.js';
+import linkName from './wcag/2.4.4-link-name.js';
+// Parked by product decision (2026-07-29): label-in-name excluded from runs
+// for now — restore the import and registry entry below to bring it back.
+// import labelInName from './wcag/2.5.3-label-in-name.js';
+import formLabel from './wcag/1.3.1-form-label.js';
+import autocompleteValid from './wcag/1.3.5-autocomplete-valid.js';
+import metaViewport from './wcag/1.4.4-meta-viewport.js';
+import colorContrast from './wcag/1.4.3-color-contrast.js';
+import frameTitle from './wcag/4.1.2-frame-title.js';
+import ariaValidRefs from './wcag/4.1.2-aria-valid-refs.js';
+import validRole from './wcag/4.1.2-valid-role.js';
+import ariaHiddenFocus from './wcag/4.1.2-aria-hidden-focus.js';
+import listStructure from './wcag/1.3.1-list-structure.js';
+import nestedInteractive from './wcag/4.1.2-nested-interactive.js';
+import bypassBlocks from './wcag/2.4.1-bypass-blocks.js';
+import targetSize from './wcag/2.5.8-target-size.js';
+import audioControl from './wcag/1.4.2-audio-control.js';
+import pauseStopHide from './wcag/2.2.2-pause-stop-hide.js';
+import mediaCaptions from './wcag/1.2.2-media-captions.js';
+import ariaAttrValid from './wcag/4.1.2-aria-attr-valid.js';
+import ariaAllowedAttr from './wcag/4.1.2-aria-allowed-attr.js';
+import ariaFieldName from './wcag/4.1.2-aria-field-name.js';
+// Demoted to best-practice: prohibited-but-inert ARIA on a generic element
+// fails no success criterion (see the note in the rule file).
+import ariaLabelMisuse from './best-practice/aria-label-misuse.js';
+import roleRequiredAria from './wcag/4.1.2-role-required-aria.js';
+import labelForValid from './wcag/4.1.2-label-for-valid.js';
+import listitemParent from './wcag/1.3.1-listitem-parent.js';
+import definitionList from './wcag/1.3.1-definition-list.js';
+import dlitemParent from './wcag/1.3.1-dlitem-parent.js';
+import areaAlt from './wcag/1.1.1-area-alt.js';
+import objectAlt from './wcag/1.1.1-object-alt.js';
+import inputImageAlt from './wcag/1.1.1-input-image-alt.js';
+// Demoted to best-practice: multiple labels are valid HTML that 3.3.2
+// does not prohibit (see the note in the rule file).
+import multipleLabels from './best-practice/multiple-labels.js';
+import metaRefresh from './wcag/2.2.1-meta-refresh.js';
+import linkInTextBlock from './wcag/1.4.1-link-in-text-block.js';
+import pAsHeading from './wcag/1.3.1-p-as-heading.js';
+import ariaRequiredChildren from './wcag/1.3.1-aria-required-children.js';
+import ariaRequiredParent from './wcag/1.3.1-aria-required-parent.js';
+import scrollableRegionFocusable from './wcag/2.1.1-scrollable-region-focusable.js';
+import tableHeaders from './wcag/1.3.1-table-headers.js';
+import contrastEnhanced from './wcag/1.4.6-contrast-enhanced.js';
+import targetSizeEnhanced from './wcag/2.5.5-target-size-enhanced.js';
+import dialogName from './wcag/4.1.2-dialog-name.js';
+import controlContrast from './wcag/1.4.3-control-contrast.js';
+import nonTextContrast from './wcag/1.4.11-non-text-contrast.js';
+import textSpacing from './wcag/1.4.12-text-spacing.js';
+import reflow from './wcag/1.4.10-reflow.js';
+import focusVisible from './wcag/2.4.7-focus-visible.js';
+import focusNotObscured from './wcag/2.4.11-focus-not-obscured.js';
+import authFieldObstruction from './wcag/3.3.8-auth-field-obstruction.js';
+
+// --- Best practice ---
+import headingOrder from './best-practice/heading-order.js';
+import emptyHeading from './best-practice/empty-heading.js';
+import positiveTabindex from './best-practice/positive-tabindex.js';
+import region from './best-practice/region.js';
+import landmarkOneMain from './best-practice/landmark-one-main.js';
+import pageHeadingOne from './best-practice/page-heading-one.js';
+import landmarkUnique from './best-practice/landmark-unique.js';
+import redundantRole from './best-practice/redundant-role.js';
+import redundantAria from './best-practice/redundant-aria.js';
+import redundantAriaLabel from './best-practice/redundant-aria-label.js';
+import redundantAltPhrase from './best-practice/redundant-alt-phrase.js';
+import redundantTabindex from './best-practice/redundant-tabindex.js';
+import redundantImageAlt from './best-practice/redundant-image-alt.js';
+import landmarkTopLevel from './best-practice/landmark-top-level.js';
+import accesskeys from './best-practice/accesskeys.js';
+import buttonType from './best-practice/button-type.js';
+import noAutofocus from './best-practice/no-autofocus.js';
+import newWindowLink from './best-practice/new-window-link.js';
+import fieldsetLegend from './best-practice/fieldset-legend.js';
+
+/** Sort key: primary WCAG SC (numeric), best-practice rules after all WCAG
+ *  rules, ties by rule id. Execution order doesn't change any verdict —
+ *  spec order just makes progress display and reports predictable. */
+function scKey(rule) {
+  const tag = rule.tags.find((t) => /^wcag\d{3,4}$/.test(t));
+  if (!tag) return [9, 9, 99];
+  const digits = tag.slice(4);
+  return [+digits[0], +digits[1], +digits.slice(2)];
+}
+
+export default [
+  documentTitle,
+  htmlLang,
+  validLangParts,
+  imageAlt,
+  svgImgAlt,
+  buttonName,
+  linkName,
+  // labelInName, — parked 2026-07-29, see note at the import
+  formLabel,
+  autocompleteValid,
+  metaViewport,
+  colorContrast,
+  frameTitle,
+  ariaValidRefs,
+  validRole,
+  ariaHiddenFocus,
+  listStructure,
+  nestedInteractive,
+  bypassBlocks,
+  targetSize,
+  audioControl,
+  pauseStopHide,
+  mediaCaptions,
+  ariaAttrValid,
+  ariaAllowedAttr,
+  ariaFieldName,
+  ariaLabelMisuse,
+  roleRequiredAria,
+  labelForValid,
+  listitemParent,
+  definitionList,
+  dlitemParent,
+  areaAlt,
+  objectAlt,
+  inputImageAlt,
+  multipleLabels,
+  metaRefresh,
+  linkInTextBlock,
+  pAsHeading,
+  ariaRequiredChildren,
+  ariaRequiredParent,
+  scrollableRegionFocusable,
+  tableHeaders,
+  dialogName,
+  controlContrast,
+  nonTextContrast,
+  textSpacing,
+  reflow,
+  focusVisible,
+  focusNotObscured,
+  authFieldObstruction,
+  contrastEnhanced,
+  targetSizeEnhanced,
+  headingOrder,
+  emptyHeading,
+  positiveTabindex,
+  region,
+  landmarkOneMain,
+  pageHeadingOne,
+  landmarkUnique,
+  redundantRole,
+  redundantAria,
+  redundantAriaLabel,
+  redundantAltPhrase,
+  redundantTabindex,
+  redundantImageAlt,
+  landmarkTopLevel,
+  accesskeys,
+  buttonType,
+  noAutofocus,
+  newWindowLink,
+  fieldsetLegend,
+].sort((a, b) => {
+  const ka = scKey(a);
+  const kb = scKey(b);
+  return (ka[0] - kb[0]) || (ka[1] - kb[1]) || (ka[2] - kb[2]) || a.id.localeCompare(b.id);
+});

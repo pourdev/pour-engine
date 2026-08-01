@@ -1,0 +1,35 @@
+{
+  "name": "pour-engine",
+  "version": "1.1.0",
+  "description": "Clean-room accessibility (WCAG) audit engine — runs entirely in the browser, no dependencies.",
+  "type": "module",
+  "main": "engine/index.js",
+  "exports": {
+    ".": "./engine/index.js"
+  },
+  "files": [
+    "engine",
+    "config",
+    "README.md",
+    "LICENSE"
+  ],
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pourdev/pour-engine.git"
+  },
+  "homepage": "https://pour.dev",
+  "author": "David Yarham",
+  "license": "MIT",
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "wcag",
+    "wcag22",
+    "audit",
+    "testing"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
