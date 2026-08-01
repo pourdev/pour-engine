@@ -1,8 +1,9 @@
 // Audit any URL with Playwright:  npm i pour-engine playwright
 //   node examples/playwright.mjs https://example.com
 // The engine is dependency-free ES modules, so the page can import it
-// directly from a CDN. (Sites with a strict CSP block that — bundle your
-// local node_modules copy with esbuild and addScriptTag it instead.)
+// directly from a CDN. (Sites with a strict CSP can block CDN imports —
+// serve the installed package's files from the page's own origin via
+// request interception instead; no bundler needed either way.)
 import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'https://example.com';
