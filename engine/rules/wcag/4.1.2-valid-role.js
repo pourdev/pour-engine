@@ -45,7 +45,12 @@ export default {
     // canonical harmless case. The failure worth reporting is an invalid
     // role MASKING real semantics or decorating an interactive element.
     const tag = element.tagName.toLowerCase();
-    const genericFallback = tag === 'div' || tag === 'span';
+    // What the element falls back to when the bogus role is ignored. div/span
+    // expose generic; <svg> exposes image (or graphics-document) in every
+    // current engine, which is what an author writing role="img"/"image" on it
+    // wanted anyway — so a typo there costs an AT user nothing. Elements with
+    // real semantics to mask (headings, lists, controls) stay out of the hatch.
+    const genericFallback = tag === 'div' || tag === 'span' || tag === 'svg';
     const focusable = element.tabIndex >= 0
       || element.matches('a[href], button, input, select, textarea, summary');
     const hasAriaProps = [...element.attributes].some(

@@ -1,11 +1,33 @@
 // WCAG SC 2.4.11 Focus Not Obscured (Minimum) (Level AA)
-// When a focusable element's box lies ENTIRELY under an opaque fixed or
-// sticky overlay at its resting position, focusing it shows the user
-// nothing — the criterion's core case (bottom cookie bars covering footer
-// links). Partial overlap passes 2.4.11 by definition ("not entirely
-// hidden"), so only full containment is judged, and only for elements
-// currently inside the viewport where the geometry is real.
+// An opaque fixed/sticky overlay covering a focusable element is the
+// criterion's core case (bottom cookie bars over footer links). Partial
+// overlap passes by definition ("not entirely hidden"), so only full
+// containment counts.
+//
+// This REVIEWS rather than fails, deliberately. What a snapshot can see is
+// "element X is under the panel right now", and that is a fact about the
+// current scroll position, not about the page: scrolling the same page a few
+// hundred pixels names entirely different elements, or none at all. The
+// criterion asks about the state focus ARRIVES in, which depends on tab order,
+// on whether the browser scrolls (it won't, for an element already inside the
+// viewport — merely covered), and on any author focus handler that moves the
+// page. None of that is knowable from geometry alone, so the honest output is
+// a pointer to the overlay and a request for a keyboard pass.
+//
+// Sites that apply the spec's own sufficient technique — scroll-padding for
+// the overlay's edge — are not flagged at all.
 const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+
+/** Does the scroll container reserve room for an overlay on this edge?
+ *  scroll-padding is what the Understanding doc cites as sufficient: it keeps
+ *  the browser's own scroll-into-view clear of a sticky panel. */
+function edgeReserved(doc, edge, needed) {
+  const scroller = doc.scrollingElement ?? doc.documentElement;
+  const style = getComputedStyle(scroller);
+  const value = edge === 'top' ? style.scrollPaddingTop : style.scrollPaddingBottom;
+  const px = value && value.endsWith('px') ? parseFloat(value) : 0;
+  return px >= needed - 1;
+}
 
 export default {
   id: 'focus-not-obscured',
@@ -70,10 +92,16 @@ export default {
         !layer.contains(element) && !element.contains(layer)
         && isObscuringOverlay(layer) && covered(rect, layer.getBoundingClientRect()));
       if (!blocker) return { status: 'pass' };
+      // Which viewport edge is the panel pinned to? That is the edge the
+      // browser's scroll-into-view has to clear.
+      const panel = blocker.getBoundingClientRect();
+      const edge = panel.top <= 1 && panel.bottom < win.innerHeight ? 'top'
+        : panel.bottom >= win.innerHeight - 1 ? 'bottom' : null;
+      if (edge && edgeReserved(doc, edge, panel.height)) return { status: 'pass' };
       return {
-        status: 'fail',
-        message: 'This focusable element sits entirely behind an opaque fixed/sticky overlay — when keyboard focus lands on it, nothing visible changes and the user is lost.',
-        fix: 'Add scroll-padding for the overlay height, or make the overlay dismissible/non-overlapping so focused elements stay at least partly visible.',
+        status: 'incomplete',
+        message: 'This element is currently underneath an opaque fixed panel. Whether that breaks 2.4.11 depends on where the page sits when focus reaches it — the browser does not scroll an element that is already in the viewport, merely covered, so focus can land invisibly. Tab through the page and check the focus indicator is never entirely hidden.',
+        fix: `Reserve room for the panel with scroll-padding-${edge ?? 'bottom'} on the scrolling container, or move focus clear of it when the panel is up.`,
       };
     });
   },

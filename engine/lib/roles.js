@@ -116,10 +116,34 @@ export function implicitRole(element) {
 }
 
 /** The element's effective role: explicit (first modelled token) or implicit. */
+/**
+ * Presentational Roles Conflict Resolution: a `presentation`/`none` role is
+ * DISCARDED when the element is focusable or carries a global ARIA property,
+ * and the implicit role is exposed instead. Reporting against the written role
+ * in those cases names a role the browser already threw away, and sends the
+ * author to fix the wrong thing.
+ *
+ * The two triggers below are what browsers actually implement, verified in
+ * Chromium's accessibility tree: `<h2 role="presentation">` exposes StaticText,
+ * but adding tabindex or aria-describedby exposes `heading`. Note a non-global
+ * property applicable to the implicit role (aria-level on a heading) does NOT
+ * trigger it, even though a strict reading of the spec suggests it should.
+ */
+function presentationDiscarded(element) {
+  if (element.tabIndex >= 0) return true;
+  if (element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]')) return true;
+  return [...GLOBAL_ARIA].some((name) => element.hasAttribute(`aria-${name}`));
+}
+
 export function effectiveRole(element) {
   const explicit = element.getAttribute('role')?.trim().split(/\s+/) ?? [];
   for (const token of explicit) {
-    if (ROLE_ARIA[token.toLowerCase()]) return token.toLowerCase();
+    const role = token.toLowerCase();
+    if (!ROLE_ARIA[role]) continue;
+    if ((role === 'presentation' || role === 'none') && presentationDiscarded(element)) {
+      return implicitRole(element);
+    }
+    return role;
   }
   return explicit.length ? null : implicitRole(element); // unknown explicit role: don't judge
 }
