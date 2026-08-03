@@ -38,6 +38,17 @@ function isHiddenFromPointer(element, rect) {
   return false;
 }
 
+/** Text this element contributes that is NOT inside a target — i.e. does it
+ *  read as prose beside the link, or is it just another control in a list? */
+function textOutsideTargets(element) {
+  for (const node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return true;
+    if (node.nodeType === Node.ELEMENT_NODE && !node.matches(TARGETS)
+      && textOutsideTargets(node)) return true;
+  }
+  return false;
+}
+
 function isInTextLine(element) {
   let node = element;
   // inline-block/inline-flex links inside a sentence are still "in a line
@@ -48,9 +59,17 @@ function isInTextLine(element) {
     for (const sibling of node.parentNode?.childNodes ?? []) {
       if (sibling === node) continue;
       if (sibling.nodeType === Node.TEXT_NODE && sibling.textContent.trim()) return true;
+      // What counts is text the sibling contributes OUTSIDE any target, not
+      // merely that the sibling isn't a target itself. Testing identity alone
+      // let a list of links exempt itself — each <li> is not an anchor, so a
+      // sibling <li><a>t</a></li> read as prose and granted the exception to
+      // the whole cluster, exactly the nav list this function's contract says
+      // to exclude (Wikipedia's "v · t · e" navbox slipped through there).
+      // Testing `querySelector(TARGETS)` instead over-corrects the other way:
+      // a prose wrapper containing a link is still prose.
       if (sibling.nodeType === Node.ELEMENT_NODE
         && !sibling.matches(TARGETS)
-        && sibling.textContent.trim()
+        && textOutsideTargets(sibling)
         && getComputedStyle(sibling).display.startsWith('inline')) return true;
     }
     node = node.parentElement;
