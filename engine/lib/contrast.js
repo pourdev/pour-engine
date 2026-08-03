@@ -52,6 +52,7 @@ let opacityCache = new WeakMap();
 let opacityAnimatorsCache = null;
 let mediaRectsCache = null;
 let panelRectsCache = null;
+let pseudoCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -60,6 +61,7 @@ export function resetAuditCaches() {
   opacityAnimatorsCache = null;
   mediaRectsCache = null;
   panelRectsCache = null;
+  pseudoCache = new WeakMap();
 }
 
 function canvasColor(doc) {
@@ -278,6 +280,186 @@ function textSamplePoint(element) {
  * missed. The ancestor walk (which callers still run) covers the common
  * cases of that shape.
  */
+const px = (value) => (typeof value === 'string' && value.endsWith('px') ? parseFloat(value) : NaN);
+
+/**
+ * The viewport rect a positioned pseudo-element paints into, or null when
+ * its geometry isn't statically resolvable.
+ *
+ * An absolutely positioned box resolves against its containing block's
+ * PADDING box, which is the nearest ancestor that establishes one — usually
+ * the host itself (authors nearly always set position: relative for exactly
+ * this), but not always, so the chain is walked rather than assumed.
+ * Non-px insets, rotations and scales return null, which makes callers
+ * abstain rather than guess a rect.
+ */
+function containingBlockFor(host) {
+  for (let node = host; node && node.nodeType === 1; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    // Transforms, filters and containment make an element a containing block
+    // for its absolutely positioned descendants just as positioning does.
+    if (style.position !== 'static' || style.transform !== 'none'
+      || style.filter !== 'none' || /paint|layout|strict|content/.test(style.contain ?? '')) return node;
+  }
+  return null; // the initial containing block — viewport-relative, not resolved here
+}
+
+function pseudoRect(host, style) {
+  const block = containingBlockFor(host);
+  if (!block) return null;
+  const hostStyle = getComputedStyle(block);
+  // A zero-extent containing block is still a valid ORIGIN — a collapsed
+  // positioned wrapper whose pseudo paints outside it is ordinary CSS. Only
+  // the opposing-inset derivation needs a real extent, and the degenerate
+  // boxes that produces are caught by the sanity check at the end.
+  const hostRect = block.getBoundingClientRect();
+
+  // Absolute positioning resolves against the containing block's PADDING box.
+  const borderLeft = px(hostStyle.borderLeftWidth) || 0;
+  const borderTop = px(hostStyle.borderTopWidth) || 0;
+  const cbLeft = hostRect.left + borderLeft;
+  const cbTop = hostRect.top + borderTop;
+  const cbWidth = hostRect.width - borderLeft - (px(hostStyle.borderRightWidth) || 0);
+  const cbHeight = hostRect.height - borderTop - (px(hostStyle.borderBottomWidth) || 0);
+
+  // getComputedStyle reports the CONTENT box, so padding and border have to
+  // be added back to get the extent that actually paints.
+  const extraX = (px(style.paddingLeft) || 0) + (px(style.paddingRight) || 0)
+    + (px(style.borderLeftWidth) || 0) + (px(style.borderRightWidth) || 0);
+  const extraY = (px(style.paddingTop) || 0) + (px(style.paddingBottom) || 0)
+    + (px(style.borderTopWidth) || 0) + (px(style.borderBottomWidth) || 0);
+
+  // An opposing inset pair pins both edges directly; otherwise one inset plus
+  // the used size does. `auto` on both sides leaves the box where static flow
+  // would have put it — not resolvable here.
+  const span = (startValue, endValue, sizeValue, origin, extent, extra) => {
+    const start = px(startValue);
+    const end = px(endValue);
+    const size = px(sizeValue);
+    if (Number.isFinite(start) && Number.isFinite(end)) return [origin + start, origin + extent - end];
+    if (Number.isFinite(start) && Number.isFinite(size)) return [origin + start, origin + start + size + extra];
+    if (Number.isFinite(end) && Number.isFinite(size)) {
+      const far = origin + extent - end;
+      return [far - size - extra, far];
+    }
+    return null;
+  };
+  const x = span(style.left, style.right, style.width, cbLeft, cbWidth, extraX);
+  const y = span(style.top, style.bottom, style.height, cbTop, cbHeight, extraY);
+  if (!x || !y) return null;
+
+  let [left, right] = x;
+  let [top, bottom] = y;
+  if (style.transform && style.transform !== 'none') {
+    // Only a pure translation keeps the box axis-aligned and the same size;
+    // rotation/scale/skew would need real geometry, so they stay unresolved.
+    const matrix = /^matrix\(([^)]+)\)$/.exec(style.transform);
+    if (!matrix) return null;
+    const [a, b, c, d, e, f] = matrix[1].split(',').map(Number);
+    if (a !== 1 || b !== 0 || c !== 0 || d !== 1) return null;
+    left += e; right += e; top += f; bottom += f;
+  }
+  // A degenerate box is not unknowable — it is a box that paints nothing
+  // (collapsed separator rules are usually exactly this: 1px wide, 0 tall).
+  // Callers skip it rather than abstaining on the whole element.
+  return { left, top, right, bottom, empty: !(right > left) || !(bottom > top) };
+}
+
+/**
+ * The backdrop a host's own ::before/::after paints over `point`.
+ *
+ * This is the one resolution path that can see pseudo-element paint at all:
+ * they carry no DOM node, so the ancestor walk (which reads element computed
+ * styles) and elementsFromPoint (which retargets them to their host) are both
+ * structurally blind to them. The sliding indicator pill behind a selected
+ * segmented-control option is the canonical case — the text really does sit
+ * on the pill, not on the track colour both other paths report.
+ *
+ * Returns { color } (opaque or translucent paint over the point),
+ * 'unresolved' when something paints there that flat colour math can't
+ * follow, or null when no pseudo of this host paints over the point.
+ */
+/** The paint a host's pseudo-elements contribute, resolved once per audit.
+ *  Two extra getComputedStyle calls per host would otherwise land on every
+ *  text element on the page; cached, the per-point test below is rect math. */
+function pseudoLayers(host) {
+  let layers = pseudoCache.get(host);
+  if (layers !== undefined) return layers;
+  layers = [];
+  // Paint order within a host: background, ::before, content, ::after — so a
+  // later entry covers an earlier one, and both sit above the host's own
+  // background but below its text.
+  for (const which of ['::before', '::after']) {
+    const style = getComputedStyle(host, which);
+    if (style.content === 'none' || style.display === 'none' || style.visibility === 'hidden') continue;
+    const paints = style.backgroundImage !== 'none' || (parseColor(style.backgroundColor)?.a ?? 0) > 0;
+    if (!paints) continue;
+    // In-flow pseudos (the overwhelming majority: bullets, icons, rules,
+    // badges) occupy their own box in the content flow beside the text
+    // rather than painting behind it. Only out-of-flow ones can be the
+    // backdrop, so everything else is simply not a layer here — treating
+    // them as unknowable would abstain on half the web.
+    if (style.position !== 'absolute' && style.position !== 'fixed') continue;
+    const rect = style.position === 'absolute' ? pseudoRect(host, style) : null;
+    // Paint we can't place can't be ruled in or out — say so rather than
+    // silently leaving it out of the stack.
+    if (!rect) { layers = 'unresolved'; break; }
+    if (rect.empty) continue; // placed, and covers nothing
+    let color = parseColor(style.backgroundColor);
+    const opacity = parseFloat(style.opacity);
+    if (color && Number.isFinite(opacity) && opacity < 1) color = { ...color, a: color.a * opacity };
+    // Gradient and image paint rides along as CSS so callers can sample it,
+    // the same way they sample an element's background-image — a gradient
+    // scrim over a card headline is a bracketable backdrop, not a mystery.
+    const imageCss = style.backgroundImage !== 'none' ? style.backgroundImage : null;
+    layers.push({ rect, color, imageCss });
+  }
+  pseudoCache.set(host, layers);
+  return layers;
+}
+
+/**
+ * The nearest pseudo-element paint covering this element's text, walking the
+ * flat tree upward: an out-of-flow ::before/::after paints above its host's
+ * background but below its host's descendants, so the first one that covers
+ * the text is the real backdrop.
+ *
+ * This is the only path that can see pseudo-element paint at all — they carry
+ * no DOM node, so the ancestor walk (element computed styles) and
+ * elementsFromPoint (which retargets them to their host) are both
+ * structurally blind. The sliding indicator behind a selected
+ * segmented-control option is the canonical case: the text really does sit on
+ * the pill, not on the track colour both other paths report.
+ *
+ * Pure geometry, deliberately: unlike the hit-test it needs no viewport, so
+ * it answers for text scrolled far off screen too.
+ *
+ * Returns { color } (opaque, or translucent paint to composite over the
+ * walked background), { image } for gradient/image paint the caller should
+ * sample, 'unresolved' when paint in the chain can't be placed, or null when
+ * no pseudo covers the text.
+ */
+export function pseudoBackdropForText(element) {
+  const point = textSamplePoint(element);
+  if (!point) return null;
+  let acc = null;
+  for (let node = element; node && node.nodeType === 1; node = node.parentElement ?? node.getRootNode()?.host) {
+    const layers = pseudoLayers(node);
+    // Paint we can't place can't be ruled in or out, in either direction.
+    if (layers === 'unresolved') return 'unresolved';
+    for (const { rect, color, imageCss } of layers) {
+      if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) continue;
+      // Gradient/image paint is bracketable by sampling, so hand it to the
+      // caller rather than giving up on the whole element.
+      if (imageCss) return { image: { css: imageCss, element: node } };
+      if (!color || color.a === 0) continue;
+      acc = acc ? composite(acc, color) : color;
+      if (acc.a >= 1) return { color: acc };
+    }
+  }
+  return acc ? { color: acc } : null;
+}
+
 /** A layer qualifies as a scrim over `element` when it is translucent paint
  *  (or a backdrop-filter) covering most of the viewport and the whole
  *  element — the shape of a modal/loading veil, not a badge or header. */

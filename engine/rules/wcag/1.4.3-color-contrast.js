@@ -4,6 +4,7 @@ import {
   backgroundImageSource, backgroundImagePaintRect, imageLuminanceRange, gradientLuminanceRange,
   rangeVerdict, isLargeText, cumulativeOpacity, opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
+  pseudoBackdropForText,
 } from '../../lib/contrast.js';
 
 /** Display a ratio truncated (never rounded up): 4.495 must read "4.49",
@@ -302,7 +303,28 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         };
       }
     }
-    if (painted?.image) {
+    // Pseudo-element paint sits above everything the hit-test and the walk
+    // can report, and neither can see it — so it is resolved before them and
+    // wins. Geometry-only, so it settles offscreen text too, where the
+    // hit-test is blind and the walk would otherwise assert the track colour
+    // of a control the text visibly is not sitting on.
+    const pseudoBack = pseudoBackdropForText(element);
+    if (pseudoBack === 'unresolved') {
+      return {
+        status: 'incomplete',
+        message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
+      };
+    }
+    // Gradient/image paint from a pseudo-element: bracket it by sampling,
+    // exactly as an element's own background-image is bracketed.
+    if (pseudoBack?.image) {
+      const sampled = await sampledVerdict(pseudoBack.image, foreground, required, doc);
+      return sampled ?? {
+        status: 'incomplete',
+        message: 'A pseudo-element paints an image or gradient behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
+      };
+    }
+    if (painted?.image && !pseudoBack) {
       const sampled = await sampledVerdict(painted.image, foreground, required, doc);
       return sampled ?? {
         status: 'incomplete',
@@ -329,6 +351,15 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           message: 'An image or overlapping element is painted behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
         };
       }
+    }
+    if (pseudoBack?.color) {
+      // Opaque pill: it IS the backdrop. Translucent paint composites over
+      // whatever the walk resolved beneath it. Either way the geometry is
+      // computed, not guessed, so this counts as verified paint truth.
+      background = pseudoBack.color.a >= 1 || !background
+        ? pseudoBack.color
+        : composite(pseudoBack.color, background);
+      backgroundVerified = true;
     }
     if (!background) {
       return { status: 'incomplete', message: 'The background could not be determined — check contrast by eye.' };

@@ -1,5 +1,5 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
-// ARIA 1.2 roles (concrete, usable roles — abstract roles are invalid in markup).
+// Concrete, usable roles — abstract roles are invalid in markup.
 const VALID_ROLES = new Set([
   'alert', 'alertdialog', 'application', 'article', 'banner', 'blockquote', 'button',
   'caption', 'cell', 'checkbox', 'code', 'columnheader', 'combobox', 'complementary',
@@ -12,6 +12,14 @@ const VALID_ROLES = new Set([
   'slider', 'spinbutton', 'status', 'strong', 'subscript', 'superscript', 'switch', 'tab',
   'table', 'tablist', 'tabpanel', 'term', 'textbox', 'time', 'timer', 'toolbar', 'tooltip',
   'tree', 'treegrid', 'treeitem',
+  // ARIA 1.3 additions. `image` is the spec's own primary spelling with
+  // `img` kept as the synonym — img is the one ARIA role that isn't a whole
+  // word, which is why authors reach for `image`, and Safari (2021),
+  // Firefox (116) and Chromium all map it. Flagging it was a false positive
+  // on real sites; verified against Chromium's accessibility tree, where
+  // role="image" resolves to image and only a genuinely bogus role falls
+  // back to generic.
+  'image', 'comment', 'mark', 'suggestion',
 ]);
 
 export default {
