@@ -125,9 +125,38 @@ function verdictFromRange(range, foreground, required, what) {
   };
 }
 
+/**
+ * Is there translucent paint over the background image that the ancestor walk
+ * could NOT have collected? Two shapes dominate real hero banners: a
+ * ::before/::after scrim, and an absolutely-positioned sibling laid over the
+ * photo. Neither is on the text's ancestor chain, so backgroundImageSource
+ * never sees them, and judging the raw image pixels would describe a page the
+ * user is not looking at. Ancestor scrims are excluded here because they are
+ * already composited into the sampled pixels.
+ */
+function unaccountedScrim(element, imageCarrier) {
+  const pseudo = pseudoBackdropForText(element);
+  if (pseudo && pseudo !== 'unresolved' && pseudo.color?.a > 0) return true;
+  const doc = element.ownerDocument;
+  if (typeof doc.elementsFromPoint !== 'function') return false;
+  const rect = element.getBoundingClientRect();
+  const win = doc.defaultView;
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) return false;
+  const stack = doc.elementsFromPoint(x, y);
+  const start = stack.indexOf(element);
+  if (start === -1) return false;
+  return stack.slice(start + 1).some((layer) => {
+    if (layer.contains(element) || layer === imageCarrier) return false; // ancestor chain: already composited
+    const color = parseColor(getComputedStyle(layer).backgroundColor);
+    return color && color.a > 0;
+  });
+}
+
 // Bracket the verdict by sampling what's actually painted: image pixels
 // (same-origin/CORS only) or gradient colour stops.
-async function sampledVerdict(source, foreground, required, doc) {
+async function sampledVerdict(source, foreground, required, doc, overlays = []) {
   if (!source) return null;
   // Translucent text takes its presented colour from the very pixels
   // beneath it — a luminance range of the backdrop cannot bracket the
@@ -140,7 +169,7 @@ async function sampledVerdict(source, foreground, required, doc) {
     };
   }
   if (source.tagName === 'IMG') {
-    return verdictFromRange(await imageLuminanceRange(source.currentSrc || source.src), foreground, required, 'image');
+    return verdictFromRange(await imageLuminanceRange(source.currentSrc || source.src, overlays), foreground, required, 'image');
   }
   const css = source.css ?? getComputedStyle(source).backgroundImage;
   if (!css || css === 'none') return null;
@@ -149,10 +178,10 @@ async function sampledVerdict(source, foreground, required, doc) {
   if (url) {
     let absolute;
     try { absolute = new URL(url, doc.baseURI).href; } catch { return null; }
-    return verdictFromRange(await imageLuminanceRange(absolute), foreground, required, 'image');
+    return verdictFromRange(await imageLuminanceRange(absolute, overlays), foreground, required, 'image');
   }
   if (css.includes('gradient(')) {
-    return verdictFromRange(gradientLuminanceRange(css), foreground, required, 'gradient');
+    return verdictFromRange(gradientLuminanceRange(css, overlays), foreground, required, 'gradient');
   }
   return null;
 }
@@ -248,7 +277,19 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     if (imageSource) {
       const { relation, intrinsic, dimensionless } = await imageVsText(imageSource, element, doc);
       if (relation !== 'clear') {
-        const sampled = await sampledVerdict(imageSource, foreground, required, doc);
+        // imageSource.overlays are the translucent layers painted between the
+        // image and this text (hero scrims, tint panels). Judging the raw
+        // image pixels would describe a page the user never sees.
+        let sampled = await sampledVerdict(imageSource, foreground, required, doc, imageSource.overlays);
+        // Scrims the ancestor walk cannot reach (pseudo-elements, positioned
+        // siblings) leave the sampled range describing the wrong pixels, so
+        // neither verdict is safe to assert from it.
+        if (sampled && unaccountedScrim(element, imageSource.element)) {
+          sampled = {
+            status: 'incomplete',
+            message: 'This text sits over a background image with a translucent overlay painted on top of it (a pseudo-element or positioned scrim), so the colour behind the glyphs is the blend of the two — check the contrast by eye.',
+          };
+        }
         // Icon-scale images: bullets, arrows, and decorations painted
         // beside or beneath a corner of the text — their pixels may flag
         // for eyes, never assert a failure. Icon-scale means: no reliable

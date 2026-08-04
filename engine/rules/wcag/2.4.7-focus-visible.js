@@ -5,19 +5,43 @@
 // rule entirely — so this flags for review, it never asserts a fail.
 function focusSuppressors(doc) {
   const suspects = [];
+  const replacementIn = (style) => style.getPropertyValue('box-shadow') || style.getPropertyValue('border')
+    || style.getPropertyValue('border-color') || style.getPropertyValue('background')
+    || style.getPropertyValue('background-color') || style.getPropertyValue('text-decoration');
+
+  const inspect = (rule) => {
+    if (!rule.selectorText || !/:focus/.test(rule.selectorText)) return;
+    // `:focus:not(:focus-visible) { outline: none }` is the PUBLISHED pattern
+    // for showing the ring to keyboard users only: it strips the indicator
+    // precisely in the state where the browser has decided not to show focus,
+    // and leaves the keyboard state alone. Flagging it fails the pattern the
+    // guidance recommends, and it ships in most modern CSS resets.
+    if (/:not\(\s*:focus-visible\s*\)/.test(rule.selectorText)) return;
+    const style = rule.style;
+    if (!style) return;
+    const outline = `${style.getPropertyValue('outline')} ${style.getPropertyValue('outline-style')} ${style.getPropertyValue('outline-width')}`;
+    const removesOutline = /\bnone\b/.test(outline) || /(^|\s)0(px)?(\s|$)/.test(outline);
+    if (!removesOutline) return;
+    // A replacement indicator may not sit in the rule's own style block: any
+    // declaration written AFTER a nested rule is parsed into a separate
+    // CSSNestedDeclarations child (a style-bearing rule with no selector), so
+    // reading only rule.style would report a suppressor that is in fact
+    // replaced two lines further down.
+    const nested = [...(rule.cssRules ?? [])]
+      .filter((child) => child.style && !child.selectorText);
+    if (replacementIn(style) || nested.some((child) => replacementIn(child.style))) return;
+    suspects.push(rule.selectorText);
+  };
+  // Inspect each rule, THEN descend into any children. Testing `rule.cssRules`
+  // first and skipping used to walk straight past every plain style rule:
+  // since CSS Nesting shipped, a CSSStyleRule carries its own cssRules list,
+  // and an empty CSSRuleList is still a truthy object, so the check meant for
+  // @media/@supports swallowed the whole sheet and the rule could never fire.
+  // A style rule can both declare and nest, so both halves have to run.
   const scan = (rules) => {
     for (const rule of rules) {
-      if (rule.cssRules) { scan(rule.cssRules); continue; } // @media/@supports
-      if (!rule.selectorText || !/:focus/.test(rule.selectorText)) continue;
-      const style = rule.style;
-      if (!style) continue;
-      const outline = `${style.getPropertyValue('outline')} ${style.getPropertyValue('outline-style')} ${style.getPropertyValue('outline-width')}`;
-      const removesOutline = /\bnone\b/.test(outline) || /(^|\s)0(px)?(\s|$)/.test(outline);
-      if (!removesOutline) continue;
-      const replaced = style.getPropertyValue('box-shadow') || style.getPropertyValue('border')
-        || style.getPropertyValue('border-color') || style.getPropertyValue('background')
-        || style.getPropertyValue('background-color') || style.getPropertyValue('text-decoration');
-      if (!replaced) suspects.push(rule.selectorText);
+      inspect(rule);
+      if (rule.cssRules?.length) scan(rule.cssRules); // @media/@supports/nesting
     }
   };
   for (const sheet of doc.styleSheets) {

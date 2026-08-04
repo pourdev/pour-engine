@@ -1,5 +1,8 @@
 // WCAG SC 3.1.2 Language of Parts (Level AA)
-const LANG_PATTERN = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/;
+// Same shape as 3.1.1-html-lang.js, and must stay in step with it: subtags
+// may be a single character, because BCP 47 extension and private-use
+// singletons ("-u-", "-t-", "-x-") are exactly one.
+const LANG_PATTERN = /^([a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*|[xXiI](-[a-zA-Z0-9]{1,8})+)$/;
 
 export default {
   id: 'valid-lang-parts',

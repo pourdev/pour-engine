@@ -7,12 +7,18 @@ export default {
   tags: ['wcag2a', 'wcag141'],
   help: 'Links inside text must be distinguishable by more than colour',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html',
-  // Only running prose counts as a "text block" — lists of links (navs,
-  // blogrolls) are identified by their structure, not by colour.
-  selector: 'p a[href], dd a[href], blockquote a[href], td a[href]',
+  // Only running prose counts as a "text block". <li> is included because
+  // footers and credits routinely write sentences as list items ("built by
+  // the <a>team</a> with help from <a>contributors</a>"), and those links are
+  // embedded in prose exactly as 1.4.1 means it. Pure link lists (navs,
+  // blogrolls) are still excluded, but by the ownText guard below rather than
+  // by tag: in <li><a>Home</a></li> the item has no text of its own.
+  // <div> was measured too and added nothing on any test site, so it stays
+  // out rather than widening the blast radius for no gain.
+  selector: 'p a[href], dd a[href], blockquote a[href], td a[href], li a[href]',
   visibility: 'visual', // colour distinction is a purely visual concern
   evaluate(element, { ownText }) {
-    const parent = element.closest('p, dd, blockquote, td');
+    const parent = element.closest('p, dd, blockquote, td, li');
     if (!element.textContent.trim() || !parent) return { status: 'pass' };
     // Needs real surrounding text to blend into (1.4.1 is about links
     // embedded in prose, not a link that IS the content).

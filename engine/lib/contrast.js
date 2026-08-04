@@ -762,14 +762,32 @@ export function mediaRects(doc) {
  * Returns { css, element } or null.
  */
 export function backgroundImageSource(element) {
+  // Translucent background colours passed on the way up are painted BETWEEN
+  // the image and the text: the scrim over a hero photo is the everyday case.
+  // They are collected nearest-text first, so folding them back over a sampled
+  // image pixel means walking this list in reverse (see applyOverlays).
+  const overlays = [];
   for (let current = element; current; current = current.parentElement) {
     const style = getComputedStyle(current);
-    if (style.backgroundImage !== 'none') return { css: style.backgroundImage, element: current };
+    // An element's own background-image paints ABOVE its own background
+    // colour, so the element carrying the image contributes no overlay.
+    if (style.backgroundImage !== 'none') return { css: style.backgroundImage, element: current, overlays };
     const color = parseColor(style.backgroundColor);
     if (color && color.a >= 1) return null;
+    if (color && color.a > 0) overlays.push(color);
   }
   return null;
 }
+
+/** Paint `overlays` (nearest-text first) back over a base colour. */
+export function applyOverlays(base, overlays) {
+  let result = base;
+  for (let i = overlays.length - 1; i >= 0; i--) result = composite(overlays[i], result);
+  return result;
+}
+
+const overlayKey = (overlays) =>
+  overlays.map((c) => `${c.r},${c.g},${c.b},${c.a}`).join(';');
 
 /**
  * Luminance range (min/max) of an image's pixels, downscaled for speed.
@@ -777,8 +795,9 @@ export function backgroundImageSource(element) {
  * (canvas tainting), load failure, or timeout. Cached per URL.
  */
 const imageRangeCache = new Map();
-export function imageLuminanceRange(url) {
-  if (imageRangeCache.has(url)) return imageRangeCache.get(url);
+export function imageLuminanceRange(url, overlays = []) {
+  const cacheKey = overlays.length ? `${url}|${overlayKey(overlays)}` : url;
+  if (imageRangeCache.has(cacheKey)) return imageRangeCache.get(cacheKey);
   const promise = new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -797,7 +816,11 @@ export function imageLuminanceRange(url) {
         let max = 0;
         for (let i = 0; i < data.length; i += 4) {
           if (data[i + 3] < 128) continue; // mostly-transparent pixels reveal what's beneath — unknowable
-          const l = luminance({ r: data[i], g: data[i + 1], b: data[i + 2] });
+          // Composite each pixel through anything painted between the image
+          // and the text before measuring: a photo under a 75% black scrim is
+          // seen as the blend, never as the photo.
+          const pixel = { r: data[i], g: data[i + 1], b: data[i + 2], a: 1 };
+          const l = luminance(overlays.length ? applyOverlays(pixel, overlays) : pixel);
           if (l < min) min = l;
           if (l > max) max = l;
         }
@@ -809,7 +832,7 @@ export function imageLuminanceRange(url) {
     img.onerror = () => { clearTimeout(timer); resolve(null); };
     img.src = url;
   });
-  imageRangeCache.set(url, promise);
+  imageRangeCache.set(cacheKey, promise);
   return promise;
 }
 
@@ -857,10 +880,10 @@ export function backgroundImagePaintRect(element, intrinsic) {
  * Luminance range of a CSS gradient, from its colour stops. Interpolated
  * colours stay close enough to their stops' luminances to bracket.
  */
-export function gradientLuminanceRange(backgroundImageCss) {
+export function gradientLuminanceRange(backgroundImageCss, overlays = []) {
   const stops = (backgroundImageCss.match(/rgba?\([^)]+\)/g) ?? []).map(parseColor).filter(Boolean);
   if (!stops.length || stops.some((c) => c.a < 1)) return null; // translucent stops reveal what's beneath
-  const lums = stops.map(luminance);
+  const lums = stops.map((stop) => luminance(overlays.length ? applyOverlays(stop, overlays) : stop));
   return { min: Math.min(...lums), max: Math.max(...lums) };
 }
 
