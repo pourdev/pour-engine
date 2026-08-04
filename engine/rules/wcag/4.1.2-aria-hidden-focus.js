@@ -1,4 +1,6 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
+import { cumulativeOpacity } from '../../lib/contrast.js';
+
 const FOCUSABLE = 'a[href], area[href], button, input, select, textarea, summary, iframe, '
   + 'audio[controls], video[controls], [contenteditable]:not([contenteditable="false"]), [tabindex]';
 
@@ -17,12 +19,15 @@ export default {
     // focus lands there, so the harm this rule describes (sighted keyboard
     // users interacting with SR-invisible content) doesn't materialise —
     // an invisible tab stop is a focus-order/visible-focus concern instead.
+    // Transparency is measured up the flat tree: opacity is not an inherited
+    // property, so a faded WRAPPER (the standard off-canvas drawer) leaves
+    // every control inside it computing opacity: 1 while none of them paint.
     const focusable = [element, ...element.querySelectorAll(FOCUSABLE)].filter(
       (el) => el.matches?.(FOCUSABLE) && el.getAttribute('tabindex') !== '-1' && !el.disabled
         // `inert` removes focusability outright — aria-hidden + inert is
         // the CORRECT modern pattern for off-canvas content, not a defect.
         && !el.closest('[inert]')
-        && isRendered(el) && getComputedStyle(el).opacity !== '0',
+        && isRendered(el) && cumulativeOpacity(el) > 0,
     );
     if (!focusable.length) return { status: 'pass' };
     // While a modal dialog is open, the page behind it is DELIBERATELY

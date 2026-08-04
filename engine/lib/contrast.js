@@ -140,12 +140,30 @@ export function backgroundColorSource(element) {
   for (let node = element; node && node.nodeType === 1;
     node = node.parentElement ?? node.getRootNode()?.host) {
     const style = getComputedStyle(node);
-    if (style.backgroundImage !== 'none') return null;
+    if (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage)) return null;
     const color = parseColor(style.backgroundColor);
     if (!color || color.a === 0) continue; // transparent: keep walking, as the resolver does
     return color.a >= 1 ? style.backgroundColor : null; // translucent: composited, no single source
   }
   return null;
+}
+
+/**
+ * Absolute URLs of images that sampling found to have no opaque pixels.
+ * Populated by imageLuminanceRange (async) and read by the background walk
+ * (sync): by the time a rule falls back to the walk, the image over that
+ * text has already been sampled, so the fact is in hand. Lives as long as
+ * the sample cache does — it describes the image, not the page.
+ */
+const transparentImages = new Set();
+
+/** True when every layer of this computed background-image is a url() known
+ *  to paint nothing — so the layer cannot change what is behind it. Any
+ *  gradient, or any unsampled image, makes that unknowable. */
+function paintsNothing(backgroundImage) {
+  if (backgroundImage.includes('gradient(')) return false;
+  const urls = [...backgroundImage.matchAll(/url\(["']?(.*?)["']?\)/g)].map((m) => m[1]);
+  return urls.length > 0 && urls.every((url) => transparentImages.has(url));
 }
 
 function canvasColor(doc) {
@@ -169,7 +187,7 @@ function resolveBackground(element, doc) {
   }
   let result;
   const style = getComputedStyle(element);
-  if (style.backgroundImage !== 'none') {
+  if (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage)) {
     result = null;
   } else {
     const color = parseColor(style.backgroundColor);
@@ -792,7 +810,10 @@ const overlayKey = (overlays) =>
 /**
  * Luminance range (min/max) of an image's pixels, downscaled for speed.
  * null when the image can't be read: cross-origin without CORS headers
- * (canvas tainting), load failure, or timeout. Cached per URL.
+ * (canvas tainting), load failure, or timeout. `{ transparent: true }` when
+ * the image reads fine but has no opaque pixels at all — it paints nothing,
+ * which is a very different fact from "unknown" and must not be reported as
+ * one. Cached per URL.
  */
 const imageRangeCache = new Map();
 export function imageLuminanceRange(url, overlays = []) {
@@ -814,8 +835,10 @@ export function imageLuminanceRange(url, overlays = []) {
         const data = ctx.getImageData(0, 0, size, size).data;
         let min = 1;
         let max = 0;
+        let opaquePixels = 0;
         for (let i = 0; i < data.length; i += 4) {
           if (data[i + 3] < 128) continue; // mostly-transparent pixels reveal what's beneath — unknowable
+          opaquePixels += 1;
           // Composite each pixel through anything painted between the image
           // and the text before measuring: a photo under a 75% black scrim is
           // seen as the blend, never as the photo.
@@ -823,6 +846,21 @@ export function imageLuminanceRange(url, overlays = []) {
           const l = luminance(overlays.length ? applyOverlays(pixel, overlays) : pixel);
           if (l < min) min = l;
           if (l > max) max = l;
+        }
+        // Not one opaque pixel: a spacer, a cleared sprite, or a decorative
+        // layer left in place with nothing in it. It covers the background
+        // without changing a single one of its pixels.
+        if (!opaquePixels) {
+          transparentImages.add(url);
+          // Any background the walk already gave up on ("there's an image in
+          // the chain") may have been given up on because of THIS image.
+          // Those answers are now wrong, and which ones is not worth
+          // tracking: a page has a handful of transparent images at most, so
+          // the walk simply re-runs. Without this the verdict would depend
+          // on which rule happened to reach the element first.
+          backgroundCache = new WeakMap();
+          resolve({ transparent: true, width: img.naturalWidth, height: img.naturalHeight });
+          return;
         }
         resolve(min <= max ? { min, max, width: img.naturalWidth, height: img.naturalHeight } : null);
       } catch {

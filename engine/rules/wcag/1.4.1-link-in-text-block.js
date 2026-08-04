@@ -54,9 +54,17 @@ export default {
     // its own line (<br>-separated address blocks, one-link-per-line
     // footers) has no surrounding words to blend into — nothing is
     // conveyed by colour.
-    const rect = element.getBoundingClientRect();
-    if (rect.height) {
-      const mid = rect.top + rect.height / 2;
+    //
+    // Measured per LINE FRAGMENT, never on the bounding box. A link that
+    // wraps has one fragment per line, and the middle of the box that
+    // encloses them falls in the leading BETWEEN the lines, where no text
+    // can ever be — so a box-midpoint test exempts every wrapped link in
+    // prose, which is the opposite of what the check is for. F73 scopes
+    // this criterion by whether a link sits within text, and says nothing
+    // about lines: one fragment sharing its line with words is enough.
+    const fragments = [...element.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+    if (fragments.length) {
+      const mids = fragments.map((r) => r.top + r.height / 2);
       const walker = element.ownerDocument.createTreeWalker(parent, NodeFilter.SHOW_TEXT);
       const range = element.ownerDocument.createRange();
       let sharesLine = false;
@@ -64,7 +72,7 @@ export default {
         if (!node.textContent.trim() || element.contains(node)) continue;
         range.selectNodeContents(node);
         for (const r of range.getClientRects()) {
-          if (r.top <= mid && r.bottom >= mid && r.width > 0) { sharesLine = true; break; }
+          if (r.width > 0 && mids.some((mid) => r.top <= mid && r.bottom >= mid)) { sharesLine = true; break; }
         }
       }
       if (!sharesLine) return { status: 'pass' };

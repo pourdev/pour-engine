@@ -51,6 +51,10 @@ export default {
   help: 'Content must work in both portrait and landscape',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/orientation.html',
   selector: 'html',
+  // The evidence is in the stylesheet, not in the root's own rendering — and
+  // the lock hides the root exactly when it is in force, so a visibility
+  // filter here would silence the rule in the only state that matters.
+  visibleOnly: false,
   evaluate(element) {
     const findings = [];
     for (const sheet of element.ownerDocument.styleSheets) {

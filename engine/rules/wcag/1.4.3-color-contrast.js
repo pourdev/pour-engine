@@ -154,10 +154,39 @@ function unaccountedScrim(element, imageCarrier) {
   });
 }
 
+/** An image layer with no opaque pixels: it covers the background without
+ *  changing it, so the callers step over it rather than reporting on it. */
+const PAINTS_NOTHING = Symbol('fully transparent image layer');
+
 // Bracket the verdict by sampling what's actually painted: image pixels
-// (same-origin/CORS only) or gradient colour stops.
+// (same-origin/CORS only) or gradient colour stops. Returns an outcome,
+// PAINTS_NOTHING, or null when nothing here can be sampled at all (stacked
+// layers, translucent gradient stops) and the caller must say so itself.
 async function sampledVerdict(source, foreground, required, doc, overlays = []) {
   if (!source) return null;
+  let range = null;
+  let what = 'image';
+  if (source.tagName === 'IMG') {
+    range = await imageLuminanceRange(source.currentSrc || source.src, overlays);
+  } else {
+    const css = source.css ?? getComputedStyle(source).backgroundImage;
+    if (!css || css === 'none') return null;
+    if ((css.match(/url\(/g) ?? []).length + (css.match(/gradient\(/g) ?? []).length > 1) return null; // stacked layers: too complex
+    const url = css.match(/url\(["']?(.*?)["']?\)/)?.[1];
+    if (url) {
+      let absolute;
+      try { absolute = new URL(url, doc.baseURI).href; } catch { return null; }
+      range = await imageLuminanceRange(absolute, overlays);
+    } else if (css.includes('gradient(')) {
+      range = gradientLuminanceRange(css, overlays);
+      what = 'gradient';
+    } else {
+      return null;
+    }
+  }
+  // Checked before the text's own alpha: there is no blend to reason about
+  // when the layer paints nothing.
+  if (range?.transparent) return PAINTS_NOTHING;
   // Translucent text takes its presented colour from the very pixels
   // beneath it — a luminance range of the backdrop cannot bracket the
   // blend (dimmed white over a dark photo reads mid-grey, not white).
@@ -168,22 +197,15 @@ async function sampledVerdict(source, foreground, required, doc, overlays = []) 
       message: 'This text is translucent over an image or gradient, so its presented colour depends on the pixels beneath — contrast must be checked by eye.',
     };
   }
-  if (source.tagName === 'IMG') {
-    return verdictFromRange(await imageLuminanceRange(source.currentSrc || source.src, overlays), foreground, required, 'image');
+  // An image we tried to read and couldn't: that is a specific, reportable
+  // fact, and the only one of these paths where cross-origin is the cause.
+  if (!range && what === 'image') {
+    return {
+      status: 'incomplete',
+      message: 'The image painted behind this text can’t be read: it is cross-origin, or it failed to load, so a script can’t sample its colours. Check the contrast by eye.',
+    };
   }
-  const css = source.css ?? getComputedStyle(source).backgroundImage;
-  if (!css || css === 'none') return null;
-  if ((css.match(/url\(/g) ?? []).length + (css.match(/gradient\(/g) ?? []).length > 1) return null; // stacked layers: too complex
-  const url = css.match(/url\(["']?(.*?)["']?\)/)?.[1];
-  if (url) {
-    let absolute;
-    try { absolute = new URL(url, doc.baseURI).href; } catch { return null; }
-    return verdictFromRange(await imageLuminanceRange(absolute, overlays), foreground, required, 'image');
-  }
-  if (css.includes('gradient(')) {
-    return verdictFromRange(gradientLuminanceRange(css, overlays), foreground, required, 'gradient');
-  }
-  return null;
+  return verdictFromRange(range, foreground, required, what);
 }
 
 /**
@@ -281,35 +303,40 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         // image and this text (hero scrims, tint panels). Judging the raw
         // image pixels would describe a page the user never sees.
         let sampled = await sampledVerdict(imageSource, foreground, required, doc, imageSource.overlays);
-        // Scrims the ancestor walk cannot reach (pseudo-elements, positioned
-        // siblings) leave the sampled range describing the wrong pixels, so
-        // neither verdict is safe to assert from it.
-        if (sampled && unaccountedScrim(element, imageSource.element)) {
-          sampled = {
+        // A layer with no opaque pixels changes nothing about what is behind
+        // the glyphs, so it must not block the verdict: fall through and
+        // judge the background that actually paints.
+        if (sampled !== PAINTS_NOTHING) {
+          // Scrims the ancestor walk cannot reach (pseudo-elements, positioned
+          // siblings) leave the sampled range describing the wrong pixels, so
+          // neither verdict is safe to assert from it.
+          if (sampled && unaccountedScrim(element, imageSource.element)) {
+            sampled = {
+              status: 'incomplete',
+              message: 'This text sits over a background image with a translucent overlay painted on top of it (a pseudo-element or positioned scrim), so the colour behind the glyphs is the blend of the two — check the contrast by eye.',
+            };
+          }
+          // Icon-scale images: bullets, arrows, and decorations painted
+          // beside or beneath a corner of the text — their pixels may flag
+          // for eyes, never assert a failure. Icon-scale means: no reliable
+          // intrinsic size, an intrinsically tiny image, OR a background
+          // carrier whose own box is line-height-sized (contain/cover paint
+          // can never exceed the carrier — a 512px nominal SVG painted on an
+          // inline link is still an icon). Only backdrop-scale images earn a
+          // definite fail from sampling.
+          const carrierBox = imageSource.element.getBoundingClientRect();
+          if (sampled?.status === 'fail'
+            && (dimensionless || (intrinsic.width <= 32 && intrinsic.height <= 32) || carrierBox.height <= 40)) {
+            return {
+              status: 'incomplete',
+              message: 'A small background icon is painted on this element — if it sits beside the text rather than under it, judge the contrast against the plain background by eye.',
+            };
+          }
+          return sampled ?? {
             status: 'incomplete',
-            message: 'This text sits over a background image with a translucent overlay painted on top of it (a pseudo-element or positioned scrim), so the colour behind the glyphs is the blend of the two — check the contrast by eye.',
+            message: 'The background here is several stacked image or gradient layers, which a script can’t sample. Contrast must be checked by eye.',
           };
         }
-        // Icon-scale images: bullets, arrows, and decorations painted
-        // beside or beneath a corner of the text — their pixels may flag
-        // for eyes, never assert a failure. Icon-scale means: no reliable
-        // intrinsic size, an intrinsically tiny image, OR a background
-        // carrier whose own box is line-height-sized (contain/cover paint
-        // can never exceed the carrier — a 512px nominal SVG painted on an
-        // inline link is still an icon). Only backdrop-scale images earn a
-        // definite fail from sampling.
-        const carrierBox = imageSource.element.getBoundingClientRect();
-        if (sampled?.status === 'fail'
-          && (dimensionless || (intrinsic.width <= 32 && intrinsic.height <= 32) || carrierBox.height <= 40)) {
-          return {
-            status: 'incomplete',
-            message: 'A small background icon is painted on this element — if it sits beside the text rather than under it, judge the contrast against the plain background by eye.',
-          };
-        }
-        return sampled ?? {
-          status: 'incomplete',
-          message: 'The background here is an image that can’t be read (cross-origin) — contrast must be checked by eye.',
-        };
       }
     }
 
@@ -360,17 +387,23 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // exactly as an element's own background-image is bracketed.
     if (pseudoBack?.image) {
       const sampled = await sampledVerdict(pseudoBack.image, foreground, required, doc);
-      return sampled ?? {
-        status: 'incomplete',
-        message: 'A pseudo-element paints an image or gradient behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
-      };
+      // PAINTS_NOTHING: the pseudo-element's image is fully transparent, so
+      // it never displaced the background the walk resolved.
+      if (sampled !== PAINTS_NOTHING) {
+        return sampled ?? {
+          status: 'incomplete',
+          message: 'A pseudo-element paints an image or gradient behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
+        };
+      }
     }
     if (painted?.image && !pseudoBack) {
       const sampled = await sampledVerdict(painted.image, foreground, required, doc);
-      return sampled ?? {
-        status: 'incomplete',
-        message: 'An image or overlapping element is painted behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
-      };
+      if (sampled !== PAINTS_NOTHING) {
+        return sampled ?? {
+          status: 'incomplete',
+          message: 'An image or overlapping element is painted behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
+        };
+      }
     }
     // Only a hit-test-resolved backdrop is VERIFIED paint truth. Anything
     // else (offscreen sample point, element invisible to its own hit-test —
@@ -387,10 +420,12 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       const obscuring = backgroundObscured(element);
       if (obscuring && obscuring !== 'unverifiable') {
         const sampled = await sampledVerdict(obscuring, foreground, required, doc);
-        return sampled ?? {
-          status: 'incomplete',
-          message: 'An image or overlapping element is painted behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
-        };
+        if (sampled !== PAINTS_NOTHING) {
+          return sampled ?? {
+            status: 'incomplete',
+            message: 'An image or overlapping element is painted behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
+          };
+        }
       }
     }
     if (pseudoBack?.color) {

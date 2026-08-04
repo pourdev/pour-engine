@@ -40,10 +40,12 @@ export default {
 
     const id = element.id ? ` (it already has id="${element.id}")` : ' (give it an id first)';
 
-    // A title-only name is published sufficient technique H65 — conformant,
-    // but invisible until hover and ignored by some tools, so it's flagged
-    // for eyes rather than failed.
-    if (element.getAttribute('title') && !element.getAttribute('placeholder')) {
+    // A title name is published sufficient technique H65 — conformant, but
+    // invisible until hover and ignored by some tools, so it's flagged for
+    // eyes rather than failed. A placeholder alongside it is an example
+    // value, not a competing label: the title still names the field, so this
+    // check comes first and does not care whether one is present.
+    if (element.getAttribute('title')?.trim()) {
       return {
         status: 'incomplete',
         message: 'This field is named only by its title attribute (technique H65) — conformant, but the label is invisible until hover and some tools skip it. Check a visible label isn’t needed here.',

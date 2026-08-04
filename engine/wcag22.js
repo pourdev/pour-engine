@@ -68,7 +68,7 @@ export default [
   sc('2.3.2', 'Three Flashes', 'AAA', 'manual'),
   sc('2.3.3', 'Animation from Interactions', 'AAA', 'manual', '2.1'),
   sc('2.4.1', 'Bypass Blocks', 'A', 'partial'), // partial: "repeated across pages" can't be established from one page
-  sc('2.4.2', 'Page Titled', 'A', 'auto'),
+  sc('2.4.2', 'Page Titled', 'A', 'partial'), // partial: document-title proves a title exists and catches known placeholders; whether a real one DESCRIBES the page needs a reader
   sc('2.4.3', 'Focus Order', 'A', 'manual'), // no rule automates this yet; order judgment needs humans
   sc('2.4.4', 'Link Purpose (In Context)', 'A', 'partial'),
   sc('2.4.5', 'Multiple Ways', 'AA', 'manual'),
@@ -89,7 +89,7 @@ export default [
   sc('2.5.7', 'Dragging Movements', 'AA', 'manual', '2.2'),
   sc('2.5.8', 'Target Size (Minimum)', 'AA', 'partial', '2.2'), // partial: size/spacing are computable; the equivalent-control and essential exceptions need judgment
   // 3. Understandable
-  sc('3.1.1', 'Language of Page', 'A', 'auto'),
+  sc('3.1.1', 'Language of Page', 'A', 'partial'), // partial: html-lang proves the tag is present and well-formed; whether it names the language actually written needs a reader
   sc('3.1.2', 'Language of Parts', 'AA', 'partial'), // partial: invalid lang values are provable; UNMARKED foreign passages need language identification
   sc('3.1.3', 'Unusual Words', 'AAA', 'manual'),
   sc('3.1.4', 'Abbreviations', 'AAA', 'manual'),

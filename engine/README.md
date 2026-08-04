@@ -108,7 +108,7 @@ Nothing in the spec is silently skipped — that claim is the product.
 
 ## Honest current state
 
-61 rules, hardened on real sites and the `testbeds/` pages. Known gaps:
+72 rules, hardened on real sites and the `testbeds/` pages. Known gaps:
 shadow DOM and iframe traversal, the full accname spec (ours is a close
 approximation), and the language subtag registry (BCP 47 shape check only).
 Grow it rule by rule; the test beds' `expect:` annotations are the

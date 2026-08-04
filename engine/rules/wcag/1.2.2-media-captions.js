@@ -8,7 +8,14 @@ export default {
   selector: 'video',
   visibleOnly: false,
   evaluate(element) {
-    if (element.querySelector('track[kind="captions"], track[kind="subtitles"]')) return { status: 'pass' };
+    // `kind` is an enumerated attribute: its values are ASCII
+    // case-insensitive, and the MISSING value default is the subtitles
+    // state — so a bare <track> is a subtitle track and counts. (An invalid
+    // value defaults to metadata, which does not, so `kind=""` and
+    // `kind="banana"` are deliberately left out.)
+    if (element.querySelector('track[kind="captions" i], track[kind="subtitles" i], track:not([kind])')) {
+      return { status: 'pass' };
+    }
     // Captions may be burned in or provided by the player — a human must check.
     return {
       status: 'incomplete',
