@@ -62,12 +62,12 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.4.1 | [Bypass Blocks](https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html) | A | Partially automated | bypass-blocks |
 | 2.4.2 | [Page Titled](https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html) | A | Partially automated | document-title |
 | 2.4.3 | [Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) | A | Manual review | — |
-| 2.4.4 | [Link Purpose (In Context)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html) | A | Partially automated | area-alt, link-name |
+| 2.4.4 | [Link Purpose (In Context)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html) | A | Partially automated | area-alt, link-name, link-text-generic |
 | 2.4.5 | [Multiple Ways](https://www.w3.org/WAI/WCAG22/Understanding/multiple-ways.html) | AA | Manual review | — |
 | 2.4.6 | [Headings and Labels](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html) | AA | Manual review | — |
 | 2.4.7 | [Focus Visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html) | AA | Partially automated | focus-visible |
 | 2.4.8 | [Location](https://www.w3.org/WAI/WCAG22/Understanding/location.html) | AAA | Manual review | — |
-| 2.4.9 | [Link Purpose (Link Only)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-link-only.html) | AAA | Manual review | — |
+| 2.4.9 | [Link Purpose (Link Only)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-link-only.html) | AAA | Partially automated | link-text-generic-only |
 | 2.4.10 | [Section Headings](https://www.w3.org/WAI/WCAG22/Understanding/section-headings.html) | AAA | Manual review | — |
 | 2.4.11 | [Focus Not Obscured (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) | AA | Partially automated | focus-not-obscured |
 | 2.4.12 | [Focus Not Obscured (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-enhanced.html) | AAA | Manual review | — |
@@ -114,4 +114,4 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-valid-refs, button-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 29 partially automated · 57 manual — with 72 rules.
+**Totals:** 30 partially automated · 56 manual — with 74 rules.

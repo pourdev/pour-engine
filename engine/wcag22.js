@@ -75,7 +75,7 @@ export default [
   sc('2.4.6', 'Headings and Labels', 'AA', 'manual'),
   sc('2.4.7', 'Focus Visible', 'AA', 'partial'), // partial: focus-visible flags outline suppression; the indicator itself needs eyes
   sc('2.4.8', 'Location', 'AAA', 'manual'),
-  sc('2.4.9', 'Link Purpose (Link Only)', 'AAA', 'manual'),
+  sc('2.4.9', 'Link Purpose (Link Only)', 'AAA', 'partial'), // partial: contentless link names are provable; whether a real name describes its destination needs a reader
   sc('2.4.10', 'Section Headings', 'AAA', 'manual'),
   sc('2.4.11', 'Focus Not Obscured (Minimum)', 'AA', 'partial', '2.2'), // partial: focus-not-obscured catches fully-covered targets at rest
   sc('2.4.12', 'Focus Not Obscured (Enhanced)', 'AAA', 'manual', '2.2'),

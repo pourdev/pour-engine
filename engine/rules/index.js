@@ -15,6 +15,8 @@ import imageAlt from './wcag/1.1.1-image-alt.js';
 import svgImgAlt from './wcag/1.1.1-svg-img-alt.js';
 import buttonName from './wcag/4.1.2-button-name.js';
 import linkName from './wcag/2.4.4-link-name.js';
+import linkTextGeneric from './wcag/2.4.4-link-text-generic.js';
+import linkTextGenericOnly from './wcag/2.4.9-link-text-generic-only.js';
 // Re-parked by product decision (2026-08-01, David, after a one-day
 // un-parking): 2.5.3 is normative Level A but chiefly serves speech-input
 // users, and the findings volume isn't wanted in results for now. The SC is
@@ -113,6 +115,8 @@ export default [
   svgImgAlt,
   buttonName,
   linkName,
+  linkTextGeneric,
+  linkTextGenericOnly,
   // labelInName, — re-parked 2026-08-01, see note at the import
   formLabel,
   autocompleteValid,
