@@ -4,7 +4,7 @@ import {
   backgroundImageSource, backgroundImagePaintRect, imageLuminanceRange, gradientLuminanceRange,
   rangeVerdict, isLargeText, cumulativeOpacity, opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
-  pseudoBackdropForText,
+  pseudoBackdropForText, backgroundColorSource,
 } from '../../lib/contrast.js';
 
 /** Display a ratio truncated (never rounded up): 4.495 must read "4.49",
@@ -468,14 +468,33 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       const hazard = backdropHazard('fail', backgroundVerified);
       if (hazard) return hazard;
     }
+    // Both colours in sRGB, which is the space the ratio was computed in and
+    // the one an interactive checker accepts. The author's own syntax is
+    // carried alongside, never instead: a page written in oklch() or
+    // color(srgb …) would otherwise be handed an rgb() value that appears
+    // nowhere in its stylesheet.
+    const asRgb = (color) => `rgb(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)})`;
+    const foregroundRgb = asRgb(foreground);
+    const backgroundRgb = asRgb(background);
+    const foregroundCss = style.color !== foregroundRgb ? style.color : null;
+    const backgroundSource = backgroundColorSource(element);
+    const backgroundCss = backgroundSource && backgroundSource !== backgroundRgb ? backgroundSource : null;
+    const authored = [
+      foregroundCss && `the text as ${foregroundCss}`,
+      backgroundCss && `the background as ${backgroundCss}`,
+    ].filter(Boolean).join(' and ');
+
     return {
       status: 'fail',
       message: `Contrast is ${showRatio(ratio)}:1 — below the ${required}:1 WCAG minimum for this text size.`,
-      fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${style.color} on this background).`,
+      fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${foregroundRgb} on ${backgroundRgb}).`
+        + (authored ? ` Your CSS writes ${authored}, so searching it for the sRGB values above won't find them.` : ''),
       // The exact pair, for the UIs to link out to an interactive checker.
       data: {
-        foreground: style.color,
-        background: `rgb(${Math.round(background.r)}, ${Math.round(background.g)}, ${Math.round(background.b)})`,
+        foreground: foregroundRgb,
+        background: backgroundRgb,
+        ...(foregroundCss ? { foregroundCss } : {}),
+        ...(backgroundCss ? { backgroundCss } : {}),
         ratio: Number(showRatio(ratio)),
         required,
       },

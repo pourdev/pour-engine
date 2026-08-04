@@ -1,17 +1,79 @@
 // WCAG contrast math (WCAG 2.x, relative luminance per sRGB).
 
-/** Parse a computed CSS colour (`rgb()`/`rgba()`) → {r,g,b,a} or null.
+// Computed colours do not all come back as `rgb()` any more. A colour the
+// author wrote in a modern syntax is returned in THAT syntax: Chrome and
+// Safari hand back `color(srgb 0.98 0.95 0.91)` verbatim, and Tailwind 4
+// emits `oklch()` for its whole palette. Matching only the legacy comma form
+// made every such colour parse as null, which resolveBackground reads as
+// "nothing painted here" — so contrast got measured against whatever sat
+// BEHIND the element instead of the element's own background, and a real
+// failure could be reported as a pass or waved through as unreadable.
+//
+// Two tiers. The syntaxes we can convert exactly are converted here; anything
+// else (display-p3, oklch, lab, color-mix output…) is handed to the browser,
+// which paints one pixel and tells us the sRGB it produced. sRGB is the space
+// WCAG's luminance maths is defined in, so that conversion is the right one.
+const LEGACY_RGB = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+%?)\s*)?\)$/;
+const MODERN_RGB = /^rgba?\(\s*([\d.]+%?)\s+([\d.]+%?)\s+([\d.]+%?)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/;
+const SRGB_COLOR = /^color\(\s*srgb\s+(-?[\d.]+%?)\s+(-?[\d.]+%?)\s+(-?[\d.]+%?)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/;
+
+const clamp255 = (value) => Math.min(255, Math.max(0, value));
+/** A channel token: `128`, `50%`, or (in color()) `0.5` on a 0-1 scale. */
+const channel = (token, unitScale) =>
+  clamp255(token.endsWith('%') ? (parseFloat(token) / 100) * 255 : parseFloat(token) * unitScale);
+const alphaOf = (token) => {
+  if (token === undefined) return 1;
+  const value = parseFloat(token);
+  return Math.min(1, Math.max(0, token.endsWith('%') ? value / 100 : value));
+};
+
+/** Colour spaces we convert ourselves, exactly and with no DOM. */
+function parseKnownSyntax(cssColor) {
+  const rgb = LEGACY_RGB.exec(cssColor) ?? MODERN_RGB.exec(cssColor);
+  if (rgb) return { r: channel(rgb[1], 1), g: channel(rgb[2], 1), b: channel(rgb[3], 1), a: alphaOf(rgb[4]) };
+  const srgb = SRGB_COLOR.exec(cssColor);
+  if (srgb) return { r: channel(srgb[1], 255), g: channel(srgb[2], 255), b: channel(srgb[3], 255), a: alphaOf(srgb[4]) };
+  return null;
+}
+
+// One reused 1×1 canvas. Only unknown syntaxes reach it, and the result is
+// cached by string, so a page pays for it once per distinct colour.
+let probe;
+let probeUnavailable = false;
+function paintToSrgb(cssColor) {
+  if (probeUnavailable) return null;
+  try {
+    probe ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (!probe) { probeUnavailable = true; return null; }
+    // An invalid value leaves fillStyle untouched, so two different sentinels
+    // tell "the browser rejected it" apart from "it really is that colour".
+    probe.fillStyle = '#000000';
+    probe.fillStyle = cssColor;
+    const asBlack = probe.fillStyle;
+    probe.fillStyle = '#ffffff';
+    probe.fillStyle = cssColor;
+    if (asBlack === '#000000' && probe.fillStyle === '#ffffff') return null; // rejected by the browser
+    probe.clearRect(0, 0, 1, 1);
+    probe.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = probe.getImageData(0, 0, 1, 1).data;
+    // getImageData un-premultiplies, which loses precision as alpha falls;
+    // recover the colour from the alpha the browser reported.
+    return { r, g, b, a: a / 255 };
+  } catch {
+    probeUnavailable = true; // no canvas (or readback blocked): stop trying
+    return null;
+  }
+}
+
+/** Parse a computed CSS colour → {r,g,b,a}, or null when it cannot be read.
  *  Cached by string: pages use a handful of distinct colours across
- *  thousands of elements, and the regex was a top cost in contrast audits.
+ *  thousands of elements, and parsing was a top cost in contrast audits.
  *  Callers must not mutate the returned object. */
 const colorCache = new Map();
 export function parseColor(cssColor) {
   if (cssColor == null) return null;
   if (colorCache.has(cssColor)) return colorCache.get(cssColor);
-  const match = cssColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
-  const color = match
-    ? { r: +match[1], g: +match[2], b: +match[3], a: match[4] === undefined ? 1 : +match[4] }
-    : null;
+  const color = parseKnownSyntax(cssColor) ?? paintToSrgb(cssColor);
   if (colorCache.size < 10_000) colorCache.set(cssColor, color); // bounded: computed colors are few
   return color;
 }
@@ -62,6 +124,28 @@ export function resetAuditCaches() {
   mediaRectsCache = null;
   panelRectsCache = null;
   pseudoCache = new WeakMap();
+}
+
+/**
+ * The computed `background-color` STRING that ended the background walk, as
+ * the author's stylesheet produced it. Only when one opaque colour settled
+ * it: translucent layers composite into something no single declaration in
+ * the CSS holds, and there is nothing honest to point at.
+ *
+ * Reported so a failure names a colour the developer can actually find. A
+ * page written in oklch() or color(srgb …) gets told its ratio in sRGB, and
+ * searching the stylesheet for that rgb() value finds nothing at all.
+ */
+export function backgroundColorSource(element) {
+  for (let node = element; node && node.nodeType === 1;
+    node = node.parentElement ?? node.getRootNode()?.host) {
+    const style = getComputedStyle(node);
+    if (style.backgroundImage !== 'none') return null;
+    const color = parseColor(style.backgroundColor);
+    if (!color || color.a === 0) continue; // transparent: keep walking, as the resolver does
+    return color.a >= 1 ? style.backgroundColor : null; // translucent: composited, no single source
+  }
+  return null;
 }
 
 function canvasColor(doc) {
