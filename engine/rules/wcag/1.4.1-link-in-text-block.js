@@ -79,9 +79,14 @@ export default {
     }
     return {
       status: 'fail',
+      // The measured fact is the ratio against G183's threshold, and that is
+      // all this says. Naming a group who "can't see it" overclaims: a
+      // saturated red against near-white misses 3:1 on luminance while
+      // staying perfectly distinct to most people, including most red-green
+      // colour blindness, where the red darkens and the gap widens.
       message: ratio < 1.01
-        ? 'This link has no underline and the same colour as the surrounding text — sighted users can’t tell it’s a link.'
-        : `This link has no underline and only ${ratio.toFixed(2)}:1 colour difference from the surrounding text — colour-blind users can’t spot it.`,
+        ? 'This link has no underline and the same colour as the surrounding text, so there is nothing at all to mark it as a link.'
+        : `This link has no underline and only ${ratio.toFixed(2)}:1 colour difference from the surrounding text, below the 3:1 WCAG technique G183 asks for when colour is the only thing marking a link.`,
       fix: 'Underline links inside text (text-decoration: underline), or add a non-colour indicator.',
     };
   },

@@ -835,6 +835,11 @@ export function imageLuminanceRange(url, overlays = []) {
         const data = ctx.getImageData(0, 0, size, size).data;
         let min = 1;
         let max = 0;
+        // The colours at those extremes, kept for the same reason the
+        // gradient range keeps them: translucent text blends with the actual
+        // pixels, and a luminance cannot be un-gamma'd back into an rgb.
+        let minColor = null;
+        let maxColor = null;
         let opaquePixels = 0;
         for (let i = 0; i < data.length; i += 4) {
           if (data[i + 3] < 128) continue; // mostly-transparent pixels reveal what's beneath — unknowable
@@ -843,9 +848,10 @@ export function imageLuminanceRange(url, overlays = []) {
           // and the text before measuring: a photo under a 75% black scrim is
           // seen as the blend, never as the photo.
           const pixel = { r: data[i], g: data[i + 1], b: data[i + 2], a: 1 };
-          const l = luminance(overlays.length ? applyOverlays(pixel, overlays) : pixel);
-          if (l < min) min = l;
-          if (l > max) max = l;
+          const shown = overlays.length ? applyOverlays(pixel, overlays) : pixel;
+          const l = luminance(shown);
+          if (l < min) { min = l; minColor = shown; }
+          if (l > max) { max = l; maxColor = shown; }
         }
         // Not one opaque pixel: a spacer, a cleared sprite, or a decorative
         // layer left in place with nothing in it. It covers the background
@@ -862,7 +868,9 @@ export function imageLuminanceRange(url, overlays = []) {
           resolve({ transparent: true, width: img.naturalWidth, height: img.naturalHeight });
           return;
         }
-        resolve(min <= max ? { min, max, width: img.naturalWidth, height: img.naturalHeight } : null);
+        resolve(min <= max
+          ? { min, max, minColor, maxColor, width: img.naturalWidth, height: img.naturalHeight }
+          : null);
       } catch {
         resolve(null); // tainted canvas: cross-origin image without CORS headers
       }
@@ -921,8 +929,20 @@ export function backgroundImagePaintRect(element, intrinsic) {
 export function gradientLuminanceRange(backgroundImageCss, overlays = []) {
   const stops = (backgroundImageCss.match(/rgba?\([^)]+\)/g) ?? []).map(parseColor).filter(Boolean);
   if (!stops.length || stops.some((c) => c.a < 1)) return null; // translucent stops reveal what's beneath
-  const lums = stops.map((stop) => luminance(overlays.length ? applyOverlays(stop, overlays) : stop));
-  return { min: Math.min(...lums), max: Math.max(...lums) };
+  const composited = stops.map((stop) => (overlays.length ? applyOverlays(stop, overlays) : stop));
+  const lums = composited.map(luminance);
+  const min = Math.min(...lums);
+  const max = Math.max(...lums);
+  // The COLOURS at the extremes, not just their luminances: translucent text
+  // takes its presented colour from the pixels beneath, so bracketing that
+  // blend needs the actual rgb to composite against, and luminance alone
+  // cannot be un-gamma'd back into one.
+  return {
+    min,
+    max,
+    minColor: composited[lums.indexOf(min)],
+    maxColor: composited[lums.indexOf(max)],
+  };
 }
 
 /** Contrast ratio from two luminances. */

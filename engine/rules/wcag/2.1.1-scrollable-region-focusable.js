@@ -39,10 +39,26 @@ export default {
     // including content slotted in from the light DOM and content inside
     // open shadow roots (carousels built as web components).
     if (hasFocusableContent(element)) return { status: 'pass' };
+    // NOT a failure, because the browser may already have solved it.
+    //
+    // Chromium puts a scroll container in the tab order by itself when the
+    // container holds nothing focusable — and that condition is exactly the
+    // one this rule fires on, so in Chrome every element reaching this line
+    // IS keyboard reachable. Measured, not assumed: Chrome 151 tabs
+    // before → the scroller → after, while `element.tabIndex` still reports
+    // -1, which is why the check above cannot see it.
+    //
+    // It is not settled across engines though. MDN still advises the
+    // tabindex ("in some browsers, scrolling content areas are not
+    // keyboard-focusable"), and WebKit did not take focus here. So the
+    // honest report is the fact plus the split, not a verdict: asserting a
+    // Level A failure would be wrong for anyone on Chrome, and asserting a
+    // pass would be wrong for anyone who has to support the browsers that
+    // don't.
     return {
-      status: 'fail',
-      message: 'This region scrolls, but contains nothing focusable and isn’t focusable itself — keyboard users can never see the overflowed content.',
-      fix: 'Add tabindex="0" to the scrollable element (plus role="region" and an aria-label describing it).',
+      status: 'incomplete',
+      message: 'This region scrolls and holds nothing focusable, so reaching its overflowed content depends on the browser. Chromium gives such containers keyboard focus automatically; not every engine does. Tab to it in the browsers you support, and add tabindex="0" if it cannot be reached.',
+      fix: 'If you support browsers that do not focus scroll containers, add tabindex="0" (plus role="region" and an aria-label describing it).',
     };
   },
 };

@@ -1,4 +1,4 @@
-// DY Engine runner: evaluates every applicable rule against the page and
+// Engine runner: evaluates every applicable rule against the page and
 // returns structured results (violations / passes / incomplete /
 // inapplicable, plus the manual-review criteria and per-rule timings).
 import config from '../config/project.config.js';

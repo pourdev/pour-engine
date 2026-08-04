@@ -38,6 +38,68 @@ function isHiddenFromPointer(element, rect) {
   return false;
 }
 
+/**
+ * Is this element the thing a click at that point would actually reach, or
+ * is something painted over it there?
+ *
+ * The spacing exception is about targets COMPETING for pointer space, and
+ * two targets that can never be hit at the same place do not compete. On any
+ * page with a fixed header, scrolling slides ordinary content underneath it:
+ * a footer link can end up geometrically 3px from a header button while
+ * being completely unclickable there, and counting it as a crowder invents a
+ * failure out of the scroll position. That was reported on pour's own site.
+ *
+ * Only asked about targets that are ALREADY crowding an undersized one, so
+ * the hit-test cost is paid on the handful of candidate failures rather than
+ * on every target of the page.
+ *
+ * Out-of-viewport points can't be hit-tested at all: elementsFromPoint is
+ * viewport-relative and returns nothing outside it. There the honest answer
+ * is "don't know", and don't-know must not silence a finding, so it counts
+ * as reachable.
+ */
+function reachableRects(element, rect) {
+  const doc = element.ownerDocument;
+  const win = doc.defaultView;
+  if (!win || typeof doc.elementsFromPoint !== 'function') return [rect];
+  // Per LINE FRAGMENT, never the bounding box. An inline link that wraps has
+  // one fragment per line, and the box enclosing them is mostly space the
+  // element never paints: its middle falls in the leading BETWEEN the lines,
+  // where elementsFromPoint does not contain the element at all. A
+  // box-centre probe therefore reads "not hit-testable" for every wrapped
+  // link. (Same geometry trap as link-in-text-block's own-line test.)
+  //
+  // Fragments also make the answer usefully partial. A footer link scrolled
+  // half under a fixed header has its first line buried and its second line
+  // perfectly clickable, so the honest result is not "reachable" or
+  // "covered" but WHICH PART is reachable — and only that part can compete
+  // for pointer space with anything nearby.
+  const fragments = [...element.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+  const probes = fragments.length ? fragments : [rect];
+  const reachable = [];
+  let testable = false;
+  for (const fragment of probes) {
+    const x = fragment.left + fragment.width / 2;
+    const y = fragment.top + fragment.height / 2;
+    if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) continue;
+    const stack = doc.elementsFromPoint(x, y);
+    const index = stack.indexOf(element);
+    if (index < 0) continue; // this fragment isn't hit-testable; try the next
+    testable = true;
+    // Anything above it that is part of the same control is not an
+    // obstruction: a button's own icon paints over the button, an overlay
+    // label over its input. Only a genuinely separate element blocks it.
+    if (stack.slice(0, index).every((layer) => layer.contains(element) || element.contains(layer))) {
+      reachable.push(fragment);
+    }
+  }
+  // Nothing could be probed at all (entirely out of viewport,
+  // pointer-events: none, nothing laid out): don't know, and don't-know must
+  // not silence a finding, so the whole rect stands.
+  if (!testable) return [rect];
+  return reachable;
+}
+
 /** Text this element contributes that is NOT inside a target — i.e. does it
  *  read as prose beside the link, or is it just another control in a list? */
 function textOutsideTargets(element) {
@@ -146,14 +208,37 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         // Spacing exception: the min-sized circle around this target must
         // clear every other target's rect and every other undersized
         // target's circle.
-        const crowded = elements.some((other, j) => {
+        const crowds = (other, j) => {
           if (j === i || !laidOut[j]) return false;
           if (other.contains(element) || element.contains(other)) return false; // same control, nested markup
           if (encloses(rects[j], rects[i]) || encloses(rects[i], rects[j])) return false;
-          if (undersized[j] && Math.hypot(centers[j].x - centers[i].x, centers[j].y - centers[i].y) < min) return true;
-          return pointToRectDistance(centers[i], rects[j]) < min / 2;
-        });
+          const within = (box) => {
+            if (undersized[j]) {
+              const c = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+              if (Math.hypot(c.x - centers[i].x, c.y - centers[i].y) < min) return true;
+            }
+            return pointToRectDistance(centers[i], box) < min / 2;
+          };
+          // Whole-rect test first, as a cheap superset: no part of a target
+          // can be closer than the box enclosing it, so a box that doesn't
+          // reach rules the target out without any hit-testing. Only the
+          // survivors pay for the paint-order queries, which on a page of
+          // hundreds of targets is a handful.
+          if (!within(rects[j])) return false;
+          // Then the honest test: only the parts a pointer can actually
+          // reach compete for pointer space. A link whose first line is
+          // buried under a fixed header and whose second line is clear is
+          // crowding from its second line or not at all.
+          return reachableRects(other, rects[j]).some(within);
+        };
+        const crowded = elements.some(crowds);
         if (!crowded) return { status: 'pass' };
+        // Deliberately NOT applied to the target itself. A crowder that
+        // can't be clicked breaks the premise of the exception, because it
+        // isn't competing for anything. A target that happens to be under a
+        // cookie banner right now is still 20×20 the moment that banner is
+        // dismissed, and suppressing it would hide a real defect behind a
+        // transient overlay, which is the wrong way round.
       }
       const rect = rects[i];
       return {

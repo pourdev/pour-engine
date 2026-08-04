@@ -102,14 +102,15 @@ pour engine therefore reports on **every** in-scope criterion, one of two ways:
 1. **Automated/partial** — the rules in `rules/`.
 2. **Manual review** — every audit's results include `manualReview`: the
    in-scope criteria (filtered by the requested WCAG version and level)
-   that automation can't judge, rendered as a checklist in the extension.
+   that automation can't judge, for a host to render however it wants.
 
 Nothing in the spec is silently skipped — that claim is the product.
 
 ## Honest current state
 
-72 rules, hardened on real sites and the `testbeds/` pages. Known gaps:
-shadow DOM and iframe traversal, the full accname spec (ours is a close
-approximation), and the language subtag registry (BCP 47 shape check only).
-Grow it rule by rule; the test beds' `expect:` annotations are the
-regression suite.
+72 rules, hardened on real sites and the `testbeds/` pages. Audits walk into
+open shadow roots (targets come back as `host >>> inner` selector chains);
+iframe traversal is the host's job, and the extension does it. Known gaps:
+the full accname spec (ours is a close approximation) and the language
+subtag registry (BCP 47 shape check only). Grow it rule by rule; the test
+beds' `expect:` annotations and the spec cases are the regression suite.

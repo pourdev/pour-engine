@@ -78,9 +78,26 @@ async function imageVsText(imageSource, element, doc) {
   // paint rect must not use it (icon SVGs would "cover" all the text).
   const dimensionless = !intrinsic || !intrinsic.width
     || (intrinsic.width === 300 && intrinsic.height === 150);
+  // A gradient has no intrinsic size and never will, but that is not the
+  // same as an unknown paint area: with the default background-size it fills
+  // its carrier's painting box exactly. Lumping it in with "we cannot tell
+  // how big this is" meant a gradient could never earn a definite verdict,
+  // however large the panel it covers. Its scale is the carrier's, unless
+  // background-size names something small, which is the one way a gradient
+  // really is icon-scale (a tiny repeated swatch).
+  const isGradient = !url && imageSource.css.includes('gradient(');
+  let sizedSmall = false;
+  if (isGradient) {
+    const size = getComputedStyle(imageSource.element).backgroundSize ?? '';
+    const px = [...size.matchAll(/(\d+(?:\.\d+)?)px/g)].map((m) => parseFloat(m[1]));
+    sizedSmall = px.length > 0 && px.every((value) => value <= 40);
+  }
   const paint = backgroundImagePaintRect(imageSource.element, dimensionless ? null : intrinsic);
-  if (!paint) return { relation: 'unknown', intrinsic, dimensionless };
-  return { relation: textIntersects(element, paint) ? 'under' : 'clear', intrinsic, dimensionless };
+  if (!paint) return { relation: 'unknown', intrinsic, dimensionless, isGradient, sizedSmall };
+  return {
+    relation: textIntersects(element, paint) ? 'under' : 'clear',
+    intrinsic, dimensionless, isGradient, sizedSmall,
+  };
 }
 
 /**
@@ -188,10 +205,31 @@ async function sampledVerdict(source, foreground, required, doc, overlays = []) 
   // when the layer paints nothing.
   if (range?.transparent) return PAINTS_NOTHING;
   // Translucent text takes its presented colour from the very pixels
-  // beneath it — a luminance range of the backdrop cannot bracket the
-  // blend (dimmed white over a dark photo reads mid-grey, not white).
-  // Asserting either way from sampling would be a coin toss.
+  // beneath it, so a luminance range of the backdrop cannot be read straight
+  // off: dimmed white over a dark photo reads mid-grey, not white.
+  //
+  // It CAN still be bracketed, by compositing the text over each end of the
+  // backdrop's range and judging each blend against the backdrop it was
+  // blended with. That bracket is sound in one direction only. Ratio is not
+  // monotonic in backdrop luminance — as the composited text passes through
+  // the backdrop's own luminance the ratio collapses toward 1:1 — so an
+  // interior point can be WORSE than both ends but never better. Both ends
+  // failing therefore proves the whole range fails; both ends passing proves
+  // nothing about the middle, and stays a human call.
   if (foreground.a < 1) {
+    const ends = [range?.minColor, range?.maxColor].filter(Boolean);
+    if (ends.length === 2) {
+      const ratios = ends.map((backdrop) => contrastRatio(composite(foreground, backdrop), backdrop));
+      if (ratios.every((ratio) => ratio < required)) {
+        const best = Math.max(...ratios);
+        return {
+          status: 'fail',
+          message: `This text is translucent, so it blends with what is behind it: against every part of that backdrop the blend reaches at best ${showRatio(best)}:1, below the ${required}:1 minimum.`,
+          fix: 'Raise the text opacity, change its colour, or put a solid layer between the text and the backdrop.',
+          data: { ratio: Number(showRatio(best)), required },
+        };
+      }
+    }
     return {
       status: 'incomplete',
       message: 'This text is translucent over an image or gradient, so its presented colour depends on the pixels beneath — contrast must be checked by eye.',
@@ -297,7 +335,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // images (external-link arrows etc.) don't affect the text's contrast.
     const imageSource = backgroundImageSource(element);
     if (imageSource) {
-      const { relation, intrinsic, dimensionless } = await imageVsText(imageSource, element, doc);
+      const { relation, intrinsic, dimensionless, isGradient, sizedSmall } = await imageVsText(imageSource, element, doc);
       if (relation !== 'clear') {
         // imageSource.overlays are the translucent layers painted between the
         // image and this text (hero scrims, tint panels). Judging the raw
@@ -325,8 +363,10 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           // inline link is still an icon). Only backdrop-scale images earn a
           // definite fail from sampling.
           const carrierBox = imageSource.element.getBoundingClientRect();
-          if (sampled?.status === 'fail'
-            && (dimensionless || (intrinsic.width <= 32 && intrinsic.height <= 32) || carrierBox.height <= 40)) {
+          const iconScale = isGradient
+            ? (sizedSmall || carrierBox.height <= 40)
+            : (dimensionless || (intrinsic.width <= 32 && intrinsic.height <= 32) || carrierBox.height <= 40);
+          if (sampled?.status === 'fail' && iconScale) {
             return {
               status: 'incomplete',
               message: 'A small background icon is painted on this element — if it sits beside the text rather than under it, judge the contrast against the plain background by eye.',
