@@ -23,7 +23,7 @@ export default {
     // property, so a faded WRAPPER (the standard off-canvas drawer) leaves
     // every control inside it computing opacity: 1 while none of them paint.
     const focusable = [element, ...element.querySelectorAll(FOCUSABLE)].filter(
-      (el) => el.matches?.(FOCUSABLE) && el.getAttribute('tabindex') !== '-1' && !el.disabled
+      (el) => el.matches?.(FOCUSABLE) && el.getAttribute('tabindex') !== '-1' && !el.matches(':disabled')
         // `inert` removes focusability outright — aria-hidden + inert is
         // the CORRECT modern pattern for off-canvas content, not a defect.
         && !el.closest('[inert]')

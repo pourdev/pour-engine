@@ -76,7 +76,9 @@ export default {
       && rect.top >= overlay.top && rect.bottom <= overlay.bottom;
 
     return elements.map((element) => {
-      if (element.disabled) return { status: 'pass' };
+      // `:disabled` catches controls disabled by an ancestor fieldset, which
+      // the `disabled` property does not reflect — those never take focus.
+      if (element.matches(':disabled')) return { status: 'pass' };
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) return { status: 'pass' };
       // Only in-viewport geometry is trustworthy (or cheap).

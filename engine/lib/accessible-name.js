@@ -2,19 +2,45 @@
 // the ARIA accname spec: aria-labelledby → aria-label → native labelling
 // (alt, <label>, text content, value) → title/placeholder fallbacks.
 //
-// Deliberately simpler than the full spec (no recursion into referenced
-// hidden subtrees, no CSS content). Good enough for name-presence rules;
-// grow it as rules need more.
+// Deliberately simpler than the full spec. Good enough for name-presence
+// rules; grow it as rules need more.
+
+/** Input types whose `.value` is user-entered text rather than a state. */
+const TEXT_INPUT = new Set(['text', 'search', 'url', 'tel', 'email', 'password', 'number', 'date',
+  'datetime-local', 'month', 'time', 'week', '']);
 
 export function accessibleName(element) {
-  const labelledby = element.getAttribute('aria-labelledby');
-  if (labelledby) {
-    const text = labelledby
-      .split(/\s+/)
-      .map((id) => element.getRootNode().getElementById?.(id)?.textContent ?? '')
-      .join(' ')
-      .trim();
-    if (text) return text;
+  return computeName(element, false);
+}
+
+/** The name aria-labelledby contributes, resolved the way accname requires:
+ *  each referenced element's NAME, not its raw text. A reference whose target
+ *  is named by an img alt, an aria-label or a control value names the referrer
+ *  too, and reading textContent instead reports those elements as nameless.
+ *  Rules that only need "is it labelled?" call this directly. */
+export function labelledByName(element) {
+  const refs = element.getAttribute?.('aria-labelledby');
+  if (!refs) return '';
+  const root = element.getRootNode();
+  return refs
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((id) => {
+      const target = root.getElementById?.(id);
+      return target ? computeName(target, true) : '';
+    })
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function computeName(element, inLabelledBy) {
+  // accname step 2B: a referenced element's own aria-labelledby is not
+  // followed a second time. That is also what stops <p id="a"
+  // aria-labelledby="a"> recursing forever.
+  if (!inLabelledBy) {
+    const fromLabelledBy = labelledByName(element);
+    if (fromLabelledBy) return fromLabelledBy;
   }
 
   const ariaLabel = element.getAttribute('aria-label')?.trim();
@@ -42,6 +68,14 @@ export function accessibleName(element) {
       const alt = element.getAttribute('alt')?.trim();
       if (alt) return alt;
     }
+    // accname step 2E: an embedded control contributes its value, so
+    // aria-labelledby pointing at a filled text box names the referrer with
+    // what the user typed. Text-like fields only: a checkbox's `.value` is
+    // the string "on", which is a state, not a name.
+    if (inLabelledBy && (tag === 'textarea' || TEXT_INPUT.has(element.type))) {
+      const value = (element.value ?? '').trim();
+      if (value) return value;
+    }
     // HTML-AAM: value-less submit/reset buttons get a UA-default name —
     // browsers announce "Submit"/"Reset button" without any author text.
     if (element.type === 'submit') return 'Submit';
@@ -51,18 +85,21 @@ export function accessibleName(element) {
   // Buttons, links, headings etc. — name from contents, including image
   // alts, but EXCLUDING hidden content: text inside aria-hidden or
   // display:none/visibility:hidden subtrees does not name an element
-  // (per the accname spec).
-  const fromContents = visibleContentText(element).replace(/\s+/g, ' ').trim();
+  // (per the accname spec). The one exception is a subtree reached THROUGH
+  // aria-labelledby, where accname ignores the hidden state.
+  const fromContents = visibleContentText(element, inLabelledBy).replace(/\s+/g, ' ').trim();
   if (fromContents) return fromContents;
 
   return (element.getAttribute('title') ?? element.getAttribute('placeholder') ?? '').trim();
 }
 
-function visibleContentText(element) {
+function visibleContentText(element, includeHidden) {
   // A custom element with a shadow root renders its shadow content — name
   // from contents follows the FLAT tree (slots inside pull light DOM back).
   const nodes = element.shadowRoot ? element.shadowRoot.childNodes : element.childNodes;
-  return generatedContent(element, '::before') + textFromNodes(nodes) + generatedContent(element, '::after');
+  return generatedContent(element, '::before')
+    + textFromNodes(nodes, includeHidden)
+    + generatedContent(element, '::after');
 }
 
 /** CSS generated content contributes to name-from-contents per the accname
@@ -75,7 +112,10 @@ function generatedContent(element, pseudo) {
   return match ? match[1].replace(/\\(.)/g, '$1') : '';
 }
 
-function textFromNodes(nodes) {
+/** `includeHidden` is set while resolving an aria-labelledby target: accname
+ *  ignores the hidden state of referenced content, which is what makes the
+ *  visually-hidden label span (and the display:none one) work in browsers. */
+function textFromNodes(nodes, includeHidden) {
   let text = '';
   for (const node of nodes) {
     if (node.nodeType === 3 /* TEXT_NODE */) {
@@ -89,15 +129,17 @@ function textFromNodes(nodes) {
     // on, and sites can override the UA's display:none (seen in the wild
     // with lazy-load <noscript> fallbacks leaking "<img …>" into names).
     if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'template') continue;
-    if (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden')) continue;
-    const style = getComputedStyle(node);
-    if (style.display === 'none' || style.visibility === 'hidden') continue;
+    if (!includeHidden) {
+      if (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden')) continue;
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+    }
     // A slot renders its assigned light-DOM nodes (fallback children when
     // nothing is slotted) — a shadow <button><slot></slot></button> is named
     // by the text the page slots in.
     if (tag === 'slot') {
       const assigned = node.assignedNodes?.() ?? [];
-      text += textFromNodes(assigned.length ? assigned : node.childNodes);
+      text += textFromNodes(assigned.length ? assigned : node.childNodes, includeHidden);
       continue;
     }
     if (tag === 'img' || tag === 'area') {
@@ -111,7 +153,7 @@ function textFromNodes(nodes) {
     }
     // Flat-tree descent: shadow content renders in place of a host's
     // light children (archive.org-style nested web components).
-    const fromSubtree = textFromNodes(node.shadowRoot ? node.shadowRoot.childNodes : node.childNodes);
+    const fromSubtree = textFromNodes(node.shadowRoot ? node.shadowRoot.childNodes : node.childNodes, includeHidden);
     if (fromSubtree.trim()) {
       text += fromSubtree;
       continue;

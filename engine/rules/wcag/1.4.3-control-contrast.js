@@ -20,7 +20,10 @@ export default {
   visibility: 'visual',
   evaluate(element) {
     // 1.4.3 exempts inactive controls.
-    if (element.disabled || element.closest('[aria-disabled="true"]')) return { status: 'pass' };
+    // `:disabled`, not `element.disabled`: the property reflects only the
+    // element's own attribute, so a control inside <fieldset disabled> reads
+    // false while the browser has it inactive and 1.4.3 exempts it.
+    if (element.closest(':disabled, [aria-disabled="true"]')) return { status: 'pass' };
     // Zero-area controls (JS-widget hidden duplicates) present no text.
     const rect = element.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1) return { status: 'pass' };

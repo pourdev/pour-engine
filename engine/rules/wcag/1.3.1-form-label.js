@@ -2,6 +2,8 @@
 // Instructions (Level A) · SC 4.1.2 Name, Role, Value (Level A)
 // 3.3.2 mapping: a field with no label at all, or only a vanishing
 // placeholder, is failure F82 — the classic 3.3.2 pattern.
+import { labelledByName } from '../../lib/accessible-name.js';
+
 export default {
   id: 'form-label',
   impact: 'critical',
@@ -30,12 +32,7 @@ export default {
       .join(' ')
       .trim();
     const ariaLabel = element.getAttribute('aria-label')?.trim();
-    const labelledby = (element.getAttribute('aria-labelledby') ?? '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((id) => element.getRootNode().getElementById?.(id)?.textContent ?? '')
-      .join(' ')
-      .trim();
+    const labelledby = labelledByName(element);
     if (labelsText || ariaLabel || labelledby) return { status: 'pass' };
 
     const id = element.id ? ` (it already has id="${element.id}")` : ' (give it an id first)';

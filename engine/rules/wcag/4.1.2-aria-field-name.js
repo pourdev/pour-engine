@@ -5,20 +5,16 @@
 // Spec note (accname): input-like roles are NOT "name from content" — the
 // text inside a listbox/textbox does not name it, only author-provided
 // naming counts. Toggle roles (checkbox/radio/switch) DO name from content.
+import { labelledByName } from '../../lib/accessible-name.js';
+
 const AUTHOR_ONLY = ['textbox', 'searchbox', 'combobox', 'listbox', 'spinbutton', 'slider'];
 const FROM_CONTENT = ['checkbox', 'radio', 'switch'];
 
 function authorName(element) {
-  const labelledby = element.getAttribute('aria-labelledby');
-  if (labelledby) {
-    const text = labelledby
-      .split(/\s+/)
-      .map((id) => element.getRootNode().getElementById?.(id)?.textContent ?? '')
-      .join(' ')
-      .trim();
-    if (text) return text;
-  }
-  return element.getAttribute('aria-label')?.trim() || element.getAttribute('title')?.trim() || '';
+  return labelledByName(element)
+    || element.getAttribute('aria-label')?.trim()
+    || element.getAttribute('title')?.trim()
+    || '';
 }
 
 export default {

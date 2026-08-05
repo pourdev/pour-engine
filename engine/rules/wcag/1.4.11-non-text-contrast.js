@@ -22,7 +22,10 @@ export default {
   visibility: 'visual',
   evaluate(element) {
     // Inactive controls are exempt (same carve-out 1.4.3 makes).
-    if (element.disabled || element.closest('[aria-disabled="true"]')) return { status: 'pass' };
+    // `:disabled`, not `element.disabled`: the property misses a control
+    // disabled by an ancestor <fieldset disabled>, which 1.4.11 exempts as an
+    // inactive user interface component.
+    if (element.closest(':disabled, [aria-disabled="true"]')) return { status: 'pass' };
     // Zero-area controls (JS-widget hidden duplicates) paint no boundary
     // to judge.
     const ownRect = element.getBoundingClientRect();

@@ -4,6 +4,8 @@
 // name. An open, unnamed modal announces as just "dialog", leaving
 // screen-reader users with no idea what interrupted them (cookie-consent
 // modals are the canonical offender).
+import { labelledByName } from '../../lib/accessible-name.js';
+
 export default {
   id: 'dialog-name',
   impact: 'serious',
@@ -14,15 +16,7 @@ export default {
   // dialogs the user can actually encounter are judged.
   selector: 'dialog, [role="dialog"], [role="alertdialog"]',
   evaluate(element) {
-    const labelledby = element.getAttribute('aria-labelledby');
-    if (labelledby) {
-      const text = labelledby
-        .split(/\s+/)
-        .map((id) => element.getRootNode().getElementById?.(id)?.textContent ?? '')
-        .join(' ')
-        .trim();
-      if (text) return { status: 'pass' };
-    }
+    if (labelledByName(element)) return { status: 'pass' };
     if (element.getAttribute('aria-label')?.trim() || element.getAttribute('title')?.trim()) {
       return { status: 'pass' };
     }

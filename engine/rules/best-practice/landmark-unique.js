@@ -2,6 +2,7 @@
 // labels, and banner / contentinfo / main must be unique per page outright
 // (two "banners" are ambiguous however well they're labelled).
 import { implicitRole } from '../../lib/roles.js';
+import { labelledByName } from '../../lib/accessible-name.js';
 
 const SINGLETON = new Set(['banner', 'contentinfo', 'main']);
 
@@ -13,18 +14,11 @@ const landmarkRole = (element) =>
 
 // Landmarks are not name-from-content roles: only author-provided labels
 // distinguish them (the text inside a nav is its content, not its name).
-const landmarkName = (element) => {
-  const labelledby = element.getAttribute('aria-labelledby');
-  if (labelledby) {
-    const text = labelledby
-      .split(/\s+/)
-      .map((id) => element.ownerDocument.getElementById(id)?.textContent ?? '')
-      .join(' ')
-      .trim();
-    if (text) return text;
-  }
-  return element.getAttribute('aria-label')?.trim() || element.getAttribute('title')?.trim() || '';
-};
+const landmarkName = (element) =>
+  labelledByName(element)
+  || element.getAttribute('aria-label')?.trim()
+  || element.getAttribute('title')?.trim()
+  || '';
 
 export default {
   id: 'landmark-unique',

@@ -18,7 +18,7 @@ export default {
     // disabled controls, display:none templates, and tabindex="-1" nodes
     // inside a control are inert markup, not competing tab stops.
     const nested = [...element.querySelectorAll(INTERACTIVE)].find((el) =>
-      !el.disabled && el.getAttribute('tabindex') !== '-1'
+      !el.matches(':disabled') && el.getAttribute('tabindex') !== '-1'
       && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el));
     if (!nested) return { status: 'pass' };
     return {
