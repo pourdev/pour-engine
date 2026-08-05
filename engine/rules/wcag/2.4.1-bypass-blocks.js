@@ -18,18 +18,41 @@ export default {
     const doc = element.ownerDocument;
     const roots = collectRoots(doc);
     const inAnyRoot = (selector) => roots.some((root) => root.querySelector?.(selector));
-    if (inAnyRoot('main, [role="main"]')) return { status: 'pass' };
+    // ARIA11 accepts landmarks generally, not the main landmark alone: a
+    // banner and a navigation region are exactly what landmark navigation
+    // skips between. Requiring `main` failed pages that were already using
+    // the technique the spec names.
+    const LANDMARKS = 'main, [role="main"], header, [role="banner"], nav, [role="navigation"],'
+      + ' aside, [role="complementary"], footer, [role="contentinfo"], [role="search"], form[role="search"]';
+    if (inAnyRoot(LANDMARKS)) return { status: 'pass' };
     if (inAnyRoot('h1, h2, h3, h4, h5, h6, [role="heading"]')) return { status: 'pass' };
+    // G1/G123/G124: ANY in-page link that resolves is a bypass mechanism.
+    // Reading only the first one hid a real skip link behind the href="#"
+    // that scripts use as a button.
     for (const root of roots) {
-      const firstLink = root.querySelector?.('a[href^="#"]');
-      const id = firstLink?.getAttribute('href').slice(1);
-      if (id && roots.some((r) => r.getElementById?.(id) || r.querySelector?.(`[id="${CSS.escape(id)}"]`))) {
-        return { status: 'pass' };
+      for (const link of root.querySelectorAll?.('a[href^="#"]') ?? []) {
+        const id = link.getAttribute('href').slice(1);
+        if (!id) continue;
+        if (roots.some((r) => r.getElementById?.(id) || r.querySelector?.(`[id="${CSS.escape(id)}"]`))) {
+          return { status: 'pass' };
+        }
       }
     }
+    // H64: a titled iframe is itself a way past the block it holds.
+    const frames = [...(doc.querySelectorAll('iframe, frame') ?? [])];
+    if (frames.length && frames.every((frame) => frame.getAttribute('title')?.trim())) {
+      return { status: 'pass' };
+    }
+    // The criterion governs "blocks of content that are repeated on multiple
+    // Web pages". One page cannot prove repetition, but it can show there is
+    // no block to bypass at all: a page with barely any links has nothing a
+    // reader would need to skip, and failing it names a duty that never
+    // applied.
+    const linkCount = roots.reduce((n, root) => n + (root.querySelectorAll?.('a[href], button').length ?? 0), 0);
+    if (linkCount < 4) return { status: 'pass' };
     return {
       status: 'fail',
-      message: 'No skip link, main landmark, or headings — keyboard users must Tab through the whole header/nav to reach anything.',
+      message: `This page has ${linkCount} links and buttons but no landmark, heading, skip link, or titled frame — keyboard and screen-reader users must go through the whole header and nav to reach anything.`,
       fix: 'Add a skip link like <a href="#content">Skip to content</a>, wrap primary content in <main>, or structure the page with headings.',
     };
   },

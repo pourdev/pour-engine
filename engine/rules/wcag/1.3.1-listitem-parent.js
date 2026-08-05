@@ -15,15 +15,19 @@ export default {
     // List ownership passes through presentation/none wrappers and
     // role-less div/span grouping wrappers (generic nodes) — an <li> in a
     // framework's wrapping div inside a <ul> is still that list's item.
-    while (parent && (
+    // A list CONTAINER stops the walk even when it is itself presentational:
+    // ARIA propagates an explicit presentation role to a role's required
+    // owned elements, so the <li>s in a <ul role="none"> are presentational
+    // too. There is no listitem left to be orphaned, and stepping over the
+    // <ul> used to blame whatever happened to be above it.
+    const listContainer = (el) => el.matches('ul, ol, menu') || el.getAttribute('role') === 'list';
+    while (parent && !listContainer(parent) && (
       ['presentation', 'none'].includes(parent.getAttribute('role') ?? '')
       || (!parent.hasAttribute('role') && (parent.tagName === 'DIV' || parent.tagName === 'SPAN'))
     )) {
       parent = parent.assignedSlot?.parentElement ?? parent.parentElement ?? parent.getRootNode()?.host;
     }
-    if (parent && (parent.matches('ul, ol, menu') || parent.getAttribute('role') === 'list')) {
-      return { status: 'pass' };
-    }
+    if (parent && listContainer(parent)) return { status: 'pass' };
     return {
       status: 'fail',
       message: `This <li> sits inside <${parent?.tagName.toLowerCase() ?? 'nothing'}> — outside a list, screen readers lose the item's list context entirely.`,

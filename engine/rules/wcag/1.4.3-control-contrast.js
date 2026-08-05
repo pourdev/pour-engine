@@ -4,6 +4,7 @@
 // endemic ~2.8:1 gray-on-white) was previously never measured by any rule.
 import {
   parseColor, contrastRatio, composite, effectiveBackground, isLargeText,
+  backgroundImageSource, cumulativeOpacity, opacityAnimating, restingOpacity,
 } from '../../lib/contrast.js';
 
 const showRatio = (ratio) => (Math.floor(ratio * 100) / 100).toFixed(2);
@@ -28,14 +29,31 @@ export default {
     const rect = element.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1) return { status: 'pass' };
     const style = getComputedStyle(element);
+    // Judge the opacity the text RESTS at, matching the main contrast rule:
+    // a control faded out by an ancestor (fade-in-on-scroll, a collapsed
+    // panel) presents no text at all, and one held at a low opacity presents
+    // far less contrast than its declared colours suggest.
+    const opacity = opacityAnimating(element) ? restingOpacity(element) : cumulativeOpacity(element);
+    if (opacity < 0.05) return { status: 'pass' };
     // The control's own background wins; else whatever shows through it.
     const own = parseColor(style.backgroundColor);
-    const background = own && own.a >= 1
-      ? own
-      : (() => {
-        const behind = effectiveBackground(element);
-        return behind && own && own.a > 0 ? composite(own, behind) : behind;
-      })();
+    let background;
+    if (own && own.a >= 1) {
+      background = own;
+    } else {
+      // An image or gradient painted under a see-through control is a
+      // backdrop of pixels this rule cannot sample. The main rule samples
+      // them; here the honest answer is to hand it to a person rather than
+      // judge against the colour layer alone as if the image were not there.
+      if (backgroundImageSource(element)) {
+        return {
+          status: 'incomplete',
+          message: 'This field is see-through and sits over a background image or gradient, so its real text contrast depends on the pixels behind it. Check it by eye.',
+        };
+      }
+      const behind = effectiveBackground(element);
+      background = behind && own && own.a > 0 ? composite(own, behind) : behind;
+    }
     if (!background) {
       return { status: 'incomplete', message: 'The control’s background could not be determined — check its text contrast by eye.' };
     }
@@ -44,7 +62,10 @@ export default {
     const judge = (color, what) => {
       const parsed = parseColor(color);
       if (!parsed || parsed.a === 0) return null;
-      const fg = parsed.a < 1 ? composite(parsed, background) : parsed;
+      // Same treatment the main rule gives faded text: what reaches the eye
+      // is the declared colour thinned by the opacity it is painted at.
+      const faded = opacity < 1 ? { ...parsed, a: parsed.a * opacity } : parsed;
+      const fg = faded.a < 1 ? composite(faded, background) : faded;
       const ratio = contrastRatio(fg, background);
       if (ratio >= required) return null;
       return { what, ratio };

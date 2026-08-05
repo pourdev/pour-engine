@@ -1,5 +1,9 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
-const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE']);
+// Nothing here reaches the accessibility tree, so none of it can corrupt a
+// list's structure. STYLE belongs with them: CSS-in-JS libraries inject
+// <style> right where the markup sits, and it was being counted as a stray
+// child that broke the list.
+const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'META']);
 const ITEM_ROLES = ['listitem', 'presentation', 'none'];
 
 export default {
@@ -9,7 +13,7 @@ export default {
   help: 'Lists must only contain list items',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html',
   selector: 'ul, ol',
-  evaluate(element) {
+  evaluate(element, { isRendered }) {
     // A role attribute replaces the HTML list semantics — a <ul role="tablist">
     // is judged by ARIA structure rules, not HTML list rules.
     if (element.hasAttribute('role') && element.getAttribute('role') !== 'list') return { status: 'pass' };
@@ -29,6 +33,9 @@ export default {
     // genuinely corrupts the list.
     const isValidChild = (child) => {
       if (NEVER_RENDERED.has(child.tagName)) return true;
+      // A child the browser never renders is not in the accessibility tree
+      // either, so it cannot be corrupting the list a reader hears.
+      if (isRendered && !isRendered(child)) return true;
       // An explicit role REPLACES an <li>'s listitem semantics: a carousel
       // built as <ul> with <li role="group"> slides no longer owns any
       // listitems, so the list announces broken/empty. Only a role-less

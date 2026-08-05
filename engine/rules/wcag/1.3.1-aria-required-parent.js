@@ -28,6 +28,16 @@ export default {
   evaluate(element) {
     const role = element.getAttribute('role').trim().split(/\s+/)[0].toLowerCase();
     const containers = REQUIRED_PARENT[role];
+    // aria-owns makes the relationship without containment: the owner can sit
+    // anywhere in the document and the browser still builds the structure.
+    // Judging by DOM ancestry alone failed every remotely-owned child.
+    if (element.id) {
+      const owner = element.getRootNode().querySelector?.(`[aria-owns~="${CSS.escape(element.id)}"]`);
+      const ownerRole = owner && (
+        owner.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase()
+        ?? IMPLICIT_CONTAINER[owner.tagName.toLowerCase()]);
+      if (ownerRole && containers.includes(ownerRole)) return { status: 'pass' };
+    }
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
       const parentRole =
         parent.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase() ??

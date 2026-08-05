@@ -1,5 +1,6 @@
 // WAI forms tutorial: radio/checkbox groups need a group label — each
 // input's own label isn't enough to convey what the group asks.
+import { labelledByName } from '../../lib/accessible-name.js';
 export default {
   id: 'fieldset-legend',
   impact: 'moderate',
@@ -19,10 +20,20 @@ export default {
     for (const indexes of Object.values(groups)) {
       if (indexes.length < 2) continue;
       const first = elements[indexes[0]];
-      const fieldset = first.closest('fieldset');
-      const grouped =
-        (fieldset && fieldset.querySelector('legend')?.textContent.trim()) ||
-        first.closest('[role="group"][aria-label], [role="group"][aria-labelledby], [role="radiogroup"][aria-label], [role="radiogroup"][aria-labelledby]');
+      // A <fieldset> IS a group; it does not need role="group" written on it
+      // to be one, and a legend is one way to name it rather than the only
+      // way. Requiring an explicit role attribute reported a correctly named
+      // group as unlabelled, which the browser plainly contradicts.
+      // Name the GROUP the three ways a group can be named: its own legend,
+      // a reference, or a label. Not a general accessible-name call, which
+      // would fall through to name-from-contents and read the options inside
+      // the fieldset as if they were its name.
+      const group = first.closest('fieldset, [role="group"], [role="radiogroup"]');
+      const grouped = group && (
+        group.querySelector(':scope > legend')?.textContent.trim()
+        || labelledByName(group)
+        || group.getAttribute('aria-label')?.trim()
+      );
       if (grouped) continue;
       outcomes[indexes[0]] = {
         status: 'fail',
