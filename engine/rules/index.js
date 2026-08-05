@@ -42,7 +42,10 @@ import audioControl from './wcag/1.4.2-audio-control.js';
 import pauseStopHide from './wcag/2.2.2-pause-stop-hide.js';
 import mediaCaptions from './wcag/1.2.2-media-captions.js';
 import ariaAttrValid from './wcag/4.1.2-aria-attr-valid.js';
-import ariaAllowedAttr from './wcag/4.1.2-aria-allowed-attr.js';
+// Demoted to best-practice: an unsupported ARIA attribute breaks an ARIA
+// author MUST (1.2 §8.6) but is INERT, so name, role and value all survive
+// and no success criterion fails (see the note in the rule file).
+import ariaAllowedAttr from './best-practice/aria-allowed-attr.js';
 import ariaFieldName from './wcag/4.1.2-aria-field-name.js';
 // Demoted to best-practice: prohibited-but-inert ARIA on a generic element
 // fails no success criterion (see the note in the rule file).
