@@ -150,6 +150,15 @@ export function implicitRole(element) {
   if (tag === 'img') return element.getAttribute('alt') === '' ? 'presentation' : 'img';
   if (tag === 'header') return element.closest('article, aside, main, nav, section') ? 'generic' : 'banner';
   if (tag === 'footer') return element.closest('article, aside, main, nav, section') ? 'generic' : 'contentinfo';
+  // HTML-AAM: an aside inside sectioning content is complementary only when
+  // it carries an accessible name; unnamed it is generic. Verified against
+  // Chromium's accessibility tree, which demotes exactly that case and keeps
+  // a top-level aside complementary whether named or not.
+  if (tag === 'aside') {
+    const sectioned = element.parentElement?.closest('article, aside, nav, section');
+    const named = element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby');
+    return sectioned && !named ? 'generic' : 'complementary';
+  }
   if (tag === 'section') {
     return element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby') ? 'region' : 'generic';
   }
