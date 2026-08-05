@@ -373,9 +373,10 @@ function textSamplePoint(element) {
  *   'unresolved'       — in-viewport but unanswerable (shadow retargeting hid
  *                        the element from the stack, blend/filter layers…)
  *
- * `scrim` (when present) is a translucent viewport-scale layer painted ON TOP
- * of the text — a modal veil, loading overlay, consent dimmer. The text is
- * presented through it, so the resting colours are not what the user sees.
+ * `scrim` (when present) is the list of translucent viewport-scale layers
+ * painted ON TOP of the text — a modal veil, loading overlay, consent dimmer.
+ * The text is presented through them, so the resting colours are not what the
+ * user sees; scrimPaint() turns them into the paint that dims it.
  *
  * Known approximation: pointer-events:none layers paint but never appear in
  * hit-test stacks, so a decorative tint above the resolved colour can be
@@ -564,9 +565,13 @@ export function pseudoBackdropForText(element) {
 
 /** A layer qualifies as a scrim over `element` when it is translucent paint
  *  (or a backdrop-filter) covering most of the viewport and the whole
- *  element — the shape of a modal/loading veil, not a badge or header. */
+ *  element — the shape of a modal/loading veil, not a badge or header.
+ *  Returns EVERY such layer, topmost first: consent flows routinely stack a
+ *  dimmer under a banner container, and the dimmed state the user sees is
+ *  all of them composited, not just the first one found. */
 function scrimIn(layersAbove, element, win) {
   const rect = element.getBoundingClientRect();
+  const found = [];
   for (const layer of layersAbove) {
     if (layer.contains(element) || element.contains(layer)) continue;
     const style = getComputedStyle(layer);
@@ -582,9 +587,33 @@ function scrimIn(layersAbove, element, win) {
       >= 0.6 * win.innerWidth * win.innerHeight;
     const coversElement = r.left <= rect.left + 1 && r.top <= rect.top + 1
       && r.right >= rect.right - 1 && r.bottom >= rect.bottom - 1;
-    if (coversViewport && coversElement) return layer;
+    if (coversViewport && coversElement) found.push(layer);
   }
-  return null;
+  return found.length ? found : null;
+}
+
+/**
+ * The flat paint of scrim layers (topmost first, as `scrimIn` returns them),
+ * ready for applyOverlays — or null when the dimmed state can't be computed
+ * as flat colour at all. A backdrop-filter resamples the pixels beneath it
+ * (blur, saturate, invert) and a blend mode or filter rewrites them: no
+ * colour arithmetic reproduces either, so those veils stay a human call.
+ */
+export function scrimPaint(layers) {
+  const paints = [];
+  for (const layer of layers) {
+    const style = getComputedStyle(layer);
+    if (style.backdropFilter && style.backdropFilter !== 'none') return null;
+    if (style.filter && style.filter !== 'none') return null;
+    if (style.mixBlendMode && style.mixBlendMode !== 'normal') return null;
+    if (style.backgroundImage !== 'none') return null;
+    const color = parseColor(style.backgroundColor);
+    if (!color) return null;
+    const alpha = color.a * (parseFloat(style.opacity) || 1);
+    if (alpha <= 0) continue;
+    paints.push({ ...color, a: alpha });
+  }
+  return paints.length ? paints : null;
 }
 
 export function paintedBackdrop(element) {

@@ -4,12 +4,24 @@ import {
   backgroundImageSource, backgroundImagePaintRect, imageLuminanceRange, gradientLuminanceRange,
   rangeVerdict, isLargeText, cumulativeOpacity, opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
-  pseudoBackdropForText, backgroundColorSource,
+  pseudoBackdropForText, backgroundColorSource, scrimPaint, applyOverlays,
 } from '../../lib/contrast.js';
 
 /** Display a ratio truncated (never rounded up): 4.495 must read "4.49",
  *  because "4.50:1 — below the 4.5:1 minimum" reads as a contradiction. */
 const showRatio = (ratio) => (Math.floor(ratio * 100) / 100).toFixed(2);
+
+/** The one case a full-page veil still can't be judged for the author: the
+ *  resting page and the dimmed one land on opposite sides of the threshold,
+ *  so the verdict depends on whether the veil is transient or permanent. */
+const veiledIncomplete = (resting, veiled) => ({
+  status: 'incomplete',
+  message: 'This text sits behind a translucent full-page overlay (a modal or loading veil), which changes its presented contrast'
+    + (resting && veiled
+      ? `: ${showRatio(resting)}:1 at rest, ${showRatio(veiled)}:1 as presented through the overlay, which straddles the threshold`
+      : '')
+    + ' — judge the page with the overlay dismissed, or the dimmed state by eye if the overlay is permanent.',
+});
 
 /**
  * Is a duplicate copy of the same text painted exactly on top of this
@@ -388,28 +400,30 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // of merely flagging them for a human.
     const painted = paintedBackdrop(element);
     // A translucent viewport-scale veil is painted ON TOP of this text
-    // (modal scrim, loading overlay, consent dimmer): the user sees the
-    // text through it, so the resting colours are not the presented ones —
-    // and if the veil is transient, the resting state is what should be
-    // judged. Either way this is a human call, in both verdict directions.
-    if (painted?.scrim) {
-      return {
-        status: 'incomplete',
-        message: 'This text sits behind a translucent full-page overlay (a modal or loading veil), which changes its presented contrast — judge the page with the overlay dismissed, or the dimmed state by eye if the overlay is permanent.',
-      };
-    }
+    // (modal scrim, loading overlay, consent dimmer): the user sees the text
+    // through it, so the resting colours are not the presented ones — and if
+    // the veil is transient, the resting state is what should be judged.
+    // TWO states, then, and the honest question is whether they disagree.
+    // A consent dimmer over failing body text fails dimmed AND at rest; the
+    // veil changes nothing a human could rule differently, so a verdict is
+    // owed. Abstaining on sight instead silenced contrast across every page
+    // that greets a visitor with a cookie modal — which is most of the web.
+    // Only genuine disagreement between the two states is a human call.
+    let veilPaint = null;
+    let scrimLayers = painted?.scrim ?? null;
     // Offscreen text can't be hit-tested against the veil — but a FIXED
     // translucent overlay follows the viewport, so it dims scrolled-away
     // content just the same. (The veil's own contents are fixed too, hence
     // in-viewport, hence never routed through this branch.)
-    if (painted === 'offscreen') {
+    if (!scrimLayers && painted === 'offscreen') {
       const veil = viewportVeil(doc);
-      if (veil && !veil.contains(element)) {
-        return {
-          status: 'incomplete',
-          message: 'This text sits behind a translucent full-page overlay (a modal or loading veil), which changes its presented contrast — judge the page with the overlay dismissed, or the dimmed state by eye if the overlay is permanent.',
-        };
-      }
+      if (veil && !veil.contains(element)) scrimLayers = [veil];
+    }
+    if (scrimLayers) {
+      veilPaint = scrimPaint(scrimLayers);
+      // A veil whose paint can't be reduced to flat colour (backdrop-filter,
+      // blend mode) leaves the dimmed state uncomputable: still a human call.
+      if (!veilPaint) return veiledIncomplete();
     }
     // Pseudo-element paint sits above everything the hit-test and the walk
     // can report, and neither can see it — so it is resolved before them and
@@ -423,6 +437,11 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
       };
     }
+    // An image backdrop under a veil would have to be sampled a second time,
+    // dimmed, to answer whether the two states agree. Not worth a second pass
+    // over the pixels of every hero photo behind a cookie modal: these keep
+    // the human call they have always had.
+    if (veilPaint && (pseudoBack?.image || painted?.image)) return veiledIncomplete();
     // Gradient/image paint from a pseudo-element: bracket it by sampling,
     // exactly as an element's own background-image is bracketed.
     if (pseudoBack?.image) {
@@ -526,6 +545,17 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     };
 
     const ratio = contrastRatio(foreground, background);
+    // The dimmed state, when a veil is up: it paints over the glyphs and
+    // their background alike, so both composite through the same layers.
+    // Dimming is not monotonic on ratio (it can rescue or ruin a pairing),
+    // which is exactly why both states are measured rather than assumed.
+    const veiled = (fg, bg) => contrastRatio(applyOverlays(fg, veilPaint), applyOverlays(bg, veilPaint));
+    if (veilPaint) {
+      const veiledRatio = veiled(foreground, background);
+      if ((veiledRatio >= required) !== (ratio >= required)) {
+        return veiledIncomplete(ratio, veiledRatio);
+      }
+    }
     if (ratio >= required) {
       return backdropHazard('pass', backgroundVerified) ?? { status: 'pass' };
     }
@@ -545,6 +575,14 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       const halo = textShadowHalo(style.textShadow, fontSize);
       if (halo) {
         const haloRatio = contrastRatio(foreground, halo);
+        // A veil dims the glyphs and their own outline together: the halo
+        // verdict has to survive both states, exactly as the background one does.
+        if (veilPaint) {
+          const veiledHalo = veiled(foreground, halo);
+          if ((veiledHalo >= required) !== (haloRatio >= required)) {
+            return veiledIncomplete(haloRatio, veiledHalo);
+          }
+        }
         if (haloRatio >= required) return { status: 'pass' };
         return {
           status: 'fail',
