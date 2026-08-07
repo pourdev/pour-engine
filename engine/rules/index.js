@@ -50,9 +50,12 @@ import ariaAttrValid from './wcag/4.1.2-aria-attr-valid.js';
 // instead of claiming a failure (see the note in the rule file).
 import ariaAllowedAttr from './wcag/4.1.2-aria-allowed-attr.js';
 import ariaFieldName from './wcag/4.1.2-aria-field-name.js';
-// Demoted to best-practice: prohibited-but-inert ARIA on a generic element
-// fails no success criterion (see the note in the rule file).
-import ariaLabelMisuse from './best-practice/aria-label-misuse.js';
+// Asks instead of asserting: a prohibited name on a generic element is a
+// real ARIA MUST violation the browser silently drops, so it runs in the
+// default scope as a review question (see the note in the rule file —
+// it has been asserted, demoted, and now asks; same route as
+// aria-allowed-attr).
+import ariaLabelMisuse from './wcag/4.1.2-aria-label-misuse.js';
 import roleRequiredAria from './wcag/4.1.2-role-required-aria.js';
 import labelForValid from './wcag/4.1.2-label-for-valid.js';
 import listitemParent from './wcag/1.3.1-listitem-parent.js';
