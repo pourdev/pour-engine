@@ -3,19 +3,25 @@
 // state or property". An unsupported attribute breaks that MUST, so this is a
 // real, provable authoring error and the rule asserts it.
 //
-// It is NOT a WCAG failure, which is why it lives here rather than under
-// 4.1.2. An unsupported attribute is INERT, measured in Chromium:
-// aria-expanded on a button exposes expanded=false, while the same attribute
-// on a complementary landmark exposes no state at all. It is dropped, not
-// misreported. So the role is still exposed, the name is still computed, and
-// nothing is announced incorrectly. Name, role and value all survive, which
-// is all 4.1.2 asks for.
+// It is not, on its own, a WCAG failure. An unsupported attribute is INERT,
+// measured in Chromium: aria-expanded on a button exposes expanded=true,
+// while the same attribute on complementary, heading or list exposes no
+// state at all. It is dropped, not misreported. So the role is still
+// exposed, the name is still computed, and nothing is announced incorrectly.
+// Name, role and value all survive, which is all 4.1.2 asks for.
 //
 // What CAN fail 4.1.2 is the thing underneath: if the element genuinely has
-// the state the author reached for, that state is now invisible. Whether it
-// does is exactly what the DOM cannot establish, so the message asks rather
-// than asserts. Reporting the ARIA error as a WCAG violation would have been
-// asserting a criterion failure off the back of a question.
+// the state the author reached for, that state is now invisible to a screen
+// reader. Whether it does is exactly what the DOM cannot establish.
+//
+// So this sits in the WCAG scope and REVIEWS rather than asserts. It lived
+// under best-practice before, which was defensible on the letter of 4.1.2
+// and wrong in practice: teams act on what a tool marks as WCAG, so a real
+// ARIA error that a browser silently discards went unseen in a default
+// audit. Asserting a violation would state a criterion failure the browser
+// does not actually cause; staying silent leaves a genuine authoring error
+// unreported. Asking is the honest third option, and it is the one the
+// engine is built around.
 //
 // Note "unsupported" is distinct from "prohibited" (§5.2.5), a separate
 // category about naming that this rule does not cover.
@@ -34,9 +40,9 @@ const HANDLED_ELSEWHERE = new Set(['label', 'labelledby']);
 export default {
   id: 'aria-allowed-attr',
   impact: 'moderate',
-  tags: ['best-practice'],
+  tags: ['wcag2a', 'wcag412'],
   help: 'ARIA attributes must be supported by the element’s role',
-  helpUrl: 'https://www.w3.org/TR/wai-aria-1.2/#state_property_processing',
+  helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: '*',
   visibleOnly: false,
   evaluate(element) {
@@ -60,8 +66,8 @@ export default {
     if (!disallowed.length) return { status: 'pass' };
     const names = disallowed.map((n) => `aria-${n}`);
     return {
-      status: 'fail',
-      message: `${names.join(', ')} is not supported on role "${role}", so the browser drops it and assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. If this element really does have that state, it is currently invisible to anyone using a screen reader.`,
+      status: 'incomplete',
+      message: `${names.join(', ')} is not supported on role "${role}", so the browser drops it and assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. Does this element really have that state? If it does, it is invisible to a screen reader and this is a 4.1.2 failure. If it does not, the attribute is simply stray and no one is affected.`,
       fix: `Move ${names.join('/')} to the element whose role supports it, usually the control that toggles this one, or remove it if the element has no such state. Adding a role to this element to make the attribute legal is rarely right: the host language restricts which roles each element may take.`,
     };
   },
