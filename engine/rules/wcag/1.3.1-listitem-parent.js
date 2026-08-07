@@ -20,7 +20,17 @@ export default {
     // owned elements, so the <li>s in a <ul role="none"> are presentational
     // too. There is no listitem left to be orphaned, and stepping over the
     // <ul> used to blame whatever happened to be above it.
-    const listContainer = (el) => el.matches('ul, ol, menu') || el.getAttribute('role') === 'list';
+    //
+    // Any OTHER explicit role replaces the native list semantics entirely:
+    // a <ul role="navigation"> is a navigation landmark, not a list, so it
+    // cannot own listitems and its <li> children are orphaned exactly as if
+    // the <ul> were a <div>. Matching the tag alone waved those through
+    // (found on ar.wikipedia.org: portal links in <ul role="navigation">).
+    const listContainer = (el) => {
+      const role = el.getAttribute('role');
+      if (el.matches('ul, ol, menu')) return !role || ['list', 'presentation', 'none'].includes(role);
+      return role === 'list';
+    };
     while (parent && !listContainer(parent) && (
       ['presentation', 'none'].includes(parent.getAttribute('role') ?? '')
       || (!parent.hasAttribute('role') && (parent.tagName === 'DIV' || parent.tagName === 'SPAN'))
@@ -28,10 +38,17 @@ export default {
       parent = parent.assignedSlot?.parentElement ?? parent.parentElement ?? parent.getRootNode()?.host;
     }
     if (parent && listContainer(parent)) return { status: 'pass' };
+    const parentLabel = parent
+      ? `<${parent.tagName.toLowerCase()}${parent.getAttribute('role') ? ` role="${parent.getAttribute('role')}"` : ''}>`
+      : 'nothing';
     return {
       status: 'fail',
-      message: `This <li> sits inside <${parent?.tagName.toLowerCase() ?? 'nothing'}> — outside a list, screen readers lose the item's list context entirely.`,
-      fix: 'Wrap it in a <ul> or <ol>, or change it to a <div>/<p> if it isn’t really a list item.',
+      message: `This <li> sits inside ${parentLabel} — ${parent?.matches('ul, ol, menu') && parent.getAttribute('role')
+        ? 'the explicit role replaces the list semantics, so'
+        : 'outside a list,'} screen readers lose the item's list context entirely.`,
+      fix: parent?.matches('ul, ol, menu') && parent.getAttribute('role')
+        ? 'Remove the role from the list (use a wrapping element for the landmark), or give the items roles the container expects.'
+        : 'Wrap it in a <ul> or <ol>, or change it to a <div>/<p> if it isn’t really a list item.',
     };
   },
 };

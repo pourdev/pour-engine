@@ -199,9 +199,183 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     const encloses = (a, b) =>
       a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom;
 
+    // ── Obscured targets ──────────────────────────────────────────────
+    // The criterion measures the region that ACCEPTS the pointer action.
+    // When another target paints over part of this one, clicks in the
+    // overlap go to the other target, so the accepting region is only the
+    // part left uncovered — a 26px logo link tiled 20px from the next link
+    // offers the pointer 20px, whatever its box says (found on ant.design).
+    // Box-sized-fine targets are therefore re-measured as the largest
+    // uncovered sub-rectangle before they may pass.
+    //
+    // Overlap only counts between targets that MOVE TOGETHER. A footer
+    // link sliding under a fixed header overlaps it at this scroll
+    // position and not the next, and asserting a size failure from scroll
+    // state invents a defect the layout does not have (the same trap the
+    // reachability test below documents). Targets share motion when they
+    // share a fixed/sticky context — both inside the same pinned bar, or
+    // neither pinned at all.
+    const fixedContexts = new Map();
+    const fixedContextOf = (element) => {
+      if (fixedContexts.has(element)) return fixedContexts.get(element);
+      let context = null;
+      for (let node = element; node && node !== element.ownerDocument.documentElement; node = node.parentElement) {
+        const position = getComputedStyle(node).position;
+        if (position === 'fixed' || position === 'sticky') { context = node; break; }
+      }
+      fixedContexts.set(element, context);
+      return context;
+    };
+    const overlapOf = (a, b) => {
+      const left = Math.max(a.left, b.left);
+      const top = Math.max(a.top, b.top);
+      const right = Math.min(a.right, b.right);
+      const bottom = Math.min(a.bottom, b.bottom);
+      // Only MATERIAL overlap obscures. A 1–2px intrusion is the border-
+      // collapse convention (button groups with negative margins) plus
+      // layout rounding — asserting a size failure from a 1px shave off a
+      // 24px control invents a defect no pointer will ever notice (seen
+      // live: a consent button measured 112×23 through a 1px overlap).
+      return right - left > 2 && bottom - top > 2
+        ? { left, top, right, bottom, width: right - left, height: bottom - top } : null;
+    };
+    /** Does target j's paint sit ABOVE target i where they overlap? The
+     *  paint stack at the overlap's midpoint answers it directly; the first
+     *  layer belonging to exactly one of the two decides. Off-viewport
+     *  points cannot be probed, and guessing from document order or
+     *  z-index is not evidence on pages full of stacking contexts
+     *  (transforms, opacity), so an unprovable overlap asserts nothing —
+     *  an audit run with the region scrolled into view proves it then. */
+    const paintsOver = (j, i, overlap) => {
+      const doc = elements[i].ownerDocument;
+      const win = doc.defaultView;
+      const x = overlap.left + overlap.width / 2;
+      const y = overlap.top + overlap.height / 2;
+      if (!win || typeof doc.elementsFromPoint !== 'function'
+        || x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) return false;
+      for (const layer of doc.elementsFromPoint(x, y)) {
+        const inJ = elements[j] === layer || elements[j].contains(layer);
+        const inI = elements[i] === layer || elements[i].contains(layer);
+        if (inJ && !inI) return true;
+        if (inI && !inJ) return false;
+      }
+      return false; // neither reachable there — a third element's problem, not j's
+    };
+    /** Largest uncovered sub-rectangle after removing the overlap: the best
+     *  of the four slabs beside/above/below it (exact for one obscurer,
+     *  a safe under-approximation applied sequentially for several). */
+    const uncovered = (rect, overlap) => {
+      const slabs = [
+        { left: rect.left, top: rect.top, right: overlap.left, bottom: rect.bottom },
+        { left: overlap.right, top: rect.top, right: rect.right, bottom: rect.bottom },
+        { left: rect.left, top: rect.top, right: rect.right, bottom: overlap.top },
+        { left: rect.left, top: overlap.bottom, right: rect.right, bottom: rect.bottom },
+      ].map((s) => ({ ...s, width: s.right - s.left, height: s.bottom - s.top }))
+        .filter((s) => s.width >= 1 && s.height >= 1);
+      // Note: rect may be a DOMRect, whose properties do not survive object
+      // spread — the zero-rect is built from explicit reads.
+      if (!slabs.length) {
+        return { left: rect.left, top: rect.top, right: rect.left, bottom: rect.top, width: 0, height: 0 };
+      }
+      return slabs.reduce((best, s) => (s.width * s.height > best.width * best.height ? s : best));
+    };
+    // Spatial hash so finding overlap candidates stays near-linear on pages
+    // with tens of thousands of targets: only targets sharing a cell can
+    // intersect, so each target is tested against its cell-mates only.
+    const CELL = 256;
+    let cellIndex = null;
+    const cellsOf = (r) => {
+      const keys = [];
+      for (let cx = Math.floor(r.left / CELL); cx <= Math.floor(r.right / CELL); cx++) {
+        for (let cy = Math.floor(r.top / CELL); cy <= Math.floor(r.bottom / CELL); cy++) {
+          keys.push(`${cx}:${cy}`);
+        }
+      }
+      return keys;
+    };
+    const overlapCandidates = (i) => {
+      if (!cellIndex) {
+        cellIndex = new Map();
+        rects.forEach((r, j) => {
+          if (!laidOut[j]) return;
+          for (const key of cellsOf(r)) {
+            if (!cellIndex.has(key)) cellIndex.set(key, []);
+            cellIndex.get(key).push(j);
+          }
+        });
+      }
+      const seen = new Set();
+      for (const key of cellsOf(rects[i])) {
+        for (const j of cellIndex.get(key) ?? []) if (j !== i) seen.add(j);
+      }
+      return seen;
+    };
+    /** The pointer-accepting rect of a box-sized-fine target, reduced by
+     *  every overlapping target painted above it — or null when nothing
+     *  qualifying overlaps. */
+    const obscuredRect = (i) => {
+      let effective = null;
+      for (const j of overlapCandidates(i)) {
+        if (elements[j].contains(elements[i]) || elements[i].contains(elements[j])) continue; // same control, nested markup
+        if (encloses(rects[j], rects[i]) || encloses(rects[i], rects[j])) continue; // one control drawn twice
+        // Two links to the same place are one control in two boxes (a
+        // card's image link over its title link): clicks in the overlap
+        // land on the same destination, which is the criterion's
+        // "equivalent" case, provable here because the hrefs match.
+        if (typeof elements[i].href === 'string' && elements[i].href === elements[j].href) continue;
+        const overlap = overlapOf(effective ?? rects[i], rects[j]);
+        if (!overlap) continue;
+        if (fixedContextOf(elements[j]) !== fixedContextOf(elements[i])) continue; // scroll-state, not layout
+        if (!paintsOver(j, i, overlap)) continue;
+        effective = uncovered(effective ?? rects[i], overlap);
+      }
+      return effective;
+    };
+
     return elements.map((element, i) => {
       if (!laidOut[i]) return { status: 'pass' }; // not laid out / not a pointer target
-      if (!undersized[i]) return { status: 'pass' };
+      if (!undersized[i]) {
+        // Box is big enough — but the pointer only gets the uncovered part.
+        const effective = obscuredRect(i);
+        if (!effective || (effective.width >= min && effective.height >= min)) return { status: 'pass' };
+        if (isInTextLine(element)) return { status: 'pass' };
+        // A target the pointer never actually hits is a keyboard
+        // affordance, not a pointer target — an in-flow skip link whose
+        // box sits beneath the header's paint (python.org's is hit-tested
+        // to its container at every probe point). Probed per fragment:
+        // if every in-viewport probe misses the element, pointers never
+        // interact with it and its pointer size is nobody's defect.
+        // (Hit-tests paid only here, on candidate failures.)
+        const everHit = (() => {
+          const doc = element.ownerDocument;
+          const win = doc.defaultView;
+          if (!win || typeof doc.elementsFromPoint !== 'function') return true;
+          const fragments = [...element.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+          let tested = false;
+          for (const fragment of (fragments.length ? fragments : [rects[i]])) {
+            const x = fragment.left + fragment.width / 2;
+            const y = fragment.top + fragment.height / 2;
+            if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) continue;
+            tested = true;
+            if (doc.elementsFromPoint(x, y).includes(element)) return true;
+          }
+          return !tested; // nothing probe-able → don't know → don't silence
+        })();
+        if (!everHit) return { status: 'pass' };
+        // The spacing exception cannot apply: the obscuring target is at
+        // distance zero. UA-control cannot either: the browser sized the
+        // box, but the author's layout took part of it away.
+        const rect = rects[i];
+        return {
+          status: 'fail',
+          message: `This target's box is ${Math.round(rect.width)}×${Math.round(rect.height)}px, but another target overlaps it and clicks in the overlap go there — the part that still accepts the pointer is ${Math.round(effective.width)}×${Math.round(effective.height)}px, below the ${min}×${min}px minimum.`,
+          fix: 'Space the targets so they no longer overlap, or enlarge this one until the uncovered part reaches the minimum.',
+          data: {
+            box: { width: Math.round(rect.width), height: Math.round(rect.height) },
+            effective: { width: Math.round(effective.width), height: Math.round(effective.height) },
+          },
+        };
+      }
       if (uaControlled(element)) return { status: 'pass' }; // UA Control exception
       if (isInTextLine(element)) return { status: 'pass' };
       if (spacingException) {
