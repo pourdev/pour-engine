@@ -8,7 +8,7 @@ export default {
   id: 'form-label',
   impact: 'critical',
   tags: ['wcag2a', 'wcag131', 'wcag332', 'wcag412'],
-  help: 'Every form field needs a visible label',
+  help: 'Every form field needs a label',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html',
   selector:
     'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), select, textarea',
