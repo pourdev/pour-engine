@@ -650,7 +650,24 @@ export function paintedBackdrop(element) {
     if ((style.mixBlendMode && style.mixBlendMode !== 'normal')
       || (style.filter && style.filter !== 'none')
       || (style.backdropFilter && style.backdropFilter !== 'none')) return 'unresolved';
-    if (style.backgroundImage !== 'none') return { image: layer, scrim };
+    // An ancestor carrying a background-image is only this text's backdrop if
+    // that image actually paints where the text is. The element's own image is
+    // adjudicated upstream against its paint rect; ancestors were not, so a
+    // decorative 4px accent stripe down a callout's left edge counted as the
+    // backdrop for text sitting 44px to its right, and the stripe's colour
+    // then failed the whole paragraph. Adjudicate at the same point the hit
+    // test used: if the rect resolves and does not cover it, this image is not
+    // what is behind the glyphs, so fall through to the layer's own colour.
+    // An unresolvable rect keeps the old behaviour, which errs toward asking a
+    // human rather than asserting from geometry we could not compute.
+    if (style.backgroundImage !== 'none') {
+      const rects = backgroundImagePaintRects(layer);
+      // An unresolvable layer (null) counts as covering: not knowing where a
+      // layer paints is a reason to ask a human, never to rule it out.
+      const covers = (r) => !r
+        || (point.x >= r.left && point.x < r.right && point.y >= r.top && point.y < r.bottom);
+      if (!rects.length || rects.some(covers)) return { image: layer, scrim };
+    }
     let color = parseColor(style.backgroundColor);
     if (!color) return 'unresolved';
     // A layer's own opacity thins its paint. (Group opacity shared with the
@@ -918,6 +935,100 @@ export function imageLuminanceRange(url, overlays = []) {
  * clear text that never overlaps the image — e.g. external-link icons
  * painted in a link's right padding (Wikipedia-style).
  */
+/**
+ * Paint rect for EVERY layer of a background-image list, one entry per layer,
+ * null where a layer's geometry cannot be resolved.
+ *
+ * background-size/position/repeat are comma-separated lists that pair up with
+ * the image list, so a four-layer background can be four separate 1px lines —
+ * which is how design systems draw a tile's border without a border. Judging
+ * such a background as one blob meant text in the middle of a tile was ruled
+ * unjudgeable because of four hairlines around its edge.
+ *
+ * A layer resolves to null (unknown, treat as covering) when it tiles, when
+ * cover/contain hands sizing to an intrinsic this function does not have, or
+ * when its position is not a plain length or percentage.
+ */
+export function backgroundImagePaintRects(element) {
+  const style = getComputedStyle(element);
+  const images = splitLayers(style.backgroundImage);
+  if (!images.length) return [];
+  const box = element.getBoundingClientRect();
+  const sizes = splitLayers(style.backgroundSize);
+  const positions = splitLayers(style.backgroundPosition);
+  const repeats = splitLayers(style.backgroundRepeat);
+  const per = (list, i) => (list.length ? list[i % list.length] : undefined);
+
+  return images.map((image, i) => {
+    if (image === 'none') return { left: 0, top: 0, right: 0, bottom: 0 }; // paints nothing
+    const repeat = per(repeats, i) ?? 'repeat';
+    if (repeat !== 'no-repeat') return null; // may tile under the text
+    const size = per(sizes, i) ?? 'auto';
+    if (size === 'cover' || size === 'contain') return null;
+    const parts = splitParts(size);
+    const extent = (value, total) => {
+      if (value?.endsWith('px')) return parseFloat(value);
+      if (value?.endsWith('%')) return (parseFloat(value) / 100) * total;
+      return null; // 'auto' on a gradient means the full box, but only for a
+      // single-layer background; per-layer we decline rather than guess.
+    };
+    const width = extent(parts[0], box.width);
+    const height = extent(parts[1] ?? parts[0], box.height);
+    if (width === null || height === null
+      || Number.isNaN(width) || Number.isNaN(height)) return null;
+    const pos = splitParts(per(positions, i) ?? '0% 0%');
+    const offset = (value, total, span) => {
+      if (value?.endsWith('%')) return (parseFloat(value) / 100) * (total - span);
+      if (value?.endsWith('px')) return parseFloat(value);
+      return null;
+    };
+    const offsetX = offset(pos[0], box.width, width);
+    const offsetY = offset(pos[1] ?? '50%', box.height, height);
+    // NaN, not just null: `calc(100% - 1px)` is a real position a design
+    // system writes, and a NaN that escapes as a rect is worse than an
+    // unresolved one — it compares false against everything, so a genuine
+    // image backdrop would be silently ruled clear of the text.
+    if (offsetX === null || offsetY === null
+      || Number.isNaN(offsetX) || Number.isNaN(offsetY)) return null;
+    const left = box.left + offsetX;
+    const top = box.top + offsetY;
+    return { left, top, right: left + width, bottom: top + height };
+  });
+}
+
+/** Split a space-separated CSS value, keeping function calls whole. Splitting
+ *  `calc(100% - 1px)` on whitespace yields `calc(100%`, which parseFloat reads
+ *  as 100 and every guard downstream then trusts. */
+function splitParts(value) {
+  const out = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of value) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (/\s/.test(ch) && depth === 0) { if (current) out.push(current); current = ''; continue; }
+    current += ch;
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+/** Split a comma-separated CSS list, ignoring commas inside parentheses. */
+function splitLayers(value) {
+  if (!value || value === 'none') return value === 'none' ? ['none'] : [];
+  const out = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of value) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) { out.push(current.trim()); current = ''; continue; }
+    current += ch;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
+}
+
 export function backgroundImagePaintRect(element, intrinsic) {
   const style = getComputedStyle(element);
   if ((style.backgroundImage.match(/url\(|gradient\(/g) ?? []).length !== 1) return null;
