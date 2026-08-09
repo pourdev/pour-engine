@@ -1,4 +1,6 @@
 // WCAG SC 1.4.4 Resize Text (Level AA)
+import { isEmbeddedDocument } from '../../lib/dom.js';
+
 export default {
   id: 'meta-viewport',
   impact: 'critical',
@@ -8,6 +10,10 @@ export default {
   selector: 'meta[name="viewport"]',
   visibleOnly: false,
   evaluate(element) {
+    // Browsers read the viewport meta of the TOP document only; one inside
+    // an embedded frame is ignored wholesale, so it cannot stop anyone
+    // zooming and must not be reported as if it did.
+    if (isEmbeddedDocument(element.ownerDocument)) return { status: 'pass' };
     const content = element.getAttribute('content') ?? '';
     const disablesZoom = /user-scalable\s*=\s*(no|0)/i.test(content);
     const maxScale = content.match(/maximum-scale\s*=\s*([\d.]+)/i);

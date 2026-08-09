@@ -32,6 +32,20 @@ const TARGETS = 'a[href], button, input, select, [role="button"], [role="link"]'
 function isHiddenFromPointer(element, rect) {
   if (rect.width <= 1 || rect.height <= 1) return true;
   if (rect.right <= 0 || rect.bottom <= 0) return true; // parked above/left of the canvas
+  // Parked BEYOND the document's scrollable extent on the other two sides:
+  // the slide-in drawer pattern (basket/menu panels held at
+  // translateX(100%) until opened). A fixed drawer does not extend the
+  // document's scroll range, so no scroll position ever brings the pointer
+  // to it — its dozen stacked links are not pointer targets in this state,
+  // and they must not crowd the page's real targets either. In-flow content
+  // that genuinely overflows DOES extend scrollWidth/scrollHeight and keeps
+  // being judged.
+  const win = element.ownerDocument.defaultView;
+  const scroller = element.ownerDocument.scrollingElement ?? element.ownerDocument.documentElement;
+  if (win && scroller) {
+    if (rect.left + win.scrollX >= scroller.scrollWidth - 1) return true;
+    if (rect.top + win.scrollY >= scroller.scrollHeight - 1) return true;
+  }
   const style = getComputedStyle(element);
   if ((parseFloat(style.opacity) || 0) === 0) return true;
   if (style.clipPath !== 'none' || (style.clip !== 'auto' && style.position === 'absolute')) return true;

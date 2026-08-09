@@ -14,6 +14,8 @@
 // Deliberately NOT judged: whether a real-looking title matches the page it
 // sits on. That needs someone who can read the page, and guessing at it
 // would produce exactly the confident-but-wrong findings this engine avoids.
+import { isEmbeddedDocument } from '../../lib/dom.js';
+
 const PLACEHOLDER = new Set([
   'untitled document', 'untitled page', 'untitled-1', 'untitled 1',
   'new document', 'new page', 'new tab', 'no title',
@@ -37,6 +39,11 @@ export default {
   selector: 'html',
   visibleOnly: false,
   evaluate(element) {
+    // 2.4.2 applies to "Web pages", which the spec defines as non-embedded
+    // resources. A widget or ad iframe is part of the page, not a page:
+    // demanding a <title> of it invents failures on every embedded frame
+    // (its name comes from the iframe's title attribute, judged by 4.1.2).
+    if (isEmbeddedDocument(element.ownerDocument)) return { status: 'pass' };
     const title = element.ownerDocument.title.trim();
     if (!title) {
       return {

@@ -1,8 +1,9 @@
 // WCAG SC 1.4.3 Contrast (Minimum) (Level AA)
 import {
   parseColor, contrastRatio, composite, effectiveBackground, backgroundObscured,
-  backgroundImageSource, backgroundImagePaintRect, imageLuminanceRange, gradientLuminanceRange,
-  rangeVerdict, isLargeText, cumulativeOpacity, opacityAnimating, restingOpacity, mediaRects,
+  backgroundImageSource, backgroundImagePaintRect, imagePaintRectInBox, imageLuminanceRange,
+  gradientLuminanceRange, rangeVerdict, rangeWithBackdrop, isLargeText, cumulativeOpacity,
+  opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
 } from '../../lib/contrast.js';
@@ -187,11 +188,29 @@ function unaccountedScrim(element, imageCarrier) {
  *  changing it, so the callers step over it rather than reporting on it. */
 const PAINTS_NOTHING = Symbol('fully transparent image layer');
 
+/** The flat paint directly beneath a carrier's background-image: the
+ *  carrier's own background-color composited over whatever resolves behind
+ *  the carrier. This is what shows through the image's transparent pixels.
+ *  Null when it is itself unknowable (another image or an unresolvable
+ *  chain behind) — the sampling then has no floor to extend its range with. */
+function paintUnderImage(carrier) {
+  const color = parseColor(getComputedStyle(carrier).backgroundColor);
+  if (color && color.a >= 1) return color;
+  const parent = carrier.parentElement ?? carrier.getRootNode()?.host ?? null;
+  const behind = parent ? effectiveBackground(parent) : null;
+  if (!behind) return null;
+  return color && color.a > 0 ? composite(color, behind) : behind;
+}
+
 // Bracket the verdict by sampling what's actually painted: image pixels
 // (same-origin/CORS only) or gradient colour stops. Returns an outcome,
 // PAINTS_NOTHING, or null when nothing here can be sampled at all (stacked
 // layers, translucent gradient stops) and the caller must say so itself.
-async function sampledVerdict(source, foreground, required, doc, overlays = []) {
+// `under` is the colour painted beneath the sampled layer, when the caller
+// knows it: an image with see-through pixels shows that colour wherever the
+// ink is absent, so the judged range must include it — and without it no
+// verdict can be asserted from such an image at all.
+async function sampledVerdict(source, foreground, required, doc, overlays = [], under = null) {
   if (!source) return null;
   let range = null;
   let what = 'image';
@@ -216,6 +235,19 @@ async function sampledVerdict(source, foreground, required, doc, overlays = []) 
   // Checked before the text's own alpha: there is no blend to reason about
   // when the layer paints nothing.
   if (range?.transparent) return PAINTS_NOTHING;
+  // See-through pixels reveal the layer beneath: widen the range with it
+  // when it is known; when it isn't, the ink pixels alone prove nothing —
+  // a mostly-transparent illustration sampled dark was failing text that
+  // really sat on the white showing through it.
+  if (range?.hasAlpha) {
+    range = rangeWithBackdrop(range, under, overlays);
+    if (!range) {
+      return {
+        status: 'incomplete',
+        message: `The ${what} behind this text has transparent regions, so parts of the text sit on whatever is painted beneath it, and that layer could not be resolved — check the contrast by eye.`,
+      };
+    }
+  }
   // Translucent text takes its presented colour from the very pixels
   // beneath it, so a luminance range of the backdrop cannot be read straight
   // off: dimmed white over a dark photo reads mid-grey, not white.
@@ -270,11 +302,16 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   tags,
   help,
   helpUrl,
-  // div included deliberately: real-world layouts put lots of text in bare
-  // divs; the own-text check below keeps wrapper divs out of the results.
+  // Every element except the ones whose text is judged elsewhere or isn't
+  // CSS-colour text at all: a tag allow-list silently skipped visible text
+  // in anything it forgot (form, center, font, custom elements — Hacker
+  // News writes "Search:" directly inside <form>), and the own-text check
+  // below keeps the empty wrappers out of the results either way. Form
+  // controls stay out because control-contrast judges their text; SVG/MathML
+  // stay out because their glyphs are painted by fill, not color.
   selector:
-    'p, span, a, li, td, th, dt, dd, h1, h2, h3, h4, h5, h6, label, button, legend, caption, ' +
-    'figcaption, div, blockquote, small, strong, em, b, i, code, pre, time, cite, q, summary',
+    '*:not(script):not(style):not(noscript):not(title):not(option):not(optgroup)' +
+    ':not(input):not(textarea):not(select):not(svg):not(svg *):not(math):not(math *)',
   visibility: 'visual', // contrast is seen by sighted users even in aria-hidden content
   async evaluate(element, { ownText }) {
     if (!ownText(element)) return { status: 'pass' }; // no text of its own to judge
@@ -352,7 +389,8 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         // imageSource.overlays are the translucent layers painted between the
         // image and this text (hero scrims, tint panels). Judging the raw
         // image pixels would describe a page the user never sees.
-        let sampled = await sampledVerdict(imageSource, foreground, required, doc, imageSource.overlays);
+        let sampled = await sampledVerdict(imageSource, foreground, required, doc, imageSource.overlays,
+          paintUnderImage(imageSource.element));
         // A layer with no opaque pixels changes nothing about what is behind
         // the glyphs, so it must not block the verdict: fall through and
         // judge the background that actually paints.
@@ -440,7 +478,32 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // genuine 4.1:1 failure drowned among 163 siblings that were fine.
     const pseudoResolved = pseudoBackdropForText(element);
     const film = pseudoResolved?.film ?? 0;
-    const pseudoBack = pseudoResolved?.color || pseudoResolved?.image ? pseudoResolved : null;
+    let pseudoBack = pseudoResolved?.color || pseudoResolved?.image ? pseudoResolved : null;
+    // The pseudo's BOX covering the text says nothing about its IMAGE doing
+    // so: a no-repeat url() paints its intrinsic rect inside that box (a
+    // menu item's ::before arrow icon in a box that spans the whole item).
+    // When that rect is computable and provably misses every text box, the
+    // icon sits beside the text, not behind it — the layer is not a
+    // backdrop at all. And an icon-sized image that IS under a text corner
+    // may flag for eyes, never assert: the same discipline the element
+    // background-image path has always applied.
+    let pseudoIconScale = false;
+    if (pseudoBack?.image?.meta && pseudoBack.image.box) {
+      const pseudoUrl = pseudoBack.image.css.match(/url\(["']?(.*?)["']?\)/)?.[1];
+      if (pseudoUrl && pseudoBack.image.meta.repeat === 'no-repeat') {
+        let pseudoIntrinsic = null;
+        try { pseudoIntrinsic = await imageLuminanceRange(new URL(pseudoUrl, doc.baseURI).href); } catch { /* unknowable */ }
+        const dimensionless = !pseudoIntrinsic || !pseudoIntrinsic.width
+          || (pseudoIntrinsic.width === 300 && pseudoIntrinsic.height === 150);
+        const paint = imagePaintRectInBox(pseudoBack.image.box, pseudoBack.image.meta, dimensionless ? null : pseudoIntrinsic);
+        if (paint && !paint.empty && !textIntersects(element, paint)) {
+          pseudoBack = null; // paints clear of the glyphs — judge what's beneath
+        } else {
+          pseudoIconScale = dimensionless
+            || (pseudoIntrinsic.width <= 32 && pseudoIntrinsic.height <= 32);
+        }
+      }
+    }
     const filmIncomplete = {
       status: 'incomplete',
       message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
@@ -460,10 +523,21 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // Gradient/image paint from a pseudo-element: bracket it by sampling,
     // exactly as an element's own background-image is bracketed.
     if (pseudoBack?.image) {
-      const sampled = await sampledVerdict(pseudoBack.image, foreground, required, doc);
+      // Beneath the pseudo's paint sits its own host's background — a
+      // ::before draws above the host's background and below everything
+      // else, so the host's resolved colour is what shows through any
+      // transparent pixels the image has.
+      const sampled = await sampledVerdict(pseudoBack.image, foreground, required, doc, [],
+        effectiveBackground(pseudoBack.image.element));
       // PAINTS_NOTHING: the pseudo-element's image is fully transparent, so
       // it never displaced the background the walk resolved.
       if (sampled !== PAINTS_NOTHING) {
+        if (sampled?.status === 'fail' && pseudoIconScale) {
+          return {
+            status: 'incomplete',
+            message: 'A small icon is painted by a pseudo-element on this element — if it sits beside the text rather than under it, judge the contrast against the plain background by eye.',
+          };
+        }
         return sampled ?? {
           status: 'incomplete',
           message: 'A pseudo-element paints an image or gradient behind this text, so its real background isn’t the computed colour — contrast must be checked by eye.',
@@ -530,6 +604,16 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // gradient canvas under its hero heading is exactly this shape), so
     // even verified verdicts must be bracketed against them.
     const backdropHazard = (direction, blindOnly) => {
+      // An element's OWN opaque background sits directly beneath its own
+      // text: no non-descendant layer can paint between the two, and
+      // descendant media is already excluded below — so however the page
+      // stacks around it, the resolved colour is the presented one. Without
+      // this, every below-the-fold category chip painted over a card
+      // thumbnail (white-on-red at a flat 3.99:1) sat in the review lane
+      // because the offscreen hit-test could not verify what geometry
+      // already proves.
+      const ownPaint = parseColor(style.backgroundColor);
+      if (ownPaint && ownPaint.a >= 1) return null;
       // One box read for the element, then pure rect math per candidate —
       // this runs for every unverified element on the page.
       const box = element.getBoundingClientRect();

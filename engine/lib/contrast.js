@@ -525,8 +525,14 @@ function pseudoLayers(host) {
     // Gradient and image paint rides along as CSS so callers can sample it,
     // the same way they sample an element's background-image — a gradient
     // scrim over a card headline is a bracketable backdrop, not a mystery.
+    // Repeat/size/position ride along too: a no-repeat url() paints its
+    // intrinsic rect inside this box, not the whole of it, and only the
+    // caller (which knows where the text is) can rule on that geometry.
     const imageCss = style.backgroundImage !== 'none' ? style.backgroundImage : null;
-    layers.push({ rect, color: layerColor, imageCss });
+    const imageMeta = imageCss
+      ? { repeat: style.backgroundRepeat, size: style.backgroundSize, position: style.backgroundPosition }
+      : null;
+    layers.push({ rect, color: layerColor, imageCss, imageMeta });
   }
   pseudoCache.set(host, layers);
   return layers;
@@ -574,8 +580,11 @@ export function pseudoBackdropForText(element) {
       const { rect, color, imageCss } = layer;
       if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) continue;
       // Gradient/image paint is bracketable by sampling, so hand it to the
-      // caller rather than giving up on the whole element.
-      if (imageCss) { image = { css: imageCss, element: node }; settled = true; continue; }
+      // caller rather than giving up on the whole element. The pseudo's box
+      // and image geometry travel with it: covering the sample point is a
+      // fact about the BOX, and a no-repeat icon may still paint nowhere
+      // near the text.
+      if (imageCss) { image = { css: imageCss, element: node, box: rect, meta: layer.imageMeta }; settled = true; continue; }
       if (!color || color.a === 0) continue;
       acc = acc ? composite(acc, color) : color;
       if (acc.a >= 1) settled = true;
@@ -945,7 +954,13 @@ export function imageLuminanceRange(url, overlays = []) {
         let minColor = null;
         let maxColor = null;
         let opaquePixels = 0;
+        let alphaSeen = false;
         for (let i = 0; i < data.length; i += 4) {
+          // Any see-through pixel means part of this layer shows whatever is
+          // painted beneath it — the sampled range alone then describes only
+          // the ink, not the backdrop the eye meets. Callers widen the range
+          // with the underlying paint (rangeWithBackdrop) or abstain.
+          if (data[i + 3] < 255) alphaSeen = true;
           if (data[i + 3] < 128) continue; // mostly-transparent pixels reveal what's beneath — unknowable
           opaquePixels += 1;
           // Composite each pixel through anything painted between the image
@@ -973,7 +988,7 @@ export function imageLuminanceRange(url, overlays = []) {
           return;
         }
         resolve(min <= max
-          ? { min, max, minColor, maxColor, width: img.naturalWidth, height: img.naturalHeight }
+          ? { min, max, minColor, maxColor, hasAlpha: alphaSeen, width: img.naturalWidth, height: img.naturalHeight }
           : null);
       } catch {
         resolve(null); // tainted canvas: cross-origin image without CORS headers
@@ -1090,17 +1105,34 @@ function splitLayers(value) {
 export function backgroundImagePaintRect(element, intrinsic) {
   const style = getComputedStyle(element);
   if ((style.backgroundImage.match(/url\(|gradient\(/g) ?? []).length !== 1) return null;
-  if (style.backgroundRepeat !== 'no-repeat') return null; // may tile under the text
-  if (style.backgroundSize === 'cover' || style.backgroundSize === 'contain') return null;
   const box = element.getBoundingClientRect();
+  return imagePaintRectInBox(
+    { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+    { repeat: style.backgroundRepeat, size: style.backgroundSize, position: style.backgroundPosition },
+    intrinsic,
+  );
+}
+
+/**
+ * The same paint-rect math for any painting box a caller already has —
+ * above all a pseudo-element's resolved box, which no element rect can
+ * describe. Returns null when the geometry is not statically knowable
+ * (tiling, cover/contain, keyword positions).
+ */
+export function imagePaintRectInBox(box, meta, intrinsic) {
+  if (!box || !meta) return null;
+  if (meta.repeat !== 'no-repeat') return null; // may tile under the text
+  if (meta.size === 'cover' || meta.size === 'contain') return null;
+  const boxWidth = box.right - box.left;
+  const boxHeight = box.bottom - box.top;
   const dimension = (value, total, auto) => {
     if (value?.endsWith('px')) return parseFloat(value);
     if (value?.endsWith('%')) return (parseFloat(value) / 100) * total;
     return auto;
   };
-  const size = style.backgroundSize.split(' ');
-  const width = dimension(size[0], box.width, intrinsic?.width);
-  const height = dimension(size[1] ?? size[0], box.height, intrinsic?.height);
+  const size = meta.size.split(' ');
+  const width = dimension(size[0], boxWidth, intrinsic?.width);
+  const height = dimension(size[1] ?? size[0], boxHeight, intrinsic?.height);
   if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
   // position N% aligns the image's N% point with the container's N% point.
   // Anything else (calc() from three-value syntax, keywords) is not
@@ -1111,13 +1143,39 @@ export function backgroundImagePaintRect(element, intrinsic) {
     if (value?.endsWith('px')) return parseFloat(value);
     return null;
   };
-  const pos = style.backgroundPosition.split(' ');
-  const offsetX = offset(pos[0], box.width, width);
-  const offsetY = offset(pos[1] ?? '50%', box.height, height);
+  const pos = meta.position.split(' ');
+  const offsetX = offset(pos[0], boxWidth, width);
+  const offsetY = offset(pos[1] ?? '50%', boxHeight, height);
   if (offsetX === null || offsetY === null || Number.isNaN(offsetX) || Number.isNaN(offsetY)) return null;
   const left = box.left + offsetX;
   const top = box.top + offsetY;
   return { left, top, right: left + width, bottom: top + height };
+}
+
+/**
+ * Widen a sampled luminance range with the layer painted beneath the image,
+ * for images that do not cover their box with opaque pixels (hasAlpha).
+ * A semi-transparent pixel blends per channel between its own colour and
+ * the underlying paint, and luminance is monotone in each channel, so a
+ * range extended with the underlying colour bounds every blend the eye can
+ * meet. Returns null when the underlying paint is unknown or itself
+ * see-through: no bound exists then, and the caller must not assert either
+ * verdict from the ink pixels alone — a mostly-transparent illustration
+ * sampled dark was asserting failures for text that really sat on the white
+ * showing through it.
+ */
+export function rangeWithBackdrop(range, under, overlays = []) {
+  if (!range || !range.hasAlpha) return range;
+  if (!under || under.a < 1) return null;
+  const shown = overlays.length ? applyOverlays(under, overlays) : under;
+  const underLum = luminance(shown);
+  return {
+    ...range,
+    min: Math.min(range.min, underLum),
+    max: Math.max(range.max, underLum),
+    minColor: underLum < range.min ? shown : range.minColor,
+    maxColor: underLum > range.max ? shown : range.maxColor,
+  };
 }
 
 /**

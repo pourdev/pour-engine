@@ -106,6 +106,17 @@ export function htmlSnippet(element, maxLength = 300) {
   return html.length > maxLength ? `${html.slice(0, maxLength)}…` : html;
 }
 
+/** True when the document renders embedded inside another page (iframe or
+ *  frame). WCAG defines a "Web page" as a NON-embedded resource, so the
+ *  page-level criteria (2.4.2 Page Titled, 2.4.1 Bypass Blocks) judge only
+ *  the document the user actually opened: an embedded frame owes an
+ *  accessible name under 4.1.2, not its own <title> or skip link. The
+ *  reference comparison is safe cross-origin; frameElement is not. */
+export function isEmbeddedDocument(doc) {
+  const win = doc?.defaultView;
+  return !!(win && win.top && win !== win.top);
+}
+
 /** The element's own (not descendant-element) text, trimmed. */
 export function ownText(element) {
   return [...element.childNodes]

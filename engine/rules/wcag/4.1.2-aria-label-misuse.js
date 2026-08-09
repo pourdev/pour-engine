@@ -2,19 +2,27 @@
 // element does not support name from author. Authors MUST NOT use the
 // aria-label or aria-labelledby attributes to name the element." A label on
 // a plain div/span/p breaks that MUST, so it is a real, provable authoring
-// error — and browsers respond by dropping the prohibited name, which is
-// exactly what makes the WCAG verdict undecidable from the DOM.
+// error.
+//
+// What browsers DO with the prohibited name was measured, not assumed
+// (2026-08-09, Chromium accessibility tree + VoiceOver on a live product
+// page): both expose aria-label on paragraph/generic/strong as the
+// element's accessible name, and VoiceOver announces it. So the label is
+// NOT reliably dropped — the earlier wording here claimed it was, and a
+// user who tested with a screen reader rightly called it misleading. But
+// prohibited means unguaranteed: exposure of a name the spec forbids is
+// browser goodwill, varies across AT pairings, and may change without
+// notice. A page can neither rely on the label being announced nor on it
+// being ignored — which cuts in both directions and is exactly what makes
+// the WCAG verdict undecidable from the DOM.
 //
 // It is not, on its own, a 4.1.2 failure. A static text container is not a
-// "user interface component", and the dropped name leaves whatever name,
-// role and value the element legitimately has untouched. Nothing is
-// announced wrongly; nothing the criterion requires is provably absent.
-//
-// What CAN fail is the thing underneath: if the author reached for a label
-// because assistive technology genuinely should announce this element — a
-// hand-rolled widget missing its role, a region missing its landmark — then
-// the name they wrote is invisible and the missing role is the defect.
-// Whether that is so is exactly what the DOM cannot establish.
+// "user interface component", and whatever name, role and value the element
+// legitimately has stays untouched. Where the label IS announced, it
+// replaces the element's visible text for AT users (sometimes deliberately:
+// a price written for the ear over a struck-through visual price); where it
+// is ignored, users get the visible text alone. The human question is
+// whether either presentation is wrong for this element.
 //
 // This rule has lived on both sides of the line. It asserted under WCAG
 // scope originally, was demoted to best-practice when an independent audit
@@ -36,7 +44,7 @@ export default {
   id: 'aria-label-misuse',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag412'],
-  help: 'aria-label on a generic element is dropped by the browser',
+  help: 'aria-label on a plain container is prohibited by ARIA, so its announcement is not guaranteed',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: 'div[aria-label]:not([role]):not([tabindex]), span[aria-label]:not([role]):not([tabindex]), p[aria-label]:not([role]):not([tabindex])',
   evaluate(element) {
@@ -48,8 +56,8 @@ export default {
     if (element.closest(NAME_FROM_CONTENT)) return { status: 'pass' };
     return {
       status: 'incomplete',
-      message: `aria-label="${element.getAttribute('aria-label')}" on a plain <${element.tagName.toLowerCase()}> is prohibited by ARIA and dropped by the browser, so assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. Should this element be announced? If it plays a role worth naming — a widget, a region, a group — the missing role is the defect and this is a 4.1.2 failure. If it is just a styled container, the attribute is stray and no one is affected.`,
-      fix: 'If the element should be announced, give it the role it is playing (a landmark, group, or widget role) so the name is legal and exposed. If it should not, remove the aria-label. Do not add a role solely to legalise the label.',
+      message: `aria-label="${element.getAttribute('aria-label')}" on a plain <${element.tagName.toLowerCase()}> is prohibited by ARIA: this element's role does not support naming, so although many browser and screen reader pairings announce the label today, that support is not guaranteed anywhere and can differ between assistive technologies. Where it is announced it replaces the element's visible text; where it is not, users get the visible text alone. Check both presentations read correctly, and that nothing here relies on the label being heard.`,
+      fix: 'If this element must reliably announce something of its own, give it the role it is playing (a landmark, group, or widget role) so the name is legal and exposure is guaranteed — or move the spoken text into visible or visually-hidden real text. If the label is stray, remove it. Do not add a role solely to legalise the label.',
     };
   },
 };

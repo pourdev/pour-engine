@@ -1,5 +1,5 @@
 // WCAG SC 2.4.1 Bypass Blocks (Level A)
-import { collectRoots } from '../../lib/dom.js';
+import { collectRoots, isEmbeddedDocument } from '../../lib/dom.js';
 
 export default {
   id: 'bypass-blocks',
@@ -10,6 +10,11 @@ export default {
   selector: 'html',
   visibleOnly: false,
   evaluate(element) {
+    // 2.4.1 governs blocks "repeated on multiple Web pages", and a WCAG
+    // Web page is a non-embedded resource: an embedded frame's document
+    // owes no skip link of its own (the frame's title is itself the bypass
+    // the spec names in H64).
+    if (isEmbeddedDocument(element.ownerDocument)) return { status: 'pass' };
     // 2.4.1's sufficient techniques: a skip link, landmarks (ARIA11), or
     // headings (H69) — any one mechanism satisfies the criterion. Modern
     // component pages keep ALL of these inside open shadow roots (the
