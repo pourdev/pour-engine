@@ -108,9 +108,14 @@ function reachableRects(element, rect) {
     }
   }
   // Nothing could be probed at all (entirely out of viewport,
-  // pointer-events: none, nothing laid out): don't know, and don't-know must
-  // not silence a finding, so the whole rect stands.
-  if (!testable) return [rect];
+  // pointer-events: none, nothing laid out): the OCCLUSION question is
+  // unanswerable, and don't-know must not silence a finding — but the
+  // fragment GEOMETRY is measurable regardless, so the fragments stand,
+  // never the bounding box. A wrapped link's box is mostly leading and
+  // line-gap no pointer can activate; counting that empty space as
+  // reachable made an offscreen two-line neighbour crowd a small target
+  // its painted lines never came near (ja.wikipedia's word list).
+  if (!testable) return probes;
   return reachable;
 }
 
@@ -212,6 +217,17 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     // link cards, overlay + inner button) — not two targets crowding.
     const encloses = (a, b) =>
       a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom;
+    // Enclosure proved on the element's PAINT: true only when a single
+    // painted fragment contains the other rect. For unwrapped elements the
+    // one fragment is the box, so this is `encloses` exactly; a wrapped
+    // element's fragments are each line it actually paints, and a box that
+    // merely spans them encloses nothing. The box test runs first as a
+    // cheap superset — no fragment can enclose what the box doesn't.
+    const paintedEncloses = (target, targetBox, innerBox) => {
+      if (!encloses(targetBox, innerBox)) return false;
+      const fragments = [...target.getClientRects()].filter((f) => f.width > 0 && f.height > 0);
+      return fragments.length <= 1 || fragments.some((f) => encloses(f, innerBox));
+    };
 
     // ── Obscured targets ──────────────────────────────────────────────
     // The criterion measures the region that ACCEPTS the pointer action.
@@ -399,7 +415,15 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         const crowds = (other, j) => {
           if (j === i || !laidOut[j]) return false;
           if (other.contains(element) || element.contains(other)) return false; // same control, nested markup
-          if (encloses(rects[j], rects[i]) || encloses(rects[i], rects[j])) return false;
+          // "One control drawn twice" (stretched-link overlays) is a claim
+          // about PAINT, so it must be proved on a painted fragment, not on
+          // the bounding box: a two-line wrapped link's box swallows a small
+          // same-line neighbour while its painted lines sit nowhere near it
+          // — a different control entirely, and dismissing it here silenced
+          // the honest fragment test below. A single-fragment element's one
+          // fragment IS its box, so genuine overlays are dismissed exactly
+          // as before.
+          if (paintedEncloses(other, rects[j], rects[i]) || paintedEncloses(element, rects[i], rects[j])) return false;
           const within = (box) => {
             if (undersized[j]) {
               const c = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
