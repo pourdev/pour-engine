@@ -6,11 +6,15 @@ import {
   opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
+  showRatio,
 } from '../../lib/contrast.js';
 
-/** Display a ratio truncated (never rounded up): 4.495 must read "4.49",
- *  because "4.50:1 — below the 4.5:1 minimum" reads as a contradiction. */
-const showRatio = (ratio) => (Math.floor(ratio * 100) / 100).toFixed(2);
+/** Serialise a judged colour for the report and the checker link. Composited
+ *  channels keep up to two decimals: rounding them to integers changes the
+ *  pair enough that the checker scores a different ratio than the audit
+ *  reported (4.21 vs 4.19 on a 70%-opacity footer). */
+const channelText = (value) => String(Math.round(value * 100) / 100);
+const asRgb = (color) => `rgb(${channelText(color.r)}, ${channelText(color.g)}, ${channelText(color.b)})`;
 
 /** The one case a full-page veil still can't be judged for the author: the
  *  resting page and the dimmed one land on opposite sides of the threshold,
@@ -699,8 +703,10 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           message: `Contrast is ${showRatio(haloRatio)}:1 against this text's own outline and ${showRatio(ratio)}:1 against the background — below the ${required}:1 WCAG minimum for this text size.`,
           fix: `Increase the difference between the text colour and its text-shadow outline (or the background) until the ratio reaches ${required}:1.`,
           data: {
-            foreground: style.color,
-            background: `rgb(${Math.round(halo.r)}, ${Math.round(halo.g)}, ${Math.round(halo.b)})`,
+            // The judged (composited) colour, not style.color: the checker
+            // link must score the pair the viewer actually sees.
+            foreground: asRgb(foreground),
+            background: asRgb(halo),
             ratio: Number(showRatio(haloRatio)),
             required,
           },
@@ -737,22 +743,44 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // carried alongside, never instead: a page written in oklch() or
     // color(srgb …) would otherwise be handed an rgb() value that appears
     // nowhere in its stylesheet.
-    const asRgb = (color) => `rgb(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)})`;
     const foregroundRgb = asRgb(foreground);
     const backgroundRgb = asRgb(background);
-    const foregroundCss = style.color !== foregroundRgb ? style.color : null;
+    // …but only when the authored string is the judged colour in another
+    // spelling. An authored colour that differs in VALUE (translucent text,
+    // an ancestor's opacity dimming the glyphs) still names what to search
+    // the stylesheet for, yet must never reach the checker link: the checker
+    // would score a pair the page never renders, showing a passing ratio for
+    // this very failure.
+    const sameValue = (css, judged) => {
+      const parsed = parseColor(css);
+      return parsed != null && parsed.a >= 1 && asRgb(parsed) === judged;
+    };
+    const authoredFg = style.color !== foregroundRgb ? style.color : null;
     const backgroundSource = backgroundColorSource(element);
-    const backgroundCss = backgroundSource && backgroundSource !== backgroundRgb ? backgroundSource : null;
+    const authoredBg = backgroundSource && backgroundSource !== backgroundRgb ? backgroundSource : null;
+    const foregroundCss = authoredFg && sameValue(authoredFg, foregroundRgb) ? authoredFg : null;
+    const backgroundCss = authoredBg && sameValue(authoredBg, backgroundRgb) ? authoredBg : null;
     const authored = [
-      foregroundCss && `the text as ${foregroundCss}`,
-      backgroundCss && `the background as ${backgroundCss}`,
+      authoredFg && `the text as ${authoredFg}`,
+      authoredBg && `the background as ${authoredBg}`,
     ].filter(Boolean).join(' and ');
+    // Say WHY the rendered colour differs when the mechanism is provable, so
+    // the author learns the cause along with the finding.
+    const parsedAuthoredFg = authoredFg && !foregroundCss ? parseColor(authoredFg) : null;
+    const dimmedNote = parsedAuthoredFg
+      ? (opacity < 1
+        ? ` The gap is opacity: this element or an ancestor renders at ${Math.round(opacity * 100)}% opacity, dimming the text to the sRGB value above.`
+        : (parsedAuthoredFg.a < 1
+          ? ' The text colour is translucent, so it composites with the background into the sRGB value above.'
+          : ''))
+      : '';
 
     return {
       status: 'fail',
       message: `Contrast is ${showRatio(ratio)}:1 — below the ${required}:1 WCAG minimum for this text size.`,
       fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${foregroundRgb} on ${backgroundRgb}).`
-        + (authored ? ` Your CSS writes ${authored}, so searching it for the sRGB values above won't find them.` : ''),
+        + (authored ? ` Your CSS writes ${authored}, so searching it for the sRGB values above won't find them.` : '')
+        + dimmedNote,
       // The exact pair, for the UIs to link out to an interactive checker.
       data: {
         foreground: foregroundRgb,

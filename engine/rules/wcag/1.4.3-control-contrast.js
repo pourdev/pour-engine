@@ -4,10 +4,8 @@
 // endemic ~2.8:1 gray-on-white) was previously never measured by any rule.
 import {
   parseColor, contrastRatio, composite, effectiveBackground, isLargeText,
-  backgroundImageSource, cumulativeOpacity, opacityAnimating, restingOpacity,
+  backgroundImageSource, cumulativeOpacity, opacityAnimating, restingOpacity, showRatio,
 } from '../../lib/contrast.js';
-
-const showRatio = (ratio) => (Math.floor(ratio * 100) / 100).toFixed(2);
 
 export default {
   id: 'control-contrast',

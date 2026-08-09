@@ -93,6 +93,21 @@ export function contrastRatio(foreground, background) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * Display a ratio truncated, never rounded up: 4.495 must read "4.49",
+ * because "4.50:1 — below the 4.5:1 minimum" reads as a contradiction.
+ * Shared by the rules and the /contrast/ checker so the two surfaces can
+ * never show the same ratio differently. Above 10 one decimal is plenty
+ * (no text threshold lives up there), and "21:1" reads better than
+ * "21.0:1" — a trailing zero implies precision the eye can use.
+ */
+export function showRatio(ratio) {
+  const text = ratio >= 10
+    ? (Math.floor(ratio * 10) / 10).toFixed(1)
+    : (Math.floor(ratio * 100) / 100).toFixed(2);
+  return text.replace(/\.0+$/, '');
+}
+
 /** Alpha-composite `top` over `bottom` (both {r,g,b,a}) → opaque colour. */
 export function composite(top, bottom) {
   const a = top.a + bottom.a * (1 - top.a);

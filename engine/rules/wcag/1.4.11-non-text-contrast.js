@@ -6,9 +6,7 @@
 // with placeholder text can conform with a faint border (#ccc borders are
 // endemic, WebAIM's own search field included), and that judgment needs
 // eyes. Focus-indicator contrast is not statically computable — manual.
-import { parseColor, contrastRatio, composite, effectiveBackground } from '../../lib/contrast.js';
-
-const showRatio = (ratio) => (Math.floor(ratio * 100) / 100).toFixed(2);
+import { parseColor, contrastRatio, composite, effectiveBackground, showRatio } from '../../lib/contrast.js';
 
 export default {
   id: 'non-text-contrast',
