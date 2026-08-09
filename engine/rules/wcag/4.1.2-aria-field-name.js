@@ -7,7 +7,11 @@
 // naming counts. Toggle roles (checkbox/radio/switch) DO name from content.
 import { labelledByName } from '../../lib/accessible-name.js';
 
-const AUTHOR_ONLY = ['textbox', 'searchbox', 'combobox', 'listbox', 'spinbutton', 'slider'];
+// progressbar and meter belong here too: ARIA 1.2 marks both roles
+// "Accessible Name Required: True", they never name from content, and a
+// nameless one announces a bare value — "25%, progress bar" — of nothing
+// in particular (found live: unlabelled ant-progress widgets).
+const AUTHOR_ONLY = ['textbox', 'searchbox', 'combobox', 'listbox', 'spinbutton', 'slider', 'progressbar', 'meter'];
 const FROM_CONTENT = ['checkbox', 'radio', 'switch'];
 
 function authorName(element) {
@@ -21,7 +25,7 @@ export default {
   id: 'aria-field-name',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
-  help: 'ARIA form fields must have an accessible name',
+  help: 'ARIA fields and value widgets must have an accessible name',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: [...AUTHOR_ONLY, ...FROM_CONTENT]
     .map((role) => `[role="${role}"]:not(input):not(select):not(textarea)`)
@@ -42,7 +46,7 @@ export default {
     }
     return {
       status: 'fail',
-      message: `This role="${role}" field has no accessible name — screen readers announce the role with no idea what it's for.${
+      message: `This role="${role}" control has no accessible name — screen readers announce the role and value with no idea what it's for.${
         AUTHOR_ONLY.includes(role) ? ' (Content inside it does not count as a name for this role.)' : ''}`,
       fix: 'Add aria-label="…" or aria-labelledby pointing at its visible label.',
     };

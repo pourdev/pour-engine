@@ -52,7 +52,28 @@ export default {
       return !hasStrayText && effectiveChildren(child).every(isValidChild);
     };
     const invalid = effectiveChildren(element).filter((child) => !isValidChild(child));
-    if (!invalid.length) return { status: 'pass' };
+    if (!invalid.length) {
+      // Every rendered item neutralised: role="none" on each <li> strips
+      // its listitem semantics while the <ul> keeps announcing "list" —
+      // Chromium exposes the list role over the none children (measured
+      // 2026-08-09), so readers hear a list that owns zero items around
+      // content they can plainly see. That is the same broken announcement
+      // as <ul><div>, reached via a different door. A PARTIAL
+      // neutralisation stays valid: hiding a decorative separator item
+      // from the count is what role="none" on an <li> is for.
+      const renderedItems = effectiveChildren(element).filter((child) =>
+        child.tagName === 'LI' && (!isRendered || isRendered(child)));
+      const neutralised = renderedItems.filter((child) =>
+        ['presentation', 'none'].includes(child.getAttribute('role') ?? ''));
+      if (renderedItems.length && neutralised.length === renderedItems.length) {
+        return {
+          status: 'fail',
+          message: `Every item in this list carries role="${neutralised[0].getAttribute('role')}", so the list announces itself with zero items while ${renderedItems.length} are visible — screen readers lose the count and the positions.`,
+          fix: 'Remove the role from the <li> elements, or neutralise the whole structure by putting role="presentation" (or the intended widget role) on the list element itself.',
+        };
+      }
+      return { status: 'pass' };
+    }
     const tags = [...new Set(invalid.map((child) => {
       const role = child.getAttribute('role');
       return `<${child.tagName.toLowerCase()}${role ? ` role="${role}"` : ''}>`;
