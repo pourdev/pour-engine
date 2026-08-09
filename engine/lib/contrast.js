@@ -479,8 +479,9 @@ function pseudoRect(host, style) {
  * on the pill, not on the track colour both other paths report.
  *
  * Returns { color } (opaque or translucent paint over the point),
- * 'unresolved' when something paints there that flat colour math can't
- * follow, or null when no pseudo of this host paints over the point.
+ * or null when no pseudo of this host paints over the point. Paint that
+ * can't be placed becomes a { film } entry — an upper bound on its alpha —
+ * so callers can bracket its effect instead of giving up on the element.
  */
 /** The paint a host's pseudo-elements contribute, resolved once per audit.
  *  Two extra getComputedStyle calls per host would otherwise land on every
@@ -495,7 +496,8 @@ function pseudoLayers(host) {
   for (const which of ['::before', '::after']) {
     const style = getComputedStyle(host, which);
     if (style.content === 'none' || style.display === 'none' || style.visibility === 'hidden') continue;
-    const paints = style.backgroundImage !== 'none' || (parseColor(style.backgroundColor)?.a ?? 0) > 0;
+    const color = parseColor(style.backgroundColor);
+    const paints = style.backgroundImage !== 'none' || (color?.a ?? 0) > 0;
     if (!paints) continue;
     // In-flow pseudos (the overwhelming majority: bullets, icons, rules,
     // badges) occupy their own box in the content flow beside the text
@@ -503,19 +505,28 @@ function pseudoLayers(host) {
     // backdrop, so everything else is simply not a layer here — treating
     // them as unknowable would abstain on half the web.
     if (style.position !== 'absolute' && style.position !== 'fixed') continue;
-    const rect = style.position === 'absolute' ? pseudoRect(host, style) : null;
-    // Paint we can't place can't be ruled in or out — say so rather than
-    // silently leaving it out of the stack.
-    if (!rect) { layers = 'unresolved'; break; }
-    if (rect.empty) continue; // placed, and covers nothing
-    let color = parseColor(style.backgroundColor);
     const opacity = parseFloat(style.opacity);
-    if (color && Number.isFinite(opacity) && opacity < 1) color = { ...color, a: color.a * opacity };
+    const opacityFactor = Number.isFinite(opacity) ? opacity : 1;
+    const rect = style.position === 'absolute' ? pseudoRect(host, style) : null;
+    if (!rect) {
+      // Paint we can't place still can't paint MORE than its alpha allows:
+      // whatever colour it is and wherever it sits, it moves any channel
+      // beneath it by at most alpha × 255. Record that bound as a "film"
+      // so callers can bracket the verdict — a 3.5%-opacity grain overlay
+      // (position: fixed, the common full-page-texture pattern) must not
+      // send every element on the page to a human.
+      const alphaBound = Math.min(1, opacityFactor * (style.backgroundImage !== 'none' ? 1 : color.a));
+      if (alphaBound > 0) layers.push({ film: alphaBound });
+      continue;
+    }
+    if (rect.empty) continue; // placed, and covers nothing
+    let layerColor = color;
+    if (layerColor && opacityFactor < 1) layerColor = { ...layerColor, a: layerColor.a * opacityFactor };
     // Gradient and image paint rides along as CSS so callers can sample it,
     // the same way they sample an element's background-image — a gradient
     // scrim over a card headline is a bracketable backdrop, not a mystery.
     const imageCss = style.backgroundImage !== 'none' ? style.backgroundImage : null;
-    layers.push({ rect, color, imageCss });
+    layers.push({ rect, color: layerColor, imageCss });
   }
   pseudoCache.set(host, layers);
   return layers;
@@ -539,28 +550,75 @@ function pseudoLayers(host) {
  *
  * Returns { color } (opaque, or translucent paint to composite over the
  * walked background), { image } for gradient/image paint the caller should
- * sample, 'unresolved' when paint in the chain can't be placed, or null when
- * no pseudo covers the text.
+ * sample, or null when no pseudo covers the text. Whenever the chain also
+ * holds paint that CAN'T be placed, the result carries `film`: an upper
+ * bound on that paint's alpha, accumulated across every unplaceable layer.
+ * The caller brackets the verdict against it — a film of alpha a moves any
+ * channel by at most a × 255 whether it sits behind the text or over it,
+ * and paint hidden beneath an opaque layer moves nothing, so the bound
+ * holds regardless of paint order.
  */
 export function pseudoBackdropForText(element) {
   const point = textSamplePoint(element);
   if (!point) return null;
   let acc = null;
+  let image = null;
+  let settled = false; // an opaque colour or an image hit: deeper layers are covered
+  let film = 0;
   for (let node = element; node && node.nodeType === 1; node = node.parentElement ?? node.getRootNode()?.host) {
-    const layers = pseudoLayers(node);
-    // Paint we can't place can't be ruled in or out, in either direction.
-    if (layers === 'unresolved') return 'unresolved';
-    for (const { rect, color, imageCss } of layers) {
+    for (const layer of pseudoLayers(node)) {
+      // Films accumulate over the WHOLE chain — even past an opaque hit,
+      // because an ancestor's ::after can paint above a descendant's pill.
+      if (layer.film) { film = 1 - (1 - film) * (1 - layer.film); continue; }
+      if (settled) continue;
+      const { rect, color, imageCss } = layer;
       if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) continue;
       // Gradient/image paint is bracketable by sampling, so hand it to the
       // caller rather than giving up on the whole element.
-      if (imageCss) return { image: { css: imageCss, element: node } };
+      if (imageCss) { image = { css: imageCss, element: node }; settled = true; continue; }
       if (!color || color.a === 0) continue;
       acc = acc ? composite(acc, color) : color;
-      if (acc.a >= 1) return { color: acc };
+      if (acc.a >= 1) settled = true;
     }
   }
-  return acc ? { color: acc } : null;
+  if (image) return film > 0 ? { image, film } : { image };
+  if (acc) return film > 0 ? { color: acc, film } : { color: acc };
+  return film > 0 ? { film } : null;
+}
+
+/**
+ * The range the contrast ratio can occupy once an unplaceable translucent
+ * layer (a "film" of alpha ≤ film) may be painting somewhere in the stack.
+ *
+ * Two physical scenarios bound everything: the film behind the glyphs
+ * (shifting only the background) or over the whole element (shifting text
+ * and background alike, as t3-style full-page grain overlays do). Within
+ * each, luminance is monotone per colour channel and the ratio's derivative
+ * carries one sign across channels, so the extremes sit at an all-black or
+ * all-white film — five evaluations bound the true range.
+ *
+ * `crossed` flags the one case the endpoints can't bound from below: a film
+ * behind the text whose extremes land the background's luminance on OPPOSITE
+ * sides of the text's, where an intermediate colour collapses the ratio
+ * toward 1:1. Callers must not assert a pass when it is set; a fail needs
+ * only `max`, which the endpoints do bound.
+ */
+export function filmedContrastBounds(foreground, background, film) {
+  const ratios = [contrastRatio(foreground, background)];
+  const textLum = luminance(foreground);
+  const sides = [];
+  for (const channel of [0, 255]) {
+    const paint = { r: channel, g: channel, b: channel, a: film };
+    const shiftedBackground = composite(paint, background);
+    ratios.push(contrastRatio(foreground, shiftedBackground)); // film behind the text
+    ratios.push(contrastRatio(composite(paint, foreground), shiftedBackground)); // film over text and backdrop alike
+    sides.push(Math.sign(textLum - luminance(shiftedBackground)));
+  }
+  return {
+    min: Math.min(...ratios),
+    max: Math.max(...ratios),
+    crossed: sides[0] !== sides[1],
+  };
 }
 
 /** A layer qualifies as a scrim over `element` when it is translucent paint

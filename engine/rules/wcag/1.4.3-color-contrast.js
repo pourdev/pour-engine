@@ -4,7 +4,7 @@ import {
   backgroundImageSource, backgroundImagePaintRect, imageLuminanceRange, gradientLuminanceRange,
   rangeVerdict, isLargeText, cumulativeOpacity, opacityAnimating, restingOpacity, mediaRects,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
-  pseudoBackdropForText, backgroundColorSource, scrimPaint, applyOverlays,
+  pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
 } from '../../lib/contrast.js';
 
 /** Display a ratio truncated (never rounded up): 4.495 must read "4.49",
@@ -165,7 +165,7 @@ function verdictFromRange(range, foreground, required, what) {
  */
 function unaccountedScrim(element, imageCarrier) {
   const pseudo = pseudoBackdropForText(element);
-  if (pseudo && pseudo !== 'unresolved' && pseudo.color?.a > 0) return true;
+  if (pseudo?.color?.a > 0) return true;
   const doc = element.ownerDocument;
   if (typeof doc.elementsFromPoint !== 'function') return false;
   const rect = element.getBoundingClientRect();
@@ -430,12 +430,27 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // wins. Geometry-only, so it settles offscreen text too, where the
     // hit-test is blind and the walk would otherwise assert the track colour
     // of a control the text visibly is not sitting on.
-    const pseudoBack = pseudoBackdropForText(element);
-    if (pseudoBack === 'unresolved') {
-      return {
-        status: 'incomplete',
-        message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
-      };
+    //
+    // Unplaceable pseudo paint no longer abstains on sight: it arrives as
+    // `film`, an upper bound on its alpha, and the flat-colour verdict below
+    // is bracketed against it — asserted only when black and white films,
+    // behind the text or over it, all land the same side of the threshold.
+    // A 3.5%-opacity fixed grain overlay (the full-page texture pattern)
+    // otherwise sent every element on the page to the review lane, and a
+    // genuine 4.1:1 failure drowned among 163 siblings that were fine.
+    const pseudoResolved = pseudoBackdropForText(element);
+    const film = pseudoResolved?.film ?? 0;
+    const pseudoBack = pseudoResolved?.color || pseudoResolved?.image ? pseudoResolved : null;
+    const filmIncomplete = {
+      status: 'incomplete',
+      message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
+    };
+    // Sampled pixels, veils and text-shadow halos can't be film-bracketed
+    // (the film may sit between the sample and the glyphs): those verdicts
+    // keep the human call they had when any unplaceable paint abstained.
+    if (film > 0 && (pseudoBack?.image || painted?.image || painted === 'unresolved'
+      || veilPaint || (style.textShadow && style.textShadow !== 'none'))) {
+      return filmIncomplete;
     }
     // An image backdrop under a veil would have to be sampled a second time,
     // dimmed, to answer whether the two states agree. Not worth a second pass
@@ -545,6 +560,17 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     };
 
     const ratio = contrastRatio(foreground, background);
+    // Bracket the verdict against any unplaceable pseudo paint: only when
+    // every colour and placement the film could take leaves the ratio on one
+    // side of the threshold is the verdict provable. A 3.5% grain film can
+    // never rescue 4.1:1, so that fails outright; a 50% veil could rescue or
+    // ruin anything, so it stays the human call it always was.
+    if (film > 0) {
+      const bounds = filmedContrastBounds(foreground, background, film);
+      const decided = (bounds.min >= required) === (bounds.max >= required)
+        && !(bounds.crossed && bounds.min >= required);
+      if (!decided) return filmIncomplete;
+    }
     // The dimmed state, when a veil is up: it paints over the glyphs and
     // their background alike, so both composite through the same layers.
     // Dimming is not monotonic on ratio (it can rescue or ruin a pairing),

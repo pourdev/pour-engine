@@ -61,10 +61,20 @@ export default {
       // Only NEW clipping counts: content already truncated by design
       // (ellipsis patterns) is judged as-authored, not under the probe.
       if (before[i] || !after[i]) return { status: 'pass' };
+      // Review, not fail: the probe proves the box OVERFLOWS under the
+      // override, not that glyphs are lost. The genuine violation is a
+      // fixed-height overflow-hidden container that doesn't grow with its
+      // text, hiding whole lines (measured live: a 2-line card clamped at
+      // 37px whose text needs 61px spaced — the last line vanishes). But
+      // the same scroll-size delta also fires on benign overflow: the
+      // 0.12em letter-spacing lands AFTER the final glyph, so a snug box
+      // can overflow by trailing empty spacing that hides no ink, and a
+      // clamp pattern that swaps hidden words for an ellipsis is arguably
+      // truncation-by-design. Proving ink loss would need per-glyph rects
+      // against the clip box under the probe; until then, a human call.
       return {
-        status: 'fail',
-        message: 'With the WCAG text-spacing overrides applied (line height 1.5, letter/word spacing bumps), text in this element gets cut off — users who need wider spacing lose content.',
-        fix: 'Let the container grow (min-height instead of height, avoid overflow:hidden on text), so spacing changes reflow instead of clip.',
+        status: 'incomplete',
+        message: 'With the WCAG text-spacing overrides applied (line height 1.5, letter/word spacing bumps), this container overflows instead of growing — if that hides text rather than empty trailing spacing, users who need wider spacing lose content. Check with the overrides applied; to be safe, let the container grow (min-height instead of height, avoid overflow:hidden on text).',
       };
     });
   },
