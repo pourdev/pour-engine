@@ -84,6 +84,16 @@ import reflow from './wcag/1.4.10-reflow.js';
 import focusVisible from './wcag/2.4.7-focus-visible.js';
 import focusNotObscured from './wcag/2.4.11-focus-not-obscured.js';
 import authFieldObstruction from './wcag/3.3.8-auth-field-obstruction.js';
+// 2026-08-10 spec-sweep batch: the six missing failure families plus the two
+// state-dependent heuristics the sweep judged automatable (see COVERAGE.md).
+import embedAlt from './wcag/1.1.1-embed-alt.js';
+import canvasAlt from './wcag/1.1.1-canvas-alt.js';
+import videoLoopMotion from './wcag/2.2.2-video-loop-motion.js';
+import visualOrderDivergence from './wcag/2.4.3-visual-order-divergence.js';
+import onInputNavigation from './wcag/3.2.2-on-input-navigation.js';
+import errorMessageLinkage from './wcag/3.3.1-error-message-linkage.js';
+import compositeWidgetName from './wcag/4.1.2-composite-widget-name.js';
+import summaryName from './wcag/4.1.2-summary-name.js';
 
 // --- Best practice ---
 import headingOrder from './best-practice/heading-order.js';
@@ -171,6 +181,14 @@ export default [
   focusVisible,
   focusNotObscured,
   authFieldObstruction,
+  embedAlt,
+  canvasAlt,
+  videoLoopMotion,
+  visualOrderDivergence,
+  onInputNavigation,
+  errorMessageLinkage,
+  compositeWidgetName,
+  summaryName,
   contrastEnhanced,
   targetSizeEnhanced,
   headingOrder,

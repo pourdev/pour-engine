@@ -69,7 +69,7 @@ export default [
   sc('2.3.3', 'Animation from Interactions', 'AAA', 'manual', '2.1'),
   sc('2.4.1', 'Bypass Blocks', 'A', 'partial'), // partial: "repeated across pages" can't be established from one page
   sc('2.4.2', 'Page Titled', 'A', 'partial'), // partial: document-title proves a title exists and catches known placeholders; whether a real one DESCRIBES the page needs a reader
-  sc('2.4.3', 'Focus Order', 'A', 'manual'), // no rule automates this yet; order judgment needs humans
+  sc('2.4.3', 'Focus Order', 'A', 'partial'), // visual-order-divergence flags CSS order/*-reverse against DOM order; whether an order preserves MEANING stays human
   sc('2.4.4', 'Link Purpose (In Context)', 'A', 'partial'),
   sc('2.4.5', 'Multiple Ways', 'AA', 'manual'),
   sc('2.4.6', 'Headings and Labels', 'AA', 'manual'),
@@ -95,13 +95,13 @@ export default [
   sc('3.1.4', 'Abbreviations', 'AAA', 'manual'),
   sc('3.1.5', 'Reading Level', 'AAA', 'manual'),
   sc('3.1.6', 'Pronunciation', 'AAA', 'manual'),
-  sc('3.2.1', 'On Focus', 'A', 'manual'),
-  sc('3.2.2', 'On Input', 'A', 'manual'),
+  sc('3.2.1', 'On Focus', 'A', 'partial'), // on-input-navigation flags inline onfocus handlers that navigate; addEventListener handlers are invisible to a DOM audit
+  sc('3.2.2', 'On Input', 'A', 'partial'), // on-input-navigation flags the inline jump-menu signature; "advised beforehand" stays a human call
   sc('3.2.3', 'Consistent Navigation', 'AA', 'manual'),
   sc('3.2.4', 'Consistent Identification', 'AA', 'manual'),
   sc('3.2.5', 'Change on Request', 'AAA', 'manual'),
   sc('3.2.6', 'Consistent Help', 'A', 'manual', '2.2'),
-  sc('3.3.1', 'Error Identification', 'A', 'manual'),
+  sc('3.3.1', 'Error Identification', 'A', 'partial'), // error-message-linkage proves broken aria-errormessage targets; only in force when the page is captured mid-error
   sc('3.3.2', 'Labels or Instructions', 'A', 'partial'),
   sc('3.3.3', 'Error Suggestion', 'AA', 'manual'),
   sc('3.3.4', 'Error Prevention (Legal, Financial, Data)', 'AA', 'manual'),

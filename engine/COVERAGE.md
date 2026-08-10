@@ -12,7 +12,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 
 | SC | Name | Level | Coverage | Rules |
 |---|---|---|---|---|
-| 1.1.1 | [Non-text Content](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html) | A | Partially automated | area-alt, image-alt, input-image-alt, object-alt, svg-img-alt |
+| 1.1.1 | [Non-text Content](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html) | A | Partially automated | area-alt, canvas-alt, embed-alt, image-alt, input-image-alt, object-alt, svg-img-alt |
 | 1.2.1 | [Audio-only and Video-only (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-only-and-video-only-prerecorded.html) | A | Manual review | — |
 | 1.2.2 | [Captions (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html) | A | Partially automated | media-captions |
 | 1.2.3 | [Audio Description or Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-or-media-alternative-prerecorded.html) | A | Manual review | — |
@@ -51,7 +51,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.1.3 | [Keyboard (No Exception)](https://www.w3.org/WAI/WCAG22/Understanding/keyboard-no-exception.html) | AAA | Partially automated | scrollable-region-focusable |
 | 2.1.4 | [Character Key Shortcuts](https://www.w3.org/WAI/WCAG22/Understanding/character-key-shortcuts.html) | A | Manual review | — |
 | 2.2.1 | [Timing Adjustable](https://www.w3.org/WAI/WCAG22/Understanding/timing-adjustable.html) | A | Partially automated | meta-refresh |
-| 2.2.2 | [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) | A | Partially automated | pause-stop-hide |
+| 2.2.2 | [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) | A | Partially automated | pause-stop-hide, video-loop-motion |
 | 2.2.3 | [No Timing](https://www.w3.org/WAI/WCAG22/Understanding/no-timing.html) | AAA | Manual review | — |
 | 2.2.4 | [Interruptions](https://www.w3.org/WAI/WCAG22/Understanding/interruptions.html) | AAA | Manual review | — |
 | 2.2.5 | [Re-authenticating](https://www.w3.org/WAI/WCAG22/Understanding/re-authenticating.html) | AAA | Manual review | — |
@@ -61,7 +61,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.3.3 | [Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html) | AAA | Manual review | — |
 | 2.4.1 | [Bypass Blocks](https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html) | A | Partially automated | bypass-blocks |
 | 2.4.2 | [Page Titled](https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html) | A | Partially automated | document-title |
-| 2.4.3 | [Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) | A | Manual review | — |
+| 2.4.3 | [Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) | A | Partially automated | visual-order-divergence |
 | 2.4.4 | [Link Purpose (In Context)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html) | A | Partially automated | area-alt, link-name, link-text-generic |
 | 2.4.5 | [Multiple Ways](https://www.w3.org/WAI/WCAG22/Understanding/multiple-ways.html) | AA | Manual review | — |
 | 2.4.6 | [Headings and Labels](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html) | AA | Manual review | — |
@@ -91,13 +91,13 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 3.1.4 | [Abbreviations](https://www.w3.org/WAI/WCAG22/Understanding/abbreviations.html) | AAA | Manual review | — |
 | 3.1.5 | [Reading Level](https://www.w3.org/WAI/WCAG22/Understanding/reading-level.html) | AAA | Manual review | — |
 | 3.1.6 | [Pronunciation](https://www.w3.org/WAI/WCAG22/Understanding/pronunciation.html) | AAA | Manual review | — |
-| 3.2.1 | [On Focus](https://www.w3.org/WAI/WCAG22/Understanding/on-focus.html) | A | Manual review | — |
-| 3.2.2 | [On Input](https://www.w3.org/WAI/WCAG22/Understanding/on-input.html) | A | Manual review | — |
+| 3.2.1 | [On Focus](https://www.w3.org/WAI/WCAG22/Understanding/on-focus.html) | A | Partially automated | on-input-navigation |
+| 3.2.2 | [On Input](https://www.w3.org/WAI/WCAG22/Understanding/on-input.html) | A | Partially automated | on-input-navigation |
 | 3.2.3 | [Consistent Navigation](https://www.w3.org/WAI/WCAG22/Understanding/consistent-navigation.html) | AA | Manual review | — |
 | 3.2.4 | [Consistent Identification](https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html) | AA | Manual review | — |
 | 3.2.5 | [Change on Request](https://www.w3.org/WAI/WCAG22/Understanding/change-on-request.html) | AAA | Manual review | — |
 | 3.2.6 | [Consistent Help](https://www.w3.org/WAI/WCAG22/Understanding/consistent-help.html) | A | Manual review | — |
-| 3.3.1 | [Error Identification](https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html) | A | Manual review | — |
+| 3.3.1 | [Error Identification](https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html) | A | Partially automated | error-message-linkage |
 | 3.3.2 | [Labels or Instructions](https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html) | A | Partially automated | form-label |
 | 3.3.3 | [Error Suggestion](https://www.w3.org/WAI/WCAG22/Understanding/error-suggestion.html) | AA | Manual review | — |
 | 3.3.4 | [Error Prevention (Legal, Financial, Data)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html) | AA | Manual review | — |
@@ -111,7 +111,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 
 | SC | Name | Level | Coverage | Rules |
 |---|---|---|---|---|
-| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-valid-refs, button-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, valid-role |
+| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 30 partially automated · 56 manual — with 74 rules.
+**Totals:** 34 partially automated · 52 manual — with 82 rules.

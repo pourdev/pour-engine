@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pour Engine Rule Audit, August 2026</title>
+<style>
+  :root {
+    --bg: #FAFAF8; --surface: #FFFFFF; --ink: #1B2320; --muted: #5C6763;
+    --line: #E2E6E1; --accent: #0E6B5B; --accent-soft: #E3F0ED;
+    --code-bg: #F0F2EF;
+    --solid-fg: #1D6E42; --solid-bg: #E2F2E7;
+    --minor-fg: #82661C; --minor-bg: #F6EFD6;
+    --over-fg: #A8432B; --over-bg: #F9E6DF;
+    --under-fg: #46589E; --under-bg: #E6EAF7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101613; --surface: #171F1B; --ink: #E7ECE8; --muted: #97A49E;
+      --line: #29332D; --accent: #52C2AC; --accent-soft: #17342E;
+      --code-bg: #1E2823;
+      --solid-fg: #7BD49B; --solid-bg: #16311F;
+      --minor-fg: #DCC26A; --minor-bg: #33290F;
+      --over-fg: #EC9377; --over-bg: #3A1E14;
+      --under-fg: #9FAEE8; --under-bg: #1D2440;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101613; --surface: #171F1B; --ink: #E7ECE8; --muted: #97A49E;
+    --line: #29332D; --accent: #52C2AC; --accent-soft: #17342E;
+    --code-bg: #1E2823;
+    --solid-fg: #7BD49B; --solid-bg: #16311F;
+    --minor-fg: #DCC26A; --minor-bg: #33290F;
+    --over-fg: #EC9377; --over-bg: #3A1E14;
+    --under-fg: #9FAEE8; --under-bg: #1D2440;
+  }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; padding: 0 20px 80px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1, h2, h3 { font-family: Charter, Georgia, "Times New Roman", serif; text-wrap: balance; line-height: 1.2; }
+  h1 { font-size: 2.1rem; margin: 48px 0 6px; }
+  h2 { font-size: 1.45rem; margin: 52px 0 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { max-width: 70ch; }
+  .sub { color: var(--muted); margin: 0 0 26px; max-width: 75ch; }
+  code { font: 0.86em ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 24px 0 8px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .tile b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .tile span { color: var(--muted); font-size: 0.85rem; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px; }
+  .toc a { text-decoration: none; font-size: 0.85rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 5px 11px; border-radius: 999px; }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+  .pill { display: inline-block; font: 600 0.72rem/1 system-ui, sans-serif; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 999px; vertical-align: 1px; white-space: nowrap; }
+  .r-solid { color: var(--solid-fg); background: var(--solid-bg); }
+  .r-minor { color: var(--minor-fg); background: var(--minor-bg); }
+  .r-over { color: var(--over-fg); background: var(--over-bg); }
+  .r-under { color: var(--under-fg); background: var(--under-bg); }
+  details.rule { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+  details.rule summary { cursor: pointer; padding: 11px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  details.rule summary::marker { color: var(--muted); }
+  details.rule summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+  details.rule[open] summary { border-bottom: 1px solid var(--line); }
+  details.rule .body { padding: 6px 16px 14px; }
+  details.rule .body p { margin: 10px 0; max-width: none; }
+  .rid { font: 600 0.9rem ui-monospace, "SF Mono", Menlo, monospace; }
+  .sc { color: var(--muted); font-size: 0.82rem; }
+  .lbl { font-weight: 650; }
+  table { border-collapse: collapse; font-size: 0.88rem; min-width: 100%; }
+  th, td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .callout { background: var(--accent-soft); border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .callout p { margin: 6px 0; }
+  .defect { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--over-fg); border-radius: 6px; padding: 10px 16px; margin: 10px 0; }
+  .defect.gap { border-left-color: var(--under-fg); }
+  .defect p { margin: 4px 0; max-width: none; }
+  ol, ul { max-width: 72ch; }
+  li { margin: 6px 0; }
+  .foot { color: var(--muted); font-size: 0.85rem; margin-top: 60px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Pour Engine rule audit</h1>
+<p class="sub">A full sweep of every registered rule against the WCAG 2.2 specification, 10 August 2026. Every rule's source was read in full; every claim below comes from that source or from W3C text, and the sharpest defect claims were independently re-verified line by line before being stated. The same sweep implemented its own next batch (eight new rules), which then got a same-day adversarial audit by fresh eyes; the defects that pass found were fixed and re-pinned the same day. This report is deliberately unflinching: it lists what over-flags, what under-tests, and what the engine cannot test at all.</p>
+
+<div class="tiles">
+  <div class="tile"><b>0</b><span>catalog drift vs the published W3C spec</span></div>
+  <div class="tile"><b>176 / 176</b><span>pinned spec cases pass in Chromium</span></div>
+  <div class="tile"><b>82</b><span>rules audited (62 WCAG + 20 best practice), plus 1 parked</span></div>
+  <div class="tile"><b>29</b><span>rated solid</span></div>
+  <div class="tile"><b>38</b><span>minor gaps</span></div>
+  <div class="tile"><b>8 + 7</b><span>over-flag risks + under-testers</span></div>
+</div>
+
+<nav class="toc" aria-label="Sections">
+  <a href="#verdict">Verdict</a>
+  <a href="#defects">Top findings</a>
+  <a href="#f-text">Text &amp; media</a>
+  <a href="#f-structure">Structure &amp; forms</a>
+  <a href="#f-contrast">Contrast &amp; visual</a>
+  <a href="#f-operable">Operable &amp; targets</a>
+  <a href="#f-aria">ARIA &amp; language</a>
+  <a href="#f-batch">New batch</a>
+  <a href="#f-bp">Best practice</a>
+  <a href="#coverage">What the engine cannot test</a>
+  <a href="#missing">Missing failure families</a>
+  <a href="#next">Proposed next batch</a>
+  <a href="#themes">Cross-cutting themes</a>
+  <a href="#method">Method &amp; honesty notes</a>
+</nav>
+
+<h2 id="verdict">The honest verdict</h2>
+<p>The engine is in good shape where it matters most, and the audit found no catalog problems: all 86 success criteria match the published W3C Recommendation exactly (numbers, names, levels, and version flags), the 2025 errata are editorial only, and no newer WCAG has shipped. The abstain-over-assert discipline is real and mostly enforced: the hardest criteria (focus visibility, focus obscurement, reflow, text spacing, non-text contrast) never assert failures they cannot prove, and the main text-contrast machinery is the strongest single piece of the engine, with every contentious judgment pinned by a measured case.</p>
+<p>The honest bad news comes in four flavours. First, a handful of rules assert violations the spec does not support: four WCAG rules and four best-practice rules over-flag in concrete, reproducible scenarios. Second, six rules are honest about their verdicts but examine a much thinner slice of their criterion than their name suggests. Third, several confirmed silent bugs let the worst offenders pass: the focus-visible replacement check counts <code>box-shadow: none</code> as an indicator, and the non-text-contrast wrapper check passes any border without measuring its contrast. Fourth, the engine's hard-won doctrine is unevenly applied: lessons about inert markup, shadow DOM, and the rendered tree live in some rules and never reached their siblings.</p>
+<p>Coverage-wise, 34 of 86 criteria are now partially automated and 52 need humans. That split is honest, and this audit confirms most manual classifications are genuinely dead ends. The six provable failure families the sweep found with no rule at all are now closed: this sweep implemented its own eight-rule batch (the muted hero video, embed, canvas, summary, composite-widget items, plus error-message linkage for 3.3.1, the inline jump-menu signature for 3.2.2/3.2.1, and CSS visual-order divergence for 2.4.3), taking assisted criteria from 30 to 34.</p>
+<p>The batch then got a same-day adversarial audit by an auditor with no attachment to the implementation. It found one genuine over-assert (error-message-linkage failed broken references that Understanding 3.3.1 says visible text can still satisfy), a double-reporting overlap on <code>&lt;button role="tab"&gt;</code>, and five narrow-signal gaps. The clear-cut ones were fixed and re-pinned the same day; the per-rule blocks in the New batch section record what was fixed and what remains disclosed.</p>
+
+<h2 id="defects">Top findings, verified against source</h2>
+<p>Each of these was claimed by an auditor and then independently re-checked in the rule source before being listed here.</p>
+
+<div class="defect"><p><b>1. focus-visible counts indicator removal as indicator provision.</b> The replacement check treats any set property as a replacement, but CSSOM returns <code>"none"</code> and <code>"transparent"</code> as truthy values. So <code>:focus { outline: none; box-shadow: none }</code>, the most aggressive suppression pattern on the web, silently passes as "replaced". Measured in Chromium. <span class="sc">2.4.7-focus-visible.js, replacementIn</span></p></div>
+<div class="defect"><p><b>2. non-text-contrast passes wrapper borders without measuring them.</b> The input-group heuristic passes on any wrapper border with nonzero width and alpha, never checking the 3:1 ratio the sibling wrapper-fill branch checks. A borderless input inside a wrapper with a 1px near-white border on white gets an asserted pass at roughly 1.1:1. <span class="sc">1.4.11-non-text-contrast.js:84-87</span></p></div>
+<div class="defect"><p><b>3. text-spacing asserts pass on pages it never measured.</b> Above 20,000 elements the rule returns <code>pass</code> for every element; the comment says "abstain wholesale" but the code asserts. Should be incomplete or an honest skip. <span class="sc">1.4.12-text-spacing.js:33</span></p></div>
+<div class="defect"><p><b>4. label-for-valid asserts a 4.1.2 failure the spec can pass.</b> A dangling <code>label[for]</code> next to a control that is named via <code>aria-label</code> fully satisfies 4.1.2, and with 4.1.1 Parsing retired the dangling reference has no criterion of its own. Real markup defect, wrong criterion verdict. <span class="sc">4.1.2-label-for-valid.js:16-23</span></p></div>
+<div class="defect"><p><b>5. autocomplete-valid flags fields the criterion does not cover.</b> SC 1.3.5 scopes itself to fields collecting information about the user; the ubiquitous autofill-suppression hacks (<code>autocomplete="nope"</code> on search boxes and coupon fields) are failed anyway. Meanwhile grammatically invalid values built from valid tokens (<code>"on email"</code>, <code>"billing"</code> alone, wrong token order) pass. Both over-flags and under-tests. <span class="sc">1.3.5-autocomplete-valid.js:30-36</span></p></div>
+<div class="defect"><p><b>6. role-required-aria flags a spec-sanctioned pattern and misses six required states.</b> <code>&lt;input type="checkbox" role="switch"&gt;</code> without aria-checked is failed, but ARIA-in-HTML sanctions exactly that markup and forbids adding aria-checked to it. Against the ARIA 1.2 tables the rule also never checks: combobox and scrollbar need aria-controls, scrollbar and meter and focusable separator need aria-valuenow, option needs aria-selected, heading needs aria-level. <span class="sc">4.1.2-role-required-aria.js:26-28</span></p></div>
+<div class="defect"><p><b>7. aria-attr-valid rejects legal values and skips whole value types.</b> ARIA 1.2 types aria-orientation and aria-hidden with a legal <code>undefined</code> token; the enum tables reject it as a critical fail. Numeric values (<code>aria-level="banana"</code>) and token lists (aria-relevant) are never validated at all. <span class="sc">4.1.2-aria-attr-valid.js:5-22</span></p></div>
+<div class="defect"><p><b>8. audio-control asserts what G170 leaves open.</b> A looping autoplay clip is failed even though the criterion is satisfied by any pause control anywhere on the page, which the rule cannot see. Its sibling pause-stop-hide abstains for precisely this reason, in writing. A muted-by-stripped-audio-track video also fails because only the muted flag is consulted. <span class="sc">1.4.2-audio-control.js:20-38</span></p></div>
+<div class="defect"><p><b>9. object-alt hard-fails embedded text documents.</b> A nameless <code>&lt;object&gt;</code> embedding an HTML page or tagged PDF is text content, not non-text content, so 1.1.1 may not even apply; the rule asserts a violation regardless and offers no presentation-role escape. The new embed-alt rule implements the type-gated review this rule still needs. <span class="sc">1.1.1-object-alt.js:9-16</span></p></div>
+<div class="defect"><p><b>10. Two best-practice page rules fire inside every iframe.</b> landmark-one-main and page-heading-one lack the embedded-document gate that every page-level WCAG rule has, and the extension injects into all frames, so every ad or widget iframe fails "no main landmark" and "no h1". <span class="sc">landmark-one-main.js, page-heading-one.js</span></p></div>
+<div class="defect gap"><p><b>11. The muted background hero video is nobody's job — CLOSED.</b> <code>&lt;video autoplay loop muted&gt;</code> is infinite automatic motion beside other content, squarely 2.2.2 subject matter, and it fell between audio-control (passes it: muted) and pause-stop-hide (never looks at video). Closed by video-loop-motion in this sweep's batch.</p></div>
+<div class="defect gap"><p><b>12. media-captions accepts subtitles as captions.</b> WCAG's captions definition explicitly distinguishes captions (sound effects, speaker identification) from dialogue-only subtitles, yet a <code>kind="subtitles"</code> track passes 1.2.2 outright. This one is pinned by spec cases, so it is standing policy rather than an accident, but it remains a real deviation from the spec's own definition.</p></div>
+
+<h2 id="f-text">Text alternatives &amp; media <span class="sc">(9 rules)</span></h2>
+
+<details class="rule"><summary><span class="rid">image-alt</span> <span class="sc">SC 1.1.1, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every rendered, AT-exposed <code>&lt;img&gt;</code> has an accessible name, empty alt, or a presentation role. Whitespace-only alt fails; filename-ish or generic alt goes to review.</p>
+<p><span class="lbl">Over:</span> near none. The whitespace-alt hard fail is a defensible judgment call either way. <code>alt="42"</code> on an image depicting "42" goes to review, which is noise but not a violation.</p>
+<p><span class="lbl">Under:</span> <code>&lt;img role="presentation" tabindex="0"&gt;</code> passes, but the ARIA role-conflict rule means browsers ignore the role on focusable elements, leaving a nameless focusable image. Garbage alt like "asdf" passes; content quality is not automatable.</p>
+<p><span class="lbl">Discipline:</span> very good. Fails only on provable absence, abstains on suspicious-but-possibly-valid text.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">svg-img-alt</span> <span class="sc">SC 1.1.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> SVGs and elements with image roles need an accessible name; explicit image roles without one fail, roleless SVGs go to review.</p>
+<p><span class="lbl">Over:</span> no wrong violations, but review volume: every unlabeled decorative roleless SVG outside the link/button allowlist gets flagged for review, and that allowlist is narrower than the real set of naming containers (tabs, summary, list items with text).</p>
+<p><span class="lbl">Under:</span> the shared accessible-name helper computes name from contents for every role, but the image role is name-from-author only in the accname spec. So <code>&lt;div role="img"&gt;some text&lt;/div&gt;</code> passes while AT exposes an unnamed image. The same leak is what makes SVG title children work, so it is accidentally right for SVG and wrong for text-bearing hosts.</p>
+<p><span class="lbl">Discipline:</span> exemplary; fail only when the author claimed image semantics and shipped no name.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">area-alt</span> <span class="sc">SC 1.1.1 + 2.4.4, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every <code>&lt;area href&gt;</code> in a map needs an accessible name.</p>
+<p><span class="lbl">Over:</span> areas in an orphaned map that no image references are still failed, though nothing presents them. Harmless edge; the visibility exemption is otherwise necessary since areas have no rendered box.</p>
+<p><span class="lbl">Under:</span> none material.</p>
+<p><span class="lbl">Discipline:</span> correct assert; a nameless actionable hotspot is provable.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">object-alt</span> <span class="sc">SC 1.1.1, Level A</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every rendered <code>&lt;object&gt;</code> needs an accessible name or non-empty fallback content.</p>
+<p><span class="lbl">Over:</span> confirmed. It asserts fail regardless of what the object embeds. An object embedding an HTML document or tagged PDF is text content, so 1.1.1's applicability is itself unprovable; by the engine's own abstain principle this should be incomplete, or gated on the type and data attributes. There is also no presentation-role escape hatch, unlike image-alt.</p>
+<p><span class="lbl">Under:</span> junk fallback text passes; text quality is not automatable.</p>
+<p><span class="lbl">Discipline:</span> the one weak spot: asserts where applicability is unknowable. No pinned cases protect it.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">input-image-alt</span> <span class="sc">SC 1.1.1 + 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> <code>input[type=image]</code> must have an accessible name.</p>
+<p><span class="lbl">Over:</span> none found; the assert is justified since a UA default like "Submit" does not describe purpose, and F65 lists this exact failure.</p>
+<p><span class="lbl">Under:</span> minor inconsistency: no filename or generic-alt screen like image-alt has, so <code>alt="button.png"</code> passes here but would go to review on an img.</p>
+<p><span class="lbl">Discipline:</span> correct.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">media-captions</span> <span class="sc">SC 1.2.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every video should carry a captions track; without one it abstains, since captions may be burned in or player-provided.</p>
+<p><span class="lbl">Over:</span> no wrong violations (it never fails), but structural review noise: 1.2.2 exempts video-only media, yet every silent background hero video without tracks gets flagged for review. No use of muted state to narrow this. Live streams get the same treatment though they belong to 1.2.4.</p>
+<p><span class="lbl">Under:</span> the notable one: WCAG's captions definition distinguishes captions from dialogue-only subtitles, but a <code>kind="subtitles"</code> track (or a bare track, whose missing-value default is the subtitles state) passes outright. A French translation subtitle track on English audio passes 1.2.2 here. Pinned by two spec cases, so it is standing policy: HTML-correct, WCAG-generous. Broken or empty VTT files also pass on presence alone.</p>
+<p><span class="lbl">Discipline:</span> good on the abstain side; the presence-equals-pass assert is the one place it claims more than it measured.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">audio-control</span> <span class="sc">SC 1.4.2, Level A</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> autoplaying media must be muted, zero-volume, carry controls, or play 3 seconds or less; endless loops fail, unknown durations abstain.</p>
+<p><span class="lbl">Over:</span> confirmed, two ways. G170 lets the pause mechanism be any control on the page, so a page with a looping clip plus its own custom pause button is failed anyway; pause-stop-hide abstains on the identical unknowable and says why in its header, so the engine contradicts itself here. And a looping video whose author stripped the audio track fails hard, because only the muted flag and volume are consulted, never whether audio exists or whether autoplay was blocked.</p>
+<p><span class="lbl">Under:</span> script-initiated playback (<code>audio.play()</code> with no autoplay attribute) is invisible to the selector; iframe embeds are genuinely out of reach.</p>
+<p><span class="lbl">Discipline:</span> split personality. The muted-property check and unknown-duration abstention are exemplary; both fail paths assert on unprovables. No pinned cases.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">meta-refresh</span> <span class="sc">SC 2.2.1, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> meta refresh: zero-delay self-reload fails, zero-delay redirect passes, 1 second to 20 hours fails, over 20 hours passes.</p>
+<p><span class="lbl">Over:</span> none found. F40/F41 are unconditional documented failures and the 20-hour boundary is read exactly, pinned to the second (72000 in scope, 72001 exempt).</p>
+<p><span class="lbl">Under:</span> trivial edges: a refresh to a fragment of the same page is still a reload loop but passes; parseInt reads some forms differently than the HTML refresh parser (verdict survives, message can misstate the delay).</p>
+<p><span class="lbl">Discipline:</span> correct throughout. The best spec-boundary work in its family, fully pinned.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">pause-stop-hide</span> <span class="sc">SC 2.2.2, Level A</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> marquee and blink fail outright; text-bearing elements moved by infinite CSS animations go to review with the animation named; everything else is silence.</p>
+<p><span class="lbl">Over:</span> edge-only: a single-pass marquee (potentially under 5 seconds) and a page whose only content is the marquee are permitted by the SC's clauses but hard-failed.</p>
+<p><span class="lbl">Under:</span> the real story. The infinity-only gate skips finite-but-long motion (a 12-second slide, or 50 iterations totalling 100 seconds) that the Understanding doc confirms is covered past five seconds. The text-only gate also silences image carousels and canvas motion, core 2.2.2 subject matter, while the header frames the exclusion as just spinners. JS-driven movement, tickers, autoplaying silent video, and animated GIFs are all unexamined.</p>
+<p><span class="lbl">Discipline:</span> the best in the engine. The infinite-ticker abstention exists precisely because the pause mechanism could be any button, and every pass that is really an abstention is documented. The verdicts it emits are impeccable; the problem is what it never examines.</p>
+</div></details>
+
+<h2 id="f-structure">Structure &amp; forms <span class="sc">(11 rules)</span></h2>
+
+<details class="rule"><summary><span class="rid">aria-required-children</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> composite ARIA containers (list, listbox, menu, tablist, grid) must contain, or aria-own, at least one required child role; populated containers with none fail.</p>
+<p><span class="lbl">Over:</span> shadow DOM blindness: light-DOM queries only, so a list whose items live in a child component's shadow root is falsely failed. A child with <code>role="bogus listitem"</code> does not count because the first token is taken rather than the first valid token. aria-owns resolves in the container's own root only.</p>
+<p><span class="lbl">Under:</span> ARIA 1.2 also gives feed a required article child, and row requires cells; neither is modelled, so an empty feed or cell-less row is never checked. Deliberate lenience: fully empty containers pass as lazy-load placeholders, beyond the spec's aria-busy escape (that part is disclosed and pinned).</p>
+<p><span class="lbl">Discipline:</span> asserts only on provably populated containers, except the shadow case where abstention is owed.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-required-parent</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> child roles (listitem, option, tab, row) must sit inside or be owned by the required container role, with presentation roles and role-less wrappers transparent.</p>
+<p><span class="lbl">Over:</span> an explicit <code>role="generic"</code> wrapper breaks the walk and fails the child, though explicit generic is exactly as transparent as a role-less div. <code>&lt;select multiple&gt;</code> is missing from the implicit-container map, so an option with an explicit role inside it fails. The ancestor walk does not cross shadow boundaries, which sibling rule listitem-parent solved.</p>
+<p><span class="lbl">Under:</span> columnheader and rowheader require a row context per ARIA 1.2 and are absent from the map. Multi-token roles escape the selector.</p>
+<p><span class="lbl">Discipline:</span> fails it asserts are provable except the generic-wrapper and shadow cases.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">definition-list</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> direct children of a role-less <code>&lt;dl&gt;</code> must be dt, dd, div, or script-supporting elements.</p>
+<p><span class="lbl">Over:</span> a <code>&lt;style&gt;</code> child fails, though the engine's own list-structure rule learned that CSS-in-JS injects style elements in place and they never reach the accessibility tree; the fix never propagated here. No rendered-tree filtering either, so a hidden stray child fails here while the identical case passes list-structure.</p>
+<p><span class="lbl">Under:</span> the help text promises term/description pairing but only child tags are policed: a dd-before-dt ordering, a dt with no dd, div wrappers with arbitrary contents, and direct text nodes all pass despite violating the HTML content model.</p>
+<p><span class="lbl">Discipline:</span> fine for what it tests. No pinned cases.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">dlitem-parent</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> role-less dt/dd must have a dl ancestor.</p>
+<p><span class="lbl">Over:</span> DOM-tree closest() only, so slotted or shadow-hosted items are falsely failed; listitem-parent crosses the flat tree and this rule never got the same fix.</p>
+<p><span class="lbl">Under:</span> a dl whose role was replaced (say tablist) still passes its dt children, though the explicit role replaced the list semantics; the sibling rule fails the equivalent ul case.</p>
+<p><span class="lbl">Discipline:</span> fine for the core case.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">form-label</span> <span class="sc">SC 1.3.1 + 3.3.2 + 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every non-button field needs a perceivable label: visible label element, aria-label, or aria-labelledby pass; title-only goes to review (H65); placeholder-only, hidden-only, empty, or nothing fails.</p>
+<p><span class="lbl">Over:</span> requiring the label to be visible goes beyond 1.3.1 and 4.1.2 alone, but Understanding 3.3.2 states a label is presented to all users, and the rule carries the 3.3.2 tag, so the hidden-only-label fail is spec-grounded. One message inaccuracy when a hidden label coexists with a placeholder (verdict right, description wrong).</p>
+<p><span class="lbl">Under:</span> label text is read with raw textContent, so a label whose only content is aria-hidden or display-none still passes, though the field then has no accessible name at all. That is the one real defect.</p>
+<p><span class="lbl">Discipline:</span> exemplary; the H65 abstention and differentiated fail messages are the model for the tri-criterion judgment. Well pinned.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">list-structure</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> ul/ol direct children (flat-tree and slot aware) must carry listitem semantics; unrendered children and div/span wrappers are transparent; a list whose every rendered item is neutralised also fails.</p>
+<p><span class="lbl">Over:</span> only role-less div and span count as generic wrappers, so a custom element wrapper (<code>&lt;my-row&gt;</code>) around list items is falsely failed, though an unknown element with no role is generic in the same way. The all-items-neutralised fail is a policy call beyond any documented failure technique, but it is measured and pinned.</p>
+<p><span class="lbl">Under:</span> direct stray text nodes inside the ul are invisible to the check, though the rule's own wrapper logic treats stray text as corrupting. An empty role attribute skips judgment entirely though browsers discard it.</p>
+<p><span class="lbl">Discipline:</span> good; provable corruption only, policy pinned.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">listitem-parent</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> a role-less li must be owned, in the flat tree, by a list container, walking through presentation roles and generic wrappers.</p>
+<p><span class="lbl">Over:</span> the same custom-element wrapper blind spot as list-structure, otherwise the hard cases (presentational propagation, slotted parents, role-replaced containers, div role="list") are all handled and pinned by four cases.</p>
+<p><span class="lbl">Under:</span> <code>li role=""</code> escapes the selector though browsers discard empty roles. Marginal.</p>
+<p><span class="lbl">Discipline:</span> the strongest of the structure set; everything it fails is provable from the flat tree.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">p-as-heading</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> a short paragraph whose sole child is bold and holds all its text, followed by another paragraph, is flagged as a possible styled heading.</p>
+<p><span class="lbl">Over:</span> none in the failure sense; it only ever asks for review, and the heuristic is tight.</p>
+<p><span class="lbl">Under:</span> F2's actual territory, the CSS-styled fake heading (a paragraph or div styled big and bold with no strong element), is never examined; the rule reads markup only, no computed styles. A bold lead-in with a trailing tail also escapes.</p>
+<p><span class="lbl">Discipline:</span> perfect abstention; very narrow net.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">table-headers</span> <span class="sc">SC 1.3.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> per data-looking table: fail if headers attributes reference ids that are not cells of the same table, or if no header markup exists at all; headerless tables full of nested tables go to review as likely layout.</p>
+<p><span class="lbl">Over:</span> a data table headed with ARIA instead of th (<code>&lt;td role="columnheader"&gt;</code>) fails "no header cells" though the relationship is programmatically determined, which is all 1.3.1 asks. Document-wide id resolution can also misfire on duplicate ids.</p>
+<p><span class="lbl">Under:</span> wrong or ambiguous scope, empty th cells, and complex association errors pass by design (disclosed); ARIA tables (<code>role="table"</code> on divs) and treegrids never enter the selector though they are the rule's claimed territory.</p>
+<p><span class="lbl">Discipline:</span> good; the ambiguous case abstains.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">orientation-lock</span> <span class="sc">SC 1.3.4, Level AA</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> stylesheet rules inside orientation media queries that hide or rotate the page root (the "please rotate" wall and the forced-orientation hack).</p>
+<p><span class="lbl">Over:</span> print-context orientation queries are not excluded (contrived). The essential exception is acknowledged in the fix text but not in the verdict for the hide-wall branch; the rotate-branch argument that rendered-rotated content disproves essentiality is sound.</p>
+<p><span class="lbl">Under:</span> disclosed honestly: script locks, cross-origin sheets, and region-level hiding are out of scope, and hiding an SPA's app root rides out under the region exemption, which is the likeliest real-world lock it won't see. Rotation via rotateZ or matrix forms escapes the pattern list.</p>
+<p><span class="lbl">Discipline:</span> proves it or stays silent, with in-force pinned cases.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">autocomplete-valid</span> <span class="sc">SC 1.3.5, Level AA</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> any autocomplete attribute must use only tokens from the HTML autofill vocabulary; unknown tokens fail.</p>
+<p><span class="lbl">Over:</span> confirmed. The criterion scopes itself to fields collecting information about the user, and its Understanding doc says other fields need not expose a purpose. The rule fails every unknown token regardless, which makes the widespread autofill-suppression hacks (<code>"nope"</code>, <code>"false"</code>, <code>"chrome-off"</code> on search boxes, coupon codes, admin filters) reported violations on fields the criterion does not cover. By the engine's own principle, a token resembling no purpose on an unknowable field argues for review, not fail.</p>
+<p><span class="lbl">Under:</span> the token list is complete against the HTML spec, but only membership is checked, never the grammar: <code>"on email"</code>, <code>"email shipping"</code> in wrong order, <code>"billing"</code> with no field token, and <code>"webauthn email"</code> all pass despite being invalid values browsers may refuse to map.</p>
+<p><span class="lbl">Discipline:</span> weak on both edges. No pinned cases.</p>
+</div></details>
+
+<h2 id="f-contrast">Contrast &amp; visual <span class="sc">(8 rules)</span></h2>
+
+<details class="rule"><summary><span class="rid">link-in-text-block</span> <span class="sc">SC 1.4.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> links in prose without underline, underline substitute, or a 300+ weight difference need 3:1 colour difference from surrounding text (G183). Wrapped links are measured per line fragment.</p>
+<p><span class="lbl">Over:</span> two real ones: font-style is never read, so a link distinguished by italics alone is failed; and a link marked by a visible icon (child image or generated-content glyph) is a non-colour cue the rule cannot see, failed regardless.</p>
+<p><span class="lbl">Under:</span> the own-text gate counts only direct text nodes, so a paragraph whose surrounding words mostly sit inside inline elements (strong, em) escapes entirely. Prose in divs and other containers is out of scope by measured design.</p>
+<p><span class="lbl">Discipline:</span> asserts only after exhausting every measurable cue; the current G183 requires just the ratio, so the 3:1 pass is spec-clean. Six pinned cases.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">color-contrast</span> <span class="sc">SC 1.4.3, Level AA</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> text contrast at 4.5:1 (3:1 large) against the resolved backdrop: ancestor walk, hit-testing, pseudo-element geometry, image and gradient pixel sampling with luminance bracketing, opacity and animation resting states, modal-scrim double checks, and a film bracket for unplaceable translucent paint.</p>
+<p><span class="lbl">Over:</span> the criterion's logotype and pure-decoration exceptions are not modelled (statically undetectable), so a low-contrast HTML wordmark is failed. Image downsampling to 32x32 can narrow the sampled luminance range on high-frequency images, making a bracketed fail wrong in principle. Both are rare; the fail path is otherwise defended on every side.</p>
+<p><span class="lbl">Under:</span> disclosed: SVG and MathML text are excluded (painted by fill) and no other rule covers them. Quieter: a pointer-events-none compact control is treated as inactive and passed, but such a link can still be keyboard-focusable and operable; and an aria-disabled ancestor exempts plain prose inside it, an escape hatch the criterion does not grant for non-component text. Same-colour text goes to review, never fail, by documented choice.</p>
+<p><span class="lbl">Discipline:</span> exemplary. Every unprovable configuration goes to review with a specific reason; the translucent-text bracket is mathematically honest and pinned; the large-text boundary matches the spec's pt-to-px mapping on the lenient side.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">control-contrast</span> <span class="sc">SC 1.4.3, Level AA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> value and placeholder text contrast inside form fields, honouring fieldset disabling, resting opacity, and abstaining over images.</p>
+<p><span class="lbl">Over:</span> value-text colour is judged even on an empty input with no placeholder, where nothing is presented yet. Preventive but strictly beyond the criterion.</p>
+<p><span class="lbl">Under:</span> with an opaque background colour, the control's own background-image (gradient-styled inputs) is never consulted, so the flat colour is judged while a gradient actually paints under the text. None of the main rule's overlay, pseudo, or veil machinery runs here: a transparent input over a positioned hero panel gets no backdrop-hazard bracket. Per-option colours in selects are unexamined.</p>
+<p><span class="lbl">Discipline:</span> good and pinned on the endemic placeholder case; the gaps are in what it does not bracket.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">color-contrast-enhanced</span> <span class="sc">SC 1.4.6, Level AAA</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> the identical machinery at the AAA thresholds 7:1 and 4.5:1 large, both spec-correct.</p>
+<p><span class="lbl">Over / under:</span> inherits 1.4.3's exactly. One structural caveat: control text has no AAA twin, so in a AAA audit placeholder and value text are only ever held to AA.</p>
+<p><span class="lbl">Discipline:</span> same as the main rule.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">non-text-contrast</span> <span class="sc">SC 1.4.11, Level AA</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> whether a form field's fill or border reaches 3:1 against surroundings; verdicts are pass or review only, never fail, because a boundary is only required when it is the identifying visual information.</p>
+<p><span class="lbl">Over:</span> none possible in the violation sense; the review messages state the conditional correctly.</p>
+<p><span class="lbl">Under:</span> one confirmed bug: the input-group wrapper heuristic passes on any wrapper border with nonzero width and alpha, without measuring that border's contrast, while the sibling wrapper-fill branch measures 3:1. A near-invisible wrapper border produces an asserted pass. Beyond the bug, the scope is deliberately narrow and mostly disclosed: focus indicators, states, icons, and graphical objects are manual; checkboxes, radios, and buttons are excluded by selector even though their boundary is usually the sole identifier. The help string overstates by mentioning icons, which are never checked.</p>
+<p><span class="lbl">Discipline:</span> right posture for a mostly-human criterion, except the unmeasured wrapper-border pass asserts on unproven evidence.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">text-spacing</span> <span class="sc">SC 1.4.12, Level AA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> injects the criterion's exact four overrides in one pass and reports containers that newly overflow their clipped box, as review.</p>
+<p><span class="lbl">Over:</span> none material; overflow findings are review, never fail, pinned even for a provably line-hiding clamp.</p>
+<p><span class="lbl">Under:</span> confirmed: above 20,000 elements the rule returns pass for everything while the comment says abstain; that is an asserted pass on unmeasured pages. The overlap failure mode (fixed-height boxes spilling onto neighbours without clipping) is invisible to the probe. Shadow-root internals are only partially reached.</p>
+<p><span class="lbl">Discipline:</span> rigorous and pinned, except the pass-on-skip.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">reflow</span> <span class="sc">SC 1.4.10, Level AA</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> whether the document already scrolls horizontally at the current viewport; if so, flags for verification at 320 CSS px. Never fails.</p>
+<p><span class="lbl">Over:</span> none as verdicts. The message's claim that things "will be worse" at 320px is an unmeasured prediction (a media query may give a clean mobile layout) and should be softened.</p>
+<p><span class="lbl">Under:</span> honestly disclosed in code and message: the criterion's actual test condition (320 CSS px width) is not run, so the dominant real-world failure class, pages fine at desktop that break narrow, is invisible unless the audit itself runs narrow. The 256 px condition for horizontal-scrolling content is not addressed and not mentioned.</p>
+<p><span class="lbl">Discipline:</span> correct: flags, never asserts, and says what a human must verify.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">meta-viewport</span> <span class="sc">SC 1.4.4, Level AA</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> fails a top-document viewport meta with user-scalable=no or maximum-scale below 2; embedded-frame metas pass because browsers ignore them (measured, pinned).</p>
+<p><span class="lbl">Over:</span> strictly, desktop zoom can satisfy 1.4.4 while the meta blocks mobile pinch, but W3C's own published ACT rule maps exactly these conditions to a failed outcome, so the assert has direct spec-ecosystem backing, and the boundary (exactly 2 allowed) is right. Edges: with two viewport metas the browser honours the last but each is judged independently; an invalid negative maximum-scale that browsers drop still fails.</p>
+<p><span class="lbl">Under:</span> the rest of 1.4.4 (clipped text at 200%, controls that do not resize, viewport-unit text) is untested and honestly scoped out.</p>
+<p><span class="lbl">Discipline:</span> good; the embedded-frame carve-out kills a whole class of false positives.</p>
+</div></details>
+
+<h2 id="f-operable">Operable, focus &amp; targets <span class="sc">(11 rules + 1 parked)</span></h2>
+
+<details class="rule"><summary><span class="rid">scrollable-region-focusable</span> <span class="sc">SC 2.1.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> genuinely scrollable regions must be keyboard reachable: tabbable themselves or containing tabbable content (flat-tree aware). Explicit tabindex -1 with nothing tabbable inside fails; the no-tabindex case is browser-dependent and goes to review.</p>
+<p><span class="lbl">Over:</span> the fail only looks for tabbable content inside the scroller. A carousel scrolled by prev/next buttons outside it is fully keyboard operable (2.1.1 asks for operability, not tab-order membership) yet is failed. An invalid tabindex value is also treated as a deliberate opt-out, with a message about a value the author never wrote.</p>
+<p><span class="lbl">Under:</span> the empty-scroller browser split is handled honestly (measured, pinned); JS-only scrolling is out of scope by nature.</p>
+<p><span class="lbl">Discipline:</span> near-exemplary; one assert can hit keyboard-operable carousels.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">bypass-blocks</span> <span class="sc">SC 2.4.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> page passes if any sufficient technique is present: any landmark, any heading, any resolving in-page anchor, all frames titled, or fewer than 4 links.</p>
+<p><span class="lbl">Over:</span> the criterion governs blocks repeated across pages, which one page cannot prove; the small-page guard is the only protection, so a prose article with 5 links, no headings, and no landmarks fails on unprovable repetition. Rare shape.</p>
+<p><span class="lbl">Under:</span> presence is checked, not function: one footer landmark or one hidden heading passes the whole page, and any resolving anchor counts even if it is a back-to-top link at the bottom, which is not what G1 describes.</p>
+<p><span class="lbl">Discipline:</span> passes when uncertain rather than asserting, which is the defensible direction, but a review tier for present-but-plausibly-nonfunctional techniques does not exist.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">document-title</span> <span class="sc">SC 2.4.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> non-embedded documents need a non-empty title; known editor placeholders fail; single generic words go to review; embedded frames pass per the spec's definition of a page.</p>
+<p><span class="lbl">Over:</span> none found; the two tiers map exactly to wrong-under-every-reading versus somebody's call, and both are pinned.</p>
+<p><span class="lbl">Under:</span> the placeholder lexicon is English-only and, unlike the link rules, that limit is not stated in the file. Whether a real-looking title matches the page is deliberately not judged.</p>
+<p><span class="lbl">Discipline:</span> model behaviour.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">link-name</span> <span class="sc">SC 2.4.4, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> every link must have a non-empty accessible name via the shared accname helper.</p>
+<p><span class="lbl">Over:</span> hinges on accname fidelity, which held up under measurement: SVG title children are included (verified in Chromium), labelledby recursion, hidden-content exemptions, slots, and shadow trees all behave. Residual risk is exotic accname corners only.</p>
+<p><span class="lbl">Under:</span> none found; nameless links reliably fail. (Image-map areas are covered separately by area-alt.)</p>
+<p><span class="lbl">Discipline:</span> correct; name presence is provable.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">link-text-generic</span> <span class="sc">SC 2.4.4, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> links whose accessible name is a generic phrase ("read more", "click here") go to review, because programmatically determined context can supply the purpose.</p>
+<p><span class="lbl">Over:</span> none as violations; it never asserts. Review noise is possible but the message says exactly what to check. Pinned.</p>
+<p><span class="lbl">Under:</span> English-only, disclosed with reasoning. The finite list misses cousins ("shop now", "view all"), and identical generic names pointing at different destinations are not correlated.</p>
+<p><span class="lbl">Discipline:</span> exactly right for the criterion's context escape.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">link-text-generic-only</span> <span class="sc">SC 2.4.9, Level AAA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> the same list at AAA, but asserting fail: link text alone must identify the purpose.</p>
+<p><span class="lbl">Over:</span> the criterion says a mechanism must be available to identify purpose from text alone, and F84 conditions failure on the absence of such a mechanism (a preference that expands link texts). The rule asserts fail with no way to see a mechanism. Rare in the wild, but the assert outruns proof. The in-file reasoning about the ambiguous-to-everyone exception also reaches the right verdict by a backwards argument, which would mislead a future editor.</p>
+<p><span class="lbl">Under:</span> same list limits as the AA rule; non-generic-but-unhelpful text is untestable.</p>
+<p><span class="lbl">Discipline:</span> defensible under F84's practical reading, but this is one place abstention is bent.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">focus-visible</span> <span class="sc">SC 2.4.7, Level AA</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> scans same-origin stylesheets for focus rules that strip the outline without a replacement in the same rule (F78), exempting the published focus-visible reset idiom; reports review, never fail.</p>
+<p><span class="lbl">Over:</span> none as violations; the review message is self-disclosing.</p>
+<p><span class="lbl">Under:</span> the confirmed bug: the replacement check treats any set property as a replacement, and CSSOM returns "none" and "transparent" as truthy, so <code>:focus { outline: none; box-shadow: none }</code> and friends, the most aggressive suppressors, silently pass as replaced. Also missed: transparent outline colours, adopted stylesheets and shadow-root sheets, and scripted blur (F55). No pinned cases at all.</p>
+<p><span class="lbl">Discipline:</span> right posture (visibility cannot be asserted from static CSS), but the pass is weaker than it looks.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">focus-not-obscured</span> <span class="sc">SC 2.4.11, Level AA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> hit-tests each focusable's centre; if an opaque fixed or sticky panel fully contains it and no scroll-padding reserves the edge, asks for a keyboard pass. Never fails.</p>
+<p><span class="lbl">Over:</span> none as violations; full containment matches the criterion's "entirely hidden", partial overlap passes, and scroll-padding suppresses the finding as the Understanding doc's approach.</p>
+<p><span class="lbl">Under:</span> two silent holes: any visible dialog anywhere (including persistent chat widgets shipping as role dialog) disables the rule for the whole page with no trace; and overlays opaque via gradient or background-image with transparent background colour are invisible to the opacity test. No pinned cases.</p>
+<p><span class="lbl">Discipline:</span> the header is a model statement of why geometry alone cannot assert this criterion.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">target-size</span> <span class="sc">SC 2.5.8, Level AA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> targets at 24x24 or the spec's spacing-circle test, with inline and user-agent exceptions, overlap re-measurement, and same-action dismissal; wrapped links judged on line fragments.</p>
+<p><span class="lbl">Over:</span> two concrete: the user-agent exception is implemented only for checkboxes and radios, but the spec excepts any target whose size the agent determines and the author left unmodified, so an unstyled select or small default button crowded by a sibling fails despite the exception provably applying. And the equivalent-target exception is only applied in the overlap path, not the spacing path: a 20px icon link beside a large text link to the same URL fails though the matching hrefs are in hand.</p>
+<p><span class="lbl">Under:</span> any clip-path makes an element pointer-invisible to the rule, so a visible clipped avatar button is neither judged nor counted as a crowder. The selector misses textarea, summary, area, and ARIA widget roles, which also weakens the spacing test. The essential exception needs the human reviewing the finding, which the header discloses but the output does not.</p>
+<p><span class="lbl">Discipline:</span> the spacing geometry is the most spec-faithful implementation in the file set, and every contentious call is pinned with measured provenance.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">target-size-enhanced</span> <span class="sc">SC 2.5.5, Level AAA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> the same machinery at 44x44, correctly without the spacing exception (verified: 2.5.5's exceptions are equivalent, inline, user agent, essential only).</p>
+<p><span class="lbl">Over:</span> inherits and amplifies the user-agent gap: at 44px every unstyled native control fails a criterion that explicitly excepts unmodified agent sizing; only checkboxes and radios are exempt. Equivalent and essential are unprovable but fail is asserted, and at AAA density that will fire on excepted content.</p>
+<p><span class="lbl">Under:</span> same selector and clip-path holes. No pinned cases of its own; behaviour is locked only transitively through the shared factory.</p>
+<p><span class="lbl">Discipline:</span> usually spec-correct at this threshold, with a wider blast radius for the same tensions.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">auth-field-obstruction</span> <span class="sc">SC 3.3.8, Level AA</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> credential fields with inline paste/drop blockers or autocomplete off. One obstruction goes to review; both together fail.</p>
+<p><span class="lbl">Over:</span> the fail branch is unsound on the rule's own evidence, twice: the criterion is satisfied by an alternative (passkey, SSO, emailed link) which the header admits the rule cannot see, and the premise that autocomplete off removes the password-manager mechanism is contradicted three lines later by its own third branch ("browsers often fill anyway"). The pinned case locks this over-assertion in as policy.</p>
+<p><span class="lbl">Under:</span> honestly scoped: framework-attached blockers are invisible, and the criterion's central subject, cognitive tests themselves (CAPTCHAs, security questions), is outside this rule's remit, as the name admits.</p>
+<p><span class="lbl">Discipline:</span> the two review branches teach the distinction well; the single asserting branch asserts what the file concedes it cannot know and should be a strongly-worded review.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">label-in-name</span> <span class="sc">SC 2.5.3, Level A, PARKED</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Status:</span> deliberately unregistered by product decision (findings volume not wanted); the criterion is classed manual so it lands in the human checklist rather than being silently skipped. The rule stays maintained.</p>
+<p><span class="lbl">If re-enabled:</span> the core containment check is spec-correct, visible-text computation is careful, and the assert is appropriate. Two flaws to fix first: a visually hidden component (sr-only button with aria-label) is still judged though nothing is presented visually; and image alt inside a control is ignored though the criterion covers images of text, so a visible logo-text button with a divergent label is missed. No pinned cases.</p>
+</div></details>
+
+<h2 id="f-aria">ARIA, robust &amp; language <span class="sc">(15 rules)</span></h2>
+
+<details class="rule"><summary><span class="rid">aria-allowed-attr</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> non-global aria attributes on roles that do not support them (an ARIA author MUST). Asks for review, never asserts, because the attribute is inert and no criterion provably fails.</p>
+<p><span class="lbl">Over:</span> one wrong question: the implicit-role table maps td to cell unconditionally, so a td inside a grid (which is really a gridcell, where aria-selected is legal) gets asked about a legitimate attribute. The deprecated foursome is correctly kept legal, verified against the per-role tables.</p>
+<p><span class="lbl">Under:</span> unmodelled roles pass without guessing, honest. Label attributes are routed to aria-label-misuse, which covers fewer elements than the prohibition (see that rule).</p>
+<p><span class="lbl">Discipline:</span> the ask-not-assert stance was verified as spec-honest, and the pinned cases pin exactly the right line, including the ARIA 1.1-to-1.2 narrowing.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-attr-valid</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> aria attribute names must exist in the 1.2 vocabulary and enumerated attributes must carry an allowed value. Asserts fail.</p>
+<p><span class="lbl">Over:</span> confirmed: aria-orientation legally takes undefined (its default token) and aria-hidden is typed true/false/undefined, but both enum entries reject undefined as a critical fail on conforming markup. An unknown attribute name on a non-widget (an analytics hook) is also asserted as critical although it is inert, which is exactly the reasoning that makes the sibling rule abstain; applied inconsistently here.</p>
+<p><span class="lbl">Under:</span> numeric values are never validated and token-list values are unchecked; IDREFs are honestly delegated.</p>
+<p><span class="lbl">Discipline:</span> right to assert on a malformed value for a supported state; the blanket assert on unknown names does not meet the engine's own provability bar.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-field-name</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> ARIA-built fields and value widgets need an accessible name; author-only roles cannot be named by content. All role classifications verified against the 1.2 tables.</p>
+<p><span class="lbl">Over:</span> none found. The ARIA 1.1 combobox escape hatch passes a wrapper the ARIA spec says must be named, because the input users reach is labelled: a deliberate, documented divergence in favour of the user-outcome reading. Defensible, but unpinned; it should get a case.</p>
+<p><span class="lbl">Under:</span> honestly scoped, but engine-wide the other name-required author-only roles (radiogroup, tree, grid, treegrid, tabpanel, region, application) are covered by no rule anywhere, so an unnamed tree passes silently. Backlog item, not this rule's defect.</p>
+<p><span class="lbl">Discipline:</span> asserts only what the spec makes provable; the progressbar and meter additions are pinned with citations.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-hidden-focus</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> focusable elements inside aria-hidden regions, reachable by keyboard but imperceptible to screen readers.</p>
+<p><span class="lbl">Over:</span> a tabindex of -2 or other negative values is counted as focusable because the filter compares the literal string "-1"; such elements are not tab-reachable. Rare. The opacity and inert exclusions kill the big real-world false positives and are pinned.</p>
+<p><span class="lbl">Under:</span> does not pierce shadow roots, so an aria-hidden host with focusable shadow content passes. The open-modal carve-out downgrades every aria-hidden finding on the page to review, over-abstaining in the honest direction.</p>
+<p><span class="lbl">Discipline:</span> exemplary; asserts the provable case, abstains where script-managed focus makes the DOM inconclusive.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-label-misuse</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> aria-label on plain generic containers (div, span, p), which ARIA 1.2 prohibits naming. Asks for review.</p>
+<p><span class="lbl">Over:</span> none found; the name-from-content carve-out is spec-correct and pinned.</p>
+<p><span class="lbl">Under:</span> the prohibition covers eleven roles (including strong, em, code, caption, del, ins, presentation) and the selector covers three elements; the rest breaks the identical MUST and neither this rule nor its sibling ever mentions it. Undocumented gap.</p>
+<p><span class="lbl">Discipline:</span> the ask stance is well grounded, with exposure measured rather than assumed, and pinned into the default audit.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">aria-valid-refs</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> seven IDREF aria attributes must point at existing elements in the same tree; duplicate-id targets go to review.</p>
+<p><span class="lbl">Over:</span> lazily-rendered targets: only aria-controls under a collapsed aria-expanded is excused, so a describedby tooltip created on hover, or a tab's aria-controls to a lazily-mounted panel (tabs use aria-selected), is failed though the pattern works when the user gets there. By the engine's own inertness doctrine a dangling describedby harms no name, role, or value, so the assert proves more than the DOM shows; dangling labelledby and activedescendant asserts are fully justified.</p>
+<p><span class="lbl">Under:</span> aria-flowto omitted; trivial.</p>
+<p><span class="lbl">Discipline:</span> good on duplicates; slightly over-assertive on the describedby class.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">button-name</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> buttons must have a non-empty accessible name.</p>
+<p><span class="lbl">Over:</span> two rare accname edges: a button labelled via labelledby pointing at a select is not credited with the selection text (the helper implements embedded-control values for text inputs only), and the CSS content alternative-text syntax contributes nothing.</p>
+<p><span class="lbl">Under:</span> none found; UA-default submit names, generated content, slots, shadow, and the hidden-subtree rules all match the accname spec under verification.</p>
+<p><span class="lbl">Discipline:</span> correct; nameless buttons are provable.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">dialog-name</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> rendered dialogs must have an author-provided name; body text never names a dialog. Verified: both roles are name-required, name-from-author.</p>
+<p><span class="lbl">Over / under:</span> none found; closed dialogs are correctly filtered, labelledby resolution is pinned.</p>
+<p><span class="lbl">Discipline:</span> correct assert; fully provable.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">frame-title</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> iframes need a title or other accessible name; hidden and aria-hidden frames are excluded.</p>
+<p><span class="lbl">Over:</span> 1x1 utility trackers that are not hidden are flagged; spec-aligned since they sit in the accessibility tree, but the fix text offers only a title when aria-hidden is the right fix for such frames. Wrong prescription, right verdict.</p>
+<p><span class="lbl">Under:</span> none found.</p>
+<p><span class="lbl">Discipline:</span> correct.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">label-for-valid</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> label[for] must reference an existing labelable control in the same tree.</p>
+<p><span class="lbl">Over:</span> confirmed and structural: an orphaned label does not by itself fail 4.1.2. A dangling for attribute next to a control named via aria-label satisfies the criterion completely; with 4.1.1 Parsing retired, the dangling reference has no criterion of its own. The actual failure, a nameless control, is form-label's finding. The rule asserts a serious criterion failure on pages the spec passes.</p>
+<p><span class="lbl">Under:</span> none in scope; shadow-root resolution and the for-kills-implicit-association rule are both correctly implemented.</p>
+<p><span class="lbl">Discipline:</span> should ask, or fail only when the defect leaves a control nameless.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">nested-interactive</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> an interactive element must not contain another user-reachable interactive element; managed-focus patterns are filtered out up front.</p>
+<p><span class="lbl">Over:</span> low; the spec grounding (children-presentational roles, the HTML content model) is strong for most pairs, and the auditor could not construct a conforming page it flags.</p>
+<p><span class="lbl">Under:</span> shadow descendants are not traversed, and a few widget roles (textbox, combobox, gridcell) are not in the interactive list, so a link inside a role-textbox contenteditable passes.</p>
+<p><span class="lbl">Discipline:</span> careful filters do the abstention work up front.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">role-required-aria</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> explicit widget roles that require a state (checked, valuenow, expanded) must carry it.</p>
+<p><span class="lbl">Over:</span> confirmed: a checkbox input re-roled as switch is failed for missing aria-checked, but ARIA-in-HTML sanctions exactly that markup and forbids adding aria-checked to it; the native-state carve-out only covers same-role redundancy, not the sanctioned swaps.</p>
+<p><span class="lbl">Under:</span> measured against the 1.2 required-state tables, six requirements are unchecked and undocumented: combobox and scrollbar need aria-controls, scrollbar and meter and focusable separator need aria-valuenow, option needs aria-selected, heading needs aria-level. The map is roughly a third of the spec's table.</p>
+<p><span class="lbl">Discipline:</span> right to assert on a stateless checkbox role; the coverage is the problem.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">valid-role</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> role tokens must be valid concrete ARIA roles, with prefix vocabularies and fallback-token semantics honoured. The role table was diffed against the spec: all 80 concrete roles present, all 12 abstract roles correctly absent, deliberate draft additions documented.</p>
+<p><span class="lbl">Over:</span> the harmless-fallback escape hatch covers only div, span, and svg, so a bogus role on a paragraph or list is asserted as critical although the role is discarded, the element falls back to its real semantics, and nothing a user receives is wrong; the file's own stated principle (report invalid roles that mask semantics or decorate interactive elements) says these should pass or ask.</p>
+<p><span class="lbl">Under:</span> none material; the escape direction is safe.</p>
+<p><span class="lbl">Discipline:</span> good instincts, but the assert/pass boundary is drawn by tag name instead of by the file's own principle.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">html-lang</span> <span class="sc">SC 3.1.1, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> the html element needs a lang attribute that is a plausible BCP 47 tag.</p>
+<p><span class="lbl">Over:</span> none found; singletons, numeric regions, private-use forms, and case handling all check out, and rejecting long primary subtags like "english" matches the validity reading H57 requires.</p>
+<p><span class="lbl">Under:</span> a wrong-but-valid declaration (lang="en" on a French page) is undetectable statically and universally abstained on; the file never says so, a disclosure nit.</p>
+<p><span class="lbl">Discipline:</span> correct; both failure modes are provable.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">valid-lang-parts</span> <span class="sc">SC 3.1.2, Level AA</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> lang attributes on elements below the root must be valid BCP 47 tags; empty passes.</p>
+<p><span class="lbl">Over:</span> none found.</p>
+<p><span class="lbl">Under:</span> the primary real-world failure, foreign passages with no lang markup at all, is undetectable here, implicitly disclosed by the rule's name. One wrong comment: empty lang means language unknown per HTML, not a reset to the page language (verdict unaffected).</p>
+<p><span class="lbl">Discipline:</span> correct; asserts only the provable syntactic failure.</p>
+</div></details>
+
+<h2 id="f-batch">The new batch <span class="sc">(8 rules, shipped and adversarially audited 10 August 2026)</span></h2>
+<p>These eight were implemented by this sweep, then audited the same day by fresh eyes with zero attachment to the implementation. That pass found one genuine over-assert and several narrow-signal gaps; the clear-cut ones were fixed and re-pinned the same day (the batch carries 36 pinned cases). Ratings below are post-fix.</p>
+
+<details class="rule"><summary><span class="rid">video-loop-motion</span> <span class="sc">SC 2.2.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> autoplaying looped videos without controls at meaningful size get a review asking whether a pause mechanism reaches them. Loaded-but-paused passes: either autoplay was refused or a control already worked, and nothing is moving.</p>
+<p><span class="lbl">Fixed same day:</span> the size floor was OR-based, so a 1200x60 animated banner strip passed as icon-scale; now small-on-both-axes only, pinned.</p>
+<p><span class="lbl">Remaining, disclosed:</span> autoplay without loop but longer than 5 seconds is unexamined (duration not consulted); IDL-property autoplay and script-started playback never match the attribute selector.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">error-message-linkage</span> <span class="sc">SC 3.3.1, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> fields captured in an invalid state: a broken, empty, or hidden aria-errormessage target gets a review naming the broken reference; invalid with no linkage at all gets a review; a populated visible target passes; errormessage on a non-invalid field is inert and passes.</p>
+<p><span class="lbl">Fixed same day (the adversarial pass's flagship find):</span> the broken-reference branch originally asserted a 3.3.1 violation, but Understanding 3.3.1 is explicit that programmatic association is not required, so adjacent visible text can satisfy the criterion on its own. Both shapes now review, never assert; invalid now includes the spelling and grammar states per ARIA 1.2; image-of-text error messages now count via the accname walk. All re-pinned.</p>
+<p><span class="lbl">Remaining, disclosed:</span> fields in visual-only error state (no aria-invalid) are invisible, which is the state-dependent design.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">composite-widget-name</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> nameless tabs, menu items, options, and treeitems fail; all six roles verified name-required and name-from-contents in the ARIA 1.2 tables.</p>
+<p><span class="lbl">Fixed same day:</span> <code>&lt;button role="tab"&gt;</code> and <code>&lt;a href role="tab"&gt;</code> were double-reported, since button-name and link-name match the tag regardless of the role override; this rule now owns only div/span-style hosts, pinned.</p>
+<p><span class="lbl">Remaining:</span> a private-use icon-font glyph via generated content counts as a name per accname, so a tab announced as garbage passes: a quality gap, not a spec error. Async listboxes rendering empty mid-load draw a snapshot fail.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">summary-name</span> <span class="sc">SC 4.1.2, Level A</span> <span class="pill r-solid">SOLID</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> the first summary child of a details (the actual disclosure control per the HTML spec) must have an accessible name; other summaries are plain content and owe nothing.</p>
+<p><span class="lbl">Adversarial result:</span> hostile shapes (nested wrappers, hidden first summary, second summaries) all behaved; nothing found. Known asymmetry, accepted: a details with no summary at all passes on the UA-supplied "Details" legend, which is barely more informative than the empty summary the rule fails.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">embed-alt</span> <span class="sc">SC 1.1.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> nameless embeds fail; document formats get a review because embedded text puts 1.1.1's applicability in question.</p>
+<p><span class="lbl">Fixed same day:</span> the document carve-out covered only text types; PDF-via-embed (the common real-world case), XHTML, and typeless embeds with a document-extension src now review instead of fail, pinned.</p>
+<p><span class="lbl">Remaining:</span> no size floor, so a legacy 1x1 tracking embed hard-fails while presenting nothing; aria-hidden remains the decorative escape.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">canvas-alt</span> <span class="sc">SC 1.1.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> roleless chart-sized canvas with no name, no fallback, and no named enclosing control gets a review; decorative versus meaningful is the human call, per the roleless-SVG precedent.</p>
+<p><span class="lbl">Fixed same day:</span> the fallback check used raw textContent, so a chart library's bootstrap script inside the canvas counted as fallback content; script, style, and template text now excluded, pinned.</p>
+<p><span class="lbl">Remaining:</span> a canvas with an invalid role exits this selector and is not picked up by svg-img-alt, vanishing between rules; the enclosing-control allowlist is narrower than the real set of naming containers.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">on-input-navigation</span> <span class="sc">SC 3.2.2 + 3.2.1, Level A</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> inline onchange/oninput on form controls and onfocus anywhere whose handler writes to location, submits, or opens a window: review, since conditional code paths and the advised-beforehand clause are human questions.</p>
+<p><span class="lbl">Fixed same day:</span> the pattern matched reads of location, so analytics handlers drew reviews; now writes and navigating calls only. requestSubmit and oninput added. All pinned, including the location-read pass.</p>
+<p><span class="lbl">Remaining, disclosed:</span> bare submit() without a dot, SPA router navigation, and all addEventListener registrations are invisible.</p>
+</div></details>
+
+<details class="rule"><summary><span class="rid">visual-order-divergence</span> <span class="sc">SC 2.4.3, Level A</span> <span class="pill r-under">UNDER-TESTS</span></summary><div class="body">
+<p><span class="lbl">Checks:</span> focusable direct siblings in one flex/grid container where CSS order or a reversed flow makes measured visual order diverge from DOM order: one review per container. Triple-gated so pages that never reorder produce zero findings; RTL-aware; pinned in both directions including the order-agrees-with-DOM pass.</p>
+<p><span class="lbl">Known cost, disclosed in the header:</span> focusables wrapped one level deep (cards: flex container, then a div, then the link), the dominant real-world shape, never meet the container as direct siblings and are not examined; grid's native reordering (explicit placement, template areas, dense flow) reorders without order or reverse and is not treated as evidence. Widening either needs measured cases first.</p>
+</div></details>
+
+<h2 id="f-bp">Best practice <span class="sc">(20 opt-in rules, never WCAG-tagged)</span></h2>
+<p>Verified across the whole set: every rule carries exactly the best-practice tag and nothing else, so none of them inflates WCAG coverage. Only 2 of 20 have pinned spec cases, the set's biggest structural weakness.</p>
+
+<details class="rule"><summary><span class="rid">region</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>All perceivable content must sit inside a landmark. The most defensively engineered rule in the set: per-branch dedupe, a no-landmarks-at-all short-circuit, and a spec-derived skip-link carve-out remove every classic noise mode of this rule class. The skip-link exception is slightly lenient (any pre-header fragment nav passes), which errs in the quiet direction.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-aria-label</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>An aria-label identical to the visible text, flagged only on name-from-content roles, which kills the classic false positive (a nav labelled "Main" containing a "Main" link). Pinned in both directions; the best-pinned rule in the set. Value-named buttons (input value plus identical aria-label) escape.</p></div></details>
+
+<details class="rule"><summary><span class="rid">empty-heading</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>Headings need a non-empty accessible name. Careful role demotion and real accname use mean icon and image headings with names pass; no realistic false positive identified.</p></div></details>
+
+<details class="rule"><summary><span class="rid">landmark-unique</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>Duplicate banner/main/contentinfo and same-role-same-label landmarks. Implicit-role and demotion handling is unusually thorough; the invalid-role-token edges are cosmetic.</p></div></details>
+
+<details class="rule"><summary><span class="rid">positive-tabindex</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>Any tabindex above zero. Universally supported guidance with essentially zero false-positive surface.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-image-alt</span> <span class="pill r-solid">SOLID</span></summary><div class="body"><p>An image inside a control whose alt exactly duplicates the control's text. Conservative by design; partial duplication ("Acme logo" beside "Acme") is a scope choice, not a bug.</p></div></details>
+
+<details class="rule"><summary><span class="rid">fieldset-legend</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Same-name radio/checkbox groups need a named group. Sound, WAI-tutorial-backed, and pinned in both directions. One defect: the group key merges id-less forms, so two unrelated forms each holding one same-named radio can be fused into a phantom group and flagged.</p></div></details>
+
+<details class="rule"><summary><span class="rid">heading-order</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>No skipping heading levels, walking all headings flat. Inherent noise on sidebar and widget headings that belong to unrelated rails, plus a NaN hole: a garbage aria-level poisons the walk and silently passes surrounding jumps.</p></div></details>
+
+<details class="rule"><summary><span class="rid">landmark-one-main</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Exactly one visible main landmark. Correct on top-level pages, but it lacks the embedded-document gate every page-level WCAG rule has, and the extension injects into all frames, so every ad and widget iframe fails.</p></div></details>
+
+<details class="rule"><summary><span class="rid">page-heading-one</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>The page needs an h1. Same missing frame gate as landmark-one-main, and the inverse visibility bug: a display-none h1 satisfies the check though no AT user can navigate to it.</p></div></details>
+
+<details class="rule"><summary><span class="rid">landmark-top-level</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Banner, main, and contentinfo must not nest inside another landmark. One concrete false positive: an unnamed form ancestor counts as a landmark though unnamed forms are not exposed as landmarks (checkout pages wrapping content in a form get flagged). Complementary is missing from the checked set though the guidance includes it.</p></div></details>
+
+<details class="rule"><summary><span class="rid">multiple-labels</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>More than one visible label per field. Correctly demoted from WCAG scope after a previous sweep (the file says why); still flags the deliberate short-label-plus-sr-only-expansion pattern because clip-hidden labels count as visible.</p></div></details>
+
+<details class="rule"><summary><span class="rid">new-window-link</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>New-window links should say so. Correct advisory placement, but the warning regex is English-only (all-noise on non-English sites) and both too strict and too loose ("Opens in Spotify" passes; a describedby warning fails).</p></div></details>
+
+<details class="rule"><summary><span class="rid">accesskeys</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Duplicate accesskey values. Hidden-element duplicates over-flag (SPA double renders), multi-token values slip past whole-attribute comparison, and the "browser can only honour one" message overstates the HTML spec.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-alt-phrase</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Alt text starting with "image of" and cousins. Right guidance, but the anchored match bites proper nouns ("Icon of the Seas docked at port") and the suggested fix would amputate the noun.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-role</span> <span class="pill r-minor">MINOR GAPS</span></summary><div class="body"><p>Explicit roles equal to the implicit role. Good core with the two famous VoiceOver carve-outs honoured in code, but it keeps a local role table that diverges from the shared one: an aside nested in sectioning content is generic, so role="complementary" there is doing real work and gets flagged; td-in-grid likewise; and the SVG exception tests the URL for ".svg", losing the carve-out for data URIs.</p></div></details>
+
+<details class="rule"><summary><span class="rid">button-type</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body"><p>Buttons in forms without a type attribute. Flags the single most common valid pattern on the web: a form whose one button is the intended submit, written without a type. No accessibility authority backs the advice (it is a JS-framework lint convention, and the cited HTML spec page deliberately defaults to submit), and nothing about it is AT-specific.</p></div></details>
+
+<details class="rule"><summary><span class="rid">no-autofocus</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body"><p>Any autofocus attribute fails unconditionally. But autofocus inside a dialog is the HTML spec's recommended way to set initial dialog focus (and the dialog pattern requires moving focus in), and the spec also countenances autofocus on single-purpose pages. With visibility off it even fires while the dialog is closed. Meanwhile the actually harmful modern equivalent, scripted focus on load, is invisible.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-tabindex</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body"><p>tabindex zero on natively focusable elements. The roving-tabindex pattern puts exactly that token on the current toolbar or tablist item, siblings at -1; the rule flags the current item and its fix would break the pattern's state management. Needs a sibling-at-minus-one or composite-widget exception.</p></div></details>
+
+<details class="rule"><summary><span class="rid">redundant-aria</span> <span class="pill r-over">OVER-FLAGS</span></summary><div class="body"><p>ARIA states duplicating native attributes. Presence-only matching gives actively harmful fix advice on custom elements: a framework-reflected stray checked attribute on a non-form element plus aria-checked gets told the native attribute already informs AT, which is false there, and following the fix would break the widget. Contradictions (aria-checked false beside checked) are also mislabelled as duplicates.</p></div></details>
+
+<h2 id="coverage">What the engine does not test, and cannot</h2>
+<p>The catalog classes 30 of 86 criteria as partially automated and 56 as manual, and no criterion is claimed as fully automated: every one ends in a question about meaning only a person can settle. This audit re-examined every manual classification to ask whether a browser-measurable heuristic could at least flag candidates. The honest answer for most: no, and faking it would be worse than silence. Four structural walls account for most of the manual list:</p>
+<ul>
+<li><b>Media content judgment</b> (all of 1.2.x beyond track presence, background audio): nothing in the DOM knows what the pixels and samples mean.</li>
+<li><b>Cross-page consistency</b> (2.4.5, 3.2.3, 3.2.4, 3.2.6, and repetition in 2.4.1): a single-page engine cannot see "the same relative order across the set", and detecting a help link's presence on one page proves nothing.</li>
+<li><b>Interaction-dependent behaviour</b> (2.1.2 keyboard traps, 2.1.4 shortcuts, 1.4.13 hover content, 2.5.1/2.5.2/2.5.4/2.5.6, 3.2.5): JS listeners are invisible to a passive scan; these need driven focus, keys, and pointers, which is outside the passive audit model.</li>
+<li><b>Flash analysis</b> (2.3.1, 2.3.2): real analysis needs frame decoding and luminance thresholds. A "video present, please review" heuristic would fire on essentially every media page while proving nothing; explicitly resisted.</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Manual SC</th><th>Could a heuristic help?</th><th>Honest assessment</th></tr>
+<tr><td>2.4.3 Focus Order</td><td>Yes, narrow</td><td>CSS order and reversed flex/grid where visual order diverges from DOM order among focusable siblings is pure geometry; the general "order preserves meaning" stays human. Proposed below, riskiest of the batch.</td></tr>
+<tr><td>3.3.1 Error Identification</td><td>Yes, state-dependent</td><td>aria-invalid without message linkage, and aria-errormessage pointing at empty or hidden nodes. Fires only when the page is captured mid-error, so zero over-flag by construction. Proposed below.</td></tr>
+<tr><td>3.2.2 On Input</td><td>Yes, narrow</td><td>Inline onchange handlers that navigate (the classic jump menu). High-precision legacy signature; listener-based handlers stay invisible. Proposed below.</td></tr>
+<tr><td>1.3.2 Meaningful Sequence</td><td>Narrow slice</td><td>Same CSS-reordering mechanism as 2.4.3; shares that rule's evidence.</td></tr>
+<tr><td>2.5.7 Dragging</td><td>Marginal</td><td>Explicit draggable attributes could flag for review, but libraries set it on already-operable widgets; weaker signal than the batch above.</td></tr>
+<tr><td>2.4.12 Focus Not Obscured (Enhanced)</td><td>Yes, cheap upgrade</td><td>Same geometry as 2.4.11 with an any-part-covered predicate; AAA, low priority.</td></tr>
+<tr><td>2.4.6 Headings and Labels</td><td>Trivial slice</td><td>Placeholder heading text is real but nearly empty in the wild; descriptiveness is semantic. Not worth a WCAG-tagged rule yet.</td></tr>
+<tr><td>1.4.5 Images of Text</td><td>Not without OCR</td><td>Every proxy (aspect ratio, filename, long alt) over-flags photography; logos are excepted anyway. Dead end until OCR ships.</td></tr>
+<tr><td>4.1.3 Status Messages</td><td>Mostly no</td><td>Live-region absence proves nothing on a snapshot; the failure is about dynamically added messages a single pass never witnesses. Would need a mutation-observation window.</td></tr>
+<tr><td>1.3.3 Sensory Characteristics</td><td>No</td><td>Language-dependent phrase matching; a false-positive disaster across locales. Dead end.</td></tr>
+<tr><td>3.3.7 Redundant Entry</td><td>No</td><td>The tempting confirm-email slice mostly passes the criterion (autofill makes the value available), and the process scope is invisible. Honest dead end.</td></tr>
+<tr><td>2.3.3, 3.2.1, 1.4.8, 2.4.10, others</td><td>Weak slices only</td><td>Each has a computable fragment (reduced-motion queries, inline onfocus, justified text, long prose without headings), but each either over-flags by design or is AAA with author-default caveats. Noted, not proposed.</td></tr>
+<tr><td>All remaining manual SCs</td><td>No</td><td>Media judgment, cross-page structure, process-level requirements, or lexical semantics. Genuinely manual.</td></tr>
+</table></div>
+
+<h2 id="missing">Missing failure families</h2>
+<p>The six families this sweep found (nameless embed, roleless canvas charts, the muted hero video, icon-only summary, empty-named composite-widget items, and 3.3.1's broken-linkage state) are <b>all closed</b> by the shipped batch. The open coverage debts are now the smaller gaps the adversarial pass identified:</p>
+<ol>
+<li><b>2.2.2:</b> autoplay without loop but longer than 5 seconds (duration is measurable and unconsulted); IDL-property autoplay and script-started playback.</li>
+<li><b>2.4.3:</b> focusables wrapped one level deep inside reordered containers; grid-native reordering without order or reverse.</li>
+<li><b>4.1.2:</b> the name-required author-only composite containers (radiogroup, tree, grid, treegrid, tabpanel, region, application) still have no rule anywhere.</li>
+<li><b>1.1.1:</b> a canvas with an invalid role falls between canvas-alt and svg-img-alt.</li>
+</ol>
+
+<h2 id="next">Next batch (proposed, not implemented)</h2>
+<p>The previous sweep's eight-rule proposal is fully shipped (see <a href="#f-batch">the new batch</a>). The queue now is mostly a quality pass on standing defects rather than new coverage:</p>
+<ol>
+<li><b>composite-container-name</b> (4.1.2, A): nameless <code>role="tree" / "grid" / "treegrid" / "tabpanel" / "radiogroup" / "region"</code>, all name-required and author-only per ARIA 1.2: fail. Binary, provable, closes the last composite gap.</li>
+<li><b>Fix the four standing over-asserters:</b> label-for-valid asks (or gates on the control being nameless); autocomplete-valid reviews unknown tokens and gains a grammar check; audio-control's loop branch reviews, mirroring pause-stop-hide; object-alt adopts embed-alt's document gate.</li>
+<li><b>video-duration upgrade</b> to video-loop-motion: consult duration for non-looping autoplay over 5 seconds, as review.</li>
+<li><b>focus-visible truthiness fix:</b> treat "none", "0", and "transparent" values as removal, not replacement (confirmed defect above).</li>
+<li><b>non-text-contrast wrapper-border measurement</b> (confirmed defect above).</li>
+<li><b>text-spacing skip honesty:</b> return incomplete (or report a skip) above the element ceiling instead of pass.</li>
+<li><b>aria-attr-valid enum corrections</b> plus numeric and token-list validation.</li>
+<li><b>visual-order-divergence widening</b> to one-level wrappers, pinned by measured cases before shipping.</li>
+</ol>
+
+<h2 id="themes">Cross-cutting themes</h2>
+<h3>The inertness doctrine is applied unevenly</h3>
+<p>The engine's most distinctive idea, ask instead of asserting when broken markup is inert in browsers, is applied to unsupported attributes and prohibited labels, but not to unknown attribute names (aria-attr-valid asserts), dangling describedby references (aria-valid-refs asserts), orphaned labels (label-for-valid asserts), or bogus roles outside div/span/svg (valid-role asserts). All four assert under the same conditions the doctrine says to ask. Deciding this once and applying it everywhere would resolve four findings in one stroke.</p>
+<h3>Hard-won lessons don't propagate to siblings</h3>
+<p>list-structure learned that injected style elements never reach the accessibility tree; definition-list still fails them. listitem-parent crosses shadow boundaries; dlitem-parent and both aria-required rules don't. The wrapped-link line-fragment lesson reached target-size but the wrapper concept ("what counts as generic") is defined three different ways. A shared-helper pass would fix a class of bugs, not instances.</p>
+<h3>Shadow DOM is the biggest silent-miss surface</h3>
+<p>Confirmed blind spots in aria-required-children, aria-required-parent, dlitem-parent, aria-hidden-focus (focusables in shadow trees), focus-visible (adopted stylesheets), and text-spacing (shadow-internal declarations). Meanwhile the accname helper and listitem-parent handle shadow correctly, so the machinery exists.</p>
+<h3>English-only lexicons</h3>
+<p>document-title's placeholder list (undisclosed), link-text-generic's phrase list (disclosed with reasoning), and new-window-link's warning regex (all-noise on non-English sites). At minimum the disclosure should be uniform.</p>
+<h3>Pinned-case coverage is uneven</h3>
+<p>The spec-case harness is the engine's best defence and its coverage map is lopsided: the five legacy 1.1.1 rules, audio-control, autocomplete-valid, definition-list, focus-visible, focus-not-obscured, target-size-enhanced, the parked label-in-name, and 18 of 20 best-practice rules have no pinned cases at all. Several confirmed bugs above live exactly in the unpinned zone, which is not a coincidence. The new batch is the counterexample: fully pinned from day one (36 cases), and the same-day adversarial fixes were pinned with it.</p>
+
+<h2 id="method">Method and honesty notes</h2>
+<p>The sweep followed the repo's spec-sweep protocol: coverage regenerated and validated, the catalog diffed against the published Recommendation, and then every rule file read in full, including the shared helpers its verdicts depend on, by seven parallel auditors judging only against W3C text (the normative spec, Understanding documents, ARIA 1.2, accname, ARIA-in-HTML, HTML). An eighth adversarial auditor covered the newly implemented batch the same day, with fresh eyes and instructions to construct hostile DOM shapes. No other tool's behaviour was consulted or used as a target. A few claims were settled empirically in Chromium rather than by reading (CSSOM truthiness, SVG title display, ARIA table extraction from the downloaded spec).</p>
+<p>What to trust and how much: the ten headline defects were re-verified line by line in the source by a second pass and are safe to act on. Per-rule ratings are judgments, not measurements; the boundary between "minor gaps" and "under-tests" is taste. Over-violation claims describe constructible scenarios, not measured frequency on real pages: an over-flag that fires on rare markup matters less in practice than the rating implies, and the lab benchmark, not this audit, is the source of truth for how often each fires. Two flagged behaviours (subtitles-as-captions, the auth-field both-attributes fail) are pinned by spec cases, meaning they are standing policy: this report flags them as spec deviations, and changing them is a product decision, not a bug fix.</p>
+<p>Timeline: the audit ran against a clean tree with 140 pinned cases, changing nothing. The same day, the proposed batch was implemented (eight rules, four catalog flips), adversarially audited, corrected, and re-pinned: 176 cases now pass, along with all testbeds, frame checks, and the four-surface smoke; the mass lab gate was not run. Coverage was regenerated and site plus extension bundles rebuilt with the new engine. The pre-existing confirmed defects in the findings above are deliberately untouched: fixing them is the proposed next batch, and a separate decision from adding rules.</p>
+
+<p class="foot">Pour engine spec sweep, 10 August 2026. Catalog verified against the W3C Recommendation of 12 December 2024 and its errata. This report lives at src/engine/AUDIT.html and is regenerated by running the spec-sweep skill; it is the only home of the audit, never published externally.</p>
+</main>
+</body>
+</html>
