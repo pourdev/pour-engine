@@ -9,6 +9,12 @@ import {
   showRatio,
 } from '../../lib/contrast.js';
 
+/** The strict separator set for the pure-decoration exemption: pipes,
+ *  interpuncts, slashes, dashes and guillemets — one glyph, optionally
+ *  repeated ("···"). Deliberately excludes brackets, colons, stars and
+ *  every character that carries grouping, rating or code meaning. */
+const SEPARATOR_GLYPHS = /^([|¦·•∙‧/⁄\\‐‑‒–—―⁃«»‹›-])\1*$/;
+
 /** Serialise a judged colour for the report and the checker link. Composited
  *  channels keep up to two decimals: rounding them to integers changes the
  *  pair enough that the checker scores a different ratio than the audit
@@ -323,7 +329,49 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // The criterion exempts "inactive user interface components".
     if (element.closest(':disabled, [aria-disabled="true"]')) return { status: 'pass' };
 
-    const style = getComputedStyle(element);
+    // A shadow HOST's own text renders through its shadow tree: when a
+    // <slot> projects it, the text inherits styles from the slot's
+    // shadow-side parent, NOT from the host — a consent banner's shadow
+    // <p> painted the slotted copy near-white while the host computed
+    // black, and the host-styled pair was one no user ever sees. With no
+    // slot to project it, the host's own text does not render at all.
+    // (Closed shadow roots are undetectable; those hosts keep the old
+    // behaviour.)
+    let styleSource = element;
+    if (element.shadowRoot) {
+      const ownTextNode = [...element.childNodes]
+        .find((node) => node.nodeType === 3 && node.textContent.trim());
+      const slot = ownTextNode?.assignedSlot ?? null;
+      if (!slot) return { status: 'pass' }; // unprojected: not rendered
+      styleSource = slot;
+    }
+    const style = getComputedStyle(styleSource);
+
+    // A lone separator glyph between inline items is 1.4.3 "pure
+    // decoration": it does the job a border does (and borders carry no
+    // text-contrast requirement), and the ARIA Authoring Practices tell
+    // authors to draw exactly these separators in CSS or aria-hidden them.
+    // Strictly bounded — one repeated glyph from a fixed separator set,
+    // inline, outside code and interactive content, with rendered content
+    // on BOTH sides — so Python's `>>>` prompt, code operators, maths in
+    // prose and meaning-bearing brackets all keep their verdicts.
+    if (SEPARATOR_GLYPHS.test(ownText(element))
+      && style.display.startsWith('inline')
+      && !element.closest('code, pre, samp, kbd, var, a[href], button, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="option"]')) {
+      const hasContent = (start, dir) => {
+        for (let node = start; node; node = node[dir]) {
+          if (node.nodeType === 3 && node.textContent.trim()) return true;
+          if (node.nodeType === 1 && (node.textContent.trim()
+            || node.matches('img, svg, video, canvas, input, select, button'))) return true;
+        }
+        return false;
+      };
+      if (hasContent(element.previousSibling, 'previousSibling')
+        && hasContent(element.nextSibling, 'nextSibling')) {
+        return { status: 'pass' };
+      }
+    }
+
     // Controls conveying "disabled" without the attribute: pointer-events:
     // none on an interactive element is functional inertness — the low
     // contrast IS the disabled styling (carousel arrows at the end of
@@ -434,7 +482,11 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       }
     }
 
-    let background = effectiveBackground(element);
+    // For slotted host text, the walk starts at the slot: its flat-tree
+    // chain (slot → shadow parents → host → light ancestors) is the one the
+    // text actually paints in; effectiveBackground crosses the shadow
+    // boundary via getRootNode().host on its own.
+    let background = effectiveBackground(styleSource);
 
     // Browser-truth paint order at the text's own sample point: sees and
     // RESOLVES backdrops painted by non-ancestors (positioned siblings,
@@ -524,6 +576,18 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // over the pixels of every hero photo behind a cookie modal: these keep
     // the human call they have always had.
     if (veilPaint && (pseudoBack?.image || painted?.image)) return veiledIncomplete();
+    // A pseudo layer that sits BEYOND intermediate paint (an element between
+    // the text and the pseudo's host carries its own opaque background or
+    // image): whether the pseudo paints behind these glyphs or is covered by
+    // that nearer paint is a stacking-order question this engine deliberately
+    // does not model. Image paint can't be bracketed against the walked
+    // colour, so it stays a human call.
+    if (pseudoBack?.image && pseudoBack.beyondPaint) {
+      return {
+        status: 'incomplete',
+        message: 'An ancestor\'s pseudo-element paints an image or gradient where this text is, but other backgrounds sit between them — which one is behind the glyphs depends on paint order, so check the contrast by eye.',
+      };
+    }
     // Gradient/image paint from a pseudo-element: bracket it by sampling,
     // exactly as an element's own background-image is bracketed.
     if (pseudoBack?.image) {
@@ -580,7 +644,31 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         }
       }
     }
-    if (pseudoBack?.color) {
+    if (pseudoBack?.color && pseudoBack.beyondPaint) {
+      // Paint sits between this text and the pseudo's host, so the pseudo
+      // may equally be covered by it (the common case: a decorative
+      // full-bleed wash on body under sections with their own backgrounds).
+      // Bracket instead of choosing: a verdict is only provable when the
+      // walked background and the pseudo-as-backdrop land the same side of
+      // the threshold; disagreement is a genuine human call.
+      const candidate = pseudoBack.color.a >= 1 || !background
+        ? pseudoBack.color
+        : composite(pseudoBack.color, background);
+      if (!background) {
+        return { status: 'incomplete', message: 'The background could not be determined — check contrast by eye.' };
+      }
+      const overWalked = foreground.a < 1 ? composite(foreground, background) : foreground;
+      const overPseudo = foreground.a < 1 ? composite(foreground, candidate) : foreground;
+      if ((contrastRatio(overWalked, background) >= required)
+        !== (contrastRatio(overPseudo, candidate) >= required)) {
+        return {
+          status: 'incomplete',
+          message: 'An ancestor\'s pseudo-element paints where this text is, but other backgrounds sit between them — which colour is behind the glyphs depends on paint order, and the two candidates disagree on the verdict. Check the contrast by eye.',
+        };
+      }
+      // Both candidates agree: judge against the walked background below.
+      // The backdrop stays UNVERIFIED — the hazard bracket still applies.
+    } else if (pseudoBack?.color) {
       // Opaque pill: it IS the backdrop. Translucent paint composites over
       // whatever the walk resolved beneath it. Either way the geometry is
       // computed, not guessed, so this counts as verified paint truth.
@@ -679,6 +767,19 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     const rect = element.getBoundingClientRect();
     // Zero-area text paints nothing (collapsed badges, empty counters).
     if (!rect.width || !rect.height) return { status: 'pass' };
+    // Text parked wholly left of or above the document is unreachable by any
+    // scroll position (skip links pre-focus, sr-only labels at left:-10000px,
+    // panels slid out at negative offsets): it is not visually presented, so
+    // 1.4.3 has nothing to judge. Scrolling can only reach coordinates >= 0
+    // in LTR documents; RTL pages legitimately extend leftward, so they keep
+    // the old behavior.
+    {
+      const win = doc.defaultView;
+      if (win && getComputedStyle(doc.documentElement).direction !== 'rtl'
+        && (rect.right + win.scrollX <= 0 || rect.bottom + win.scrollY <= 0)) {
+        return { status: 'pass' };
+      }
+    }
     // A text-shadow can supply the contrast (technique G18 measures the
     // letters against their halo): white text with a solid dark outline
     // passes however the fill compares to the backdrop. A parseable solid

@@ -27,6 +27,19 @@ export default {
     const rect = element.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1) return { status: 'pass' };
     const style = getComputedStyle(element);
+    // Text rendered at font-size 0 (icon buttons whose value is a
+    // screen-reader label) is not visually presented — nothing to judge.
+    if (parseFloat(style.fontSize) === 0) return { status: 'pass' };
+    // Controls parked wholly left of or above the document are unreachable
+    // by scrolling (sr-only duplicates): same exemption as the main rule.
+    {
+      const doc = element.ownerDocument;
+      const win = doc.defaultView;
+      if (win && getComputedStyle(doc.documentElement).direction !== 'rtl'
+        && (rect.right + win.scrollX <= 0 || rect.bottom + win.scrollY <= 0)) {
+        return { status: 'pass' };
+      }
+    }
     // Judge the opacity the text RESTS at, matching the main contrast rule:
     // a control faded out by an ancestor (fade-in-on-scroll, a collapsed
     // panel) presents no text at all, and one held at a low opacity presents

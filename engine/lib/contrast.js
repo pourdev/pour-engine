@@ -153,7 +153,7 @@ export function resetAuditCaches() {
  */
 export function backgroundColorSource(element) {
   for (let node = element; node && node.nodeType === 1;
-    node = node.parentElement ?? node.getRootNode()?.host) {
+    node = node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host) {
     const style = getComputedStyle(node);
     if (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage)) return null;
     const color = parseColor(style.backgroundColor);
@@ -209,7 +209,13 @@ function resolveBackground(element, doc) {
     if (color && color.a >= 1) {
       result = color;
     } else {
-      const behind = resolveBackground(element.parentElement ?? element.getRootNode()?.host, doc);
+      // The FLAT-tree parent: a slotted element's backdrop chain runs
+      // through its slot into the shadow tree it renders in — walking the
+      // light parent instead skipped every background painted inside the
+      // outer component's shadow (a consent banner's blue container lived
+      // there, and its slotted copy was judged against the page white).
+      const behind = resolveBackground(
+        element.assignedSlot ?? element.parentElement ?? element.getRootNode()?.host, doc);
       result = behind === null ? null : (color && color.a > 0 ? composite(color, behind) : behind);
     }
   }
@@ -531,7 +537,12 @@ function pseudoLayers(host) {
       // (position: fixed, the common full-page-texture pattern) must not
       // send every element on the page to a human.
       const alphaBound = Math.min(1, opacityFactor * (style.backgroundImage !== 'none' ? 1 : color.a));
-      if (alphaBound > 0) layers.push({ film: alphaBound });
+      // Position rides along: a FIXED unplaceable pseudo is the full-page
+      // overlay pattern and dims everything below the walk; an ABSOLUTE one
+      // that defeated the geometry solver (rotation, percentage insets) is
+      // a decorative shape that nearer opaque paint covers in normal
+      // stacking — the walk needs to know which it is.
+      if (alphaBound > 0) layers.push({ film: alphaBound, fixed: style.position === 'fixed' });
       continue;
     }
     if (rect.empty) continue; // placed, and covers nothing
@@ -586,11 +597,33 @@ export function pseudoBackdropForText(element) {
   let image = null;
   let settled = false; // an opaque colour or an image hit: deeper layers are covered
   let film = 0;
+  // Paint (an opaque background-color or a background-image) on an element
+  // BETWEEN the text and a pseudo's host makes the pseudo's place in the
+  // stack unprovable from here: CSS paint order can put an out-of-flow
+  // ancestor pseudo above OR below that intermediate paint depending on
+  // positioning, z-index and tree order — the full stacking model this walk
+  // deliberately does not reimplement. Such layers are surfaced with
+  // `beyondPaint` so the caller brackets the verdict instead of asserting
+  // against paint that may never show behind the glyphs (a full-page
+  // decorative body::before wash under sections with their own solid
+  // backgrounds produced 90 false contrast failures on one university home).
+  let crossed = false;
+  let beyondPaint = false;
   for (let node = element; node && node.nodeType === 1; node = node.parentElement ?? node.getRootNode()?.host) {
     for (const layer of pseudoLayers(node)) {
-      // Films accumulate over the WHOLE chain — even past an opaque hit,
-      // because an ancestor's ::after can paint above a descendant's pill.
-      if (layer.film) { film = 1 - (1 - film) * (1 - layer.film); continue; }
+      // Films accumulate over the whole chain — an ancestor's fixed ::after
+      // (grain overlays, veils) paints above everything below it. But an
+      // ABSOLUTE pseudo whose geometry could not be solved (a rotated or
+      // percent-positioned decorative shape) sits in normal flow stacking:
+      // once opaque paint lies between the text and its host, that paint
+      // covers it, and filming the verdict anyway sent every element under
+      // a decorative page shape to the review lane (127 reviews on one
+      // charity home whose buttons carry their own solid backgrounds).
+      if (layer.film) {
+        if (!layer.fixed && crossed) continue;
+        film = 1 - (1 - film) * (1 - layer.film);
+        continue;
+      }
       if (settled) continue;
       const { rect, color, imageCss } = layer;
       if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) continue;
@@ -599,14 +632,28 @@ export function pseudoBackdropForText(element) {
       // and image geometry travel with it: covering the sample point is a
       // fact about the BOX, and a no-repeat icon may still paint nowhere
       // near the text.
-      if (imageCss) { image = { css: imageCss, element: node, box: rect, meta: layer.imageMeta }; settled = true; continue; }
+      if (imageCss) {
+        image = { css: imageCss, element: node, box: rect, meta: layer.imageMeta };
+        settled = true;
+        beyondPaint = beyondPaint || crossed;
+        continue;
+      }
       if (!color || color.a === 0) continue;
       acc = acc ? composite(acc, color) : color;
+      beyondPaint = beyondPaint || crossed;
       if (acc.a >= 1) settled = true;
     }
+    // Crossing updates AFTER the node's own pseudos: a host's ::before
+    // paints above its own background, so its own paint never makes its own
+    // pseudo ambiguous — only paint on elements nearer the text does.
+    if (!crossed) {
+      const style = getComputedStyle(node);
+      if ((style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage))
+        || (parseColor(style.backgroundColor)?.a ?? 0) >= 1) crossed = true;
+    }
   }
-  if (image) return film > 0 ? { image, film } : { image };
-  if (acc) return film > 0 ? { color: acc, film } : { color: acc };
+  if (image) return { image, ...(film > 0 && { film }), ...(beyondPaint && { beyondPaint }) };
+  if (acc) return { color: acc, ...(film > 0 && { film }), ...(beyondPaint && { beyondPaint }) };
   return film > 0 ? { film } : null;
 }
 
@@ -727,6 +774,13 @@ export function paintedBackdrop(element) {
       return { image: layer, scrim };
     }
     const style = getComputedStyle(layer);
+    // A shadow HOST in the stack hides its shadow tree from the hit-test
+    // (elementsFromPoint retargets internal elements to the host), so paint
+    // inside it is invisible here: compositing the host as "transparent"
+    // and reading layers behind it judged slotted banner text against the
+    // page white while the component's shadow painted a blue container
+    // between them. Whatever renders inside is unknowable to this walk.
+    if (layer.shadowRoot) return 'unresolved';
     // Blend modes and filters change the paint in ways flat colour math
     // can't follow — that's a human check, not a resolution.
     if ((style.mixBlendMode && style.mixBlendMode !== 'normal')
