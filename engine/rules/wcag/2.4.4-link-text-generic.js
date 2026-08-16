@@ -24,27 +24,30 @@
 // already fixed, and must not be flagged. That also means an aria-label
 // which is itself generic is caught, which is the more common mistake.
 //
-// English only, deliberately. A phrase list cannot be quietly extended to
-// other languages without a speaker of each checking it, and a wrong entry
-// would fail correct links. Non-English pages get no findings here rather
-// than bad ones.
+// The list grows one language at a time, and only with a speaker of that
+// language checking every entry — a wrong entry would fail correct links.
+// English and French are covered; pages in other languages get no findings
+// here rather than bad ones. Entries are stored in NORMALIZED form (see
+// normalizeName below): apostrophes become spaces, so "plus d informations"
+// is how "plus d'informations" — straight or typographic — must be listed.
 
 const GENERIC = new Set([
-// English
-'read more', 'read more about this', 'more', 'much more', 'learn more',
-'click here', 'click', 'click this', 'tap here', 'press here',
-'here', 'this', 'this link', 'link', 'this page', 'go', 'go here',
-'more info', 'more information', 'further information',
-'see more', 'view more', 'show more', 'find out more', 'discover more',
-'continue', 'continue reading', 'keep reading', 'full story', 'full article',
-'details', 'see details', 'view details', 'more details',
-// French
-'en savoir plus', 'savoir plus', 'lire la suite', 'lire plus', 'plus',
-'cliquez ici', 'cliquer ici', 'clique ici', 'ici', 'ce lien', 'lien',
-'cette page', 'voir plus', 'en voir plus', 'afficher plus', 'afficher', 'voir', 'voir le détail',
-'voir les détails', 'plus de détails', 'plus d\'informations', 'plus d\'infos',
-'en savoir davantage', 'découvrir', 'découvrez', 'continuer', 'suite',
-])
+  // English
+  'read more', 'read more about this', 'more', 'much more', 'learn more',
+  'click here', 'click', 'click this', 'tap here', 'press here',
+  'here', 'this', 'this link', 'link', 'this page', 'go', 'go here',
+  'more info', 'more information', 'further information',
+  'see more', 'view more', 'show more', 'find out more', 'discover more',
+  'continue', 'continue reading', 'keep reading', 'full story', 'full article',
+  'details', 'see details', 'view details', 'more details',
+  // French — contributed and checked by a native speaker
+  'en savoir plus', 'savoir plus', 'lire la suite', 'lire plus', 'plus',
+  'cliquez ici', 'cliquer ici', 'clique ici', 'ici', 'ce lien', 'lien',
+  'cette page', 'voir plus', 'en voir plus', 'afficher plus', 'afficher',
+  'voir', 'voir le détail', 'voir les détails', 'plus de détails',
+  'plus d informations', 'plus d infos',
+  'en savoir davantage', 'découvrir', 'découvrez', 'continuer', 'suite',
+]);
 
 /** Lowercased, punctuation and arrows dropped, spaces collapsed, so
  *  "Read more →", "Click here!" and "READ  MORE" all compare equal. */
