@@ -143,7 +143,18 @@ function textFromNodes(nodes, includeHidden) {
       continue;
     }
     if (tag === 'img' || tag === 'area') {
-      text += ` ${node.getAttribute('alt') ?? ''} `;
+      // HTML-AAM order for an image's own name: aria-label → alt → title.
+      // A PRESENT-but-empty alt marks the image decorative and contributes
+      // nothing — title must not resurrect it. Only when alt is ABSENT do
+      // the fallbacks apply (a title-only <img> inside a link names the
+      // link; Chromium exposes exactly this, measured on a live site where
+      // the walk's old alt-or-nothing shortcut called a named link nameless).
+      const imgAria = node.getAttribute('aria-label')?.trim();
+      if (imgAria) { text += ` ${imgAria} `; continue; }
+      const alt = node.getAttribute('alt');
+      if (alt !== null) { text += ` ${alt} `; continue; }
+      const imgTitle = node.getAttribute('title')?.trim();
+      if (imgTitle) text += ` ${imgTitle} `;
       continue;
     }
     const ariaLabel = node.getAttribute('aria-label')?.trim();

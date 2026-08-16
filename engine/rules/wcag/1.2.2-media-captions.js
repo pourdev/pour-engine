@@ -16,6 +16,24 @@ export default {
     if (element.querySelector('track[kind="captions" i], track[kind="subtitles" i], track:not([kind])')) {
       return { status: 'pass' };
     }
+    // A video with no media resource at all presents nothing — there is no
+    // audio content to caption (lazy players before their source is set).
+    if (!element.currentSrc && !element.getAttribute('src') && !element.querySelector('source')) {
+      return { status: 'pass' };
+    }
+    // The decorative no-audio-path signature — the same boundary
+    // video-loop-motion draws for 2.2.2: muted, autoplaying, no controls.
+    // With no controls there is no user path to unmute, so whatever audio
+    // the file may carry is never presented to anyone; audio that cannot be
+    // presented is not audio content under 1.2.2, and asking a human to
+    // verify captions for it is noise (measured on the benchmark corpus:
+    // our own site's aria-hidden hero loops, ffprobe-confirmed to carry no
+    // audio stream, plus the same family on four news/university homes).
+    // Properties, not attributes: script-muted heroes count too. A muted
+    // video WITH controls keeps its review — one click unmutes it.
+    if (element.muted && element.autoplay && !element.controls) {
+      return { status: 'pass' };
+    }
     // Captions may be burned in or provided by the player — a human must check.
     return {
       status: 'incomplete',
