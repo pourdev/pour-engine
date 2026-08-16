@@ -30,14 +30,21 @@
 // than bad ones.
 
 const GENERIC = new Set([
-  'read more', 'read more about this', 'more', 'much more', 'learn more',
-  'click here', 'click', 'click this', 'tap here', 'press here',
-  'here', 'this', 'this link', 'link', 'this page', 'go', 'go here',
-  'more info', 'more information', 'further information',
-  'see more', 'view more', 'show more', 'find out more', 'discover more',
-  'continue', 'continue reading', 'keep reading', 'full story', 'full article',
-  'details', 'see details', 'view details', 'more details',
-]);
+// English
+'read more', 'read more about this', 'more', 'much more', 'learn more',
+'click here', 'click', 'click this', 'tap here', 'press here',
+'here', 'this', 'this link', 'link', 'this page', 'go', 'go here',
+'more info', 'more information', 'further information',
+'see more', 'view more', 'show more', 'find out more', 'discover more',
+'continue', 'continue reading', 'keep reading', 'full story', 'full article',
+'details', 'see details', 'view details', 'more details',
+// French
+'en savoir plus', 'savoir plus', 'lire la suite', 'lire plus', 'plus',
+'cliquez ici', 'cliquer ici', 'clique ici', 'ici', 'ce lien', 'lien',
+'cette page', 'voir plus', 'en voir plus', 'afficher plus', 'afficher', 'voir', 'voir le détail',
+'voir les détails', 'plus de détails', 'plus d\'informations', 'plus d\'infos',
+'en savoir davantage', 'découvrir', 'découvrez', 'continuer', 'suite',
+])
 
 /** Lowercased, punctuation and arrows dropped, spaces collapsed, so
  *  "Read more →", "Click here!" and "READ  MORE" all compare equal. */
