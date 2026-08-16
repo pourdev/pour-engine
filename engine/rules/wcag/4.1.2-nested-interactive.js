@@ -17,9 +17,19 @@ export default {
     // Only descendants a user can actually reach count: hidden inputs,
     // disabled controls, display:none templates, and tabindex="-1" nodes
     // inside a control are inert markup, not competing tab stops.
+    // Two more shapes are unreachable by the same principle: aria-hidden
+    // content (AT ignores it wholesale — a decorative svg role="button"
+    // aria-hidden="true" inside a play button competes with nothing; if it
+    // is natively focusable that is aria-hidden-focus's finding, not a
+    // second one here), and role-only widgets never given a tabindex (a
+    // role="button" with no tabindex is not in the tab order — keyboard
+    // users cannot reach it, so it cannot be a competing stop).
+    const NATIVE = 'a[href], button, input, select, textarea, summary, audio[controls], video[controls]';
     const nested = [...element.querySelectorAll(INTERACTIVE)].find((el) =>
       !el.matches(':disabled') && el.getAttribute('tabindex') !== '-1'
-      && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el));
+      && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el)
+      && !el.closest('[aria-hidden="true"]')
+      && (el.matches(NATIVE) || el.hasAttribute('tabindex')));
     if (!nested) return { status: 'pass' };
     return {
       status: 'fail',

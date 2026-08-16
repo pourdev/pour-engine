@@ -20,12 +20,16 @@ export default {
     const role = element.getAttribute('role');
     const required = REQUIRED[role];
     if (element.hasAttribute(required)) return { status: 'pass' };
-    // A redundant explicit role on the native element (input type=checkbox
-    // role=checkbox — common framework output) needs no ARIA state: the
-    // host language supplies checkedness/value natively.
+    // Native semantics supply the state regardless of WHICH state-bearing
+    // role is claimed: HTML-AAM maps an input's checkedness to aria-checked
+    // (input type=checkbox role="switch" — the standard toggle pattern —
+    // exposes checked=false/true in the browser's tree with no ARIA at all),
+    // and a range input's value to aria-valuenow likewise.
     const type = element.tagName === 'INPUT' ? element.type : null;
-    const NATIVE_STATE = { checkbox: 'checkbox', radio: 'radio', range: 'slider' };
-    if (type && NATIVE_STATE[type] === role) return { status: 'pass' };
+    if (type === 'checkbox' || type === 'radio') {
+      if (required === 'aria-checked') return { status: 'pass' };
+    }
+    if (type === 'range' && required === 'aria-valuenow') return { status: 'pass' };
     if (element.tagName === 'SELECT' && role === 'combobox') return { status: 'pass' };
     return {
       status: 'fail',

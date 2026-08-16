@@ -21,16 +21,23 @@ export default {
       const style = getComputedStyle(label);
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
-    // Label content includes aria-labels on things inside it (icon-only
-    // labels like <label><svg aria-label="Dark mode"/></label> still name)
-    // and image alts (<label><img alt="…"></label> is a visible, named
-    // label — alt text feeds name-from-contents per accname).
-    const labelsText = visibleLabels
-      .map((l) =>
-        `${l.textContent} ${[...l.querySelectorAll('[aria-label], img[alt], area[alt]')]
-          .map((e) => e.getAttribute('aria-label') ?? e.getAttribute('alt')).join(' ')}`)
-      .join(' ')
-      .trim();
+    // A label's contribution is its ACCESSIBLE text, not its raw textContent:
+    // aria-hidden subtrees inside the label are excluded from the name
+    // computation (a custom radio whose only visible text sits in an
+    // aria-hidden styled twin names NOTHING — the browser's tree computes an
+    // empty name), while aria-label on the label itself or on things inside
+    // it (icon-only labels) and image alts DO feed the name per accname.
+    const accessibleText = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+      if (node.getAttribute('aria-hidden') === 'true') return '';
+      const aria = node.getAttribute('aria-label');
+      if (aria?.trim()) return aria;
+      const alt = (node.tagName === 'IMG' || node.tagName === 'AREA') ? node.getAttribute('alt') : null;
+      if (alt?.trim()) return alt;
+      return [...node.childNodes].map(accessibleText).join(' ');
+    };
+    const labelsText = visibleLabels.map(accessibleText).join(' ').trim();
     const ariaLabel = element.getAttribute('aria-label')?.trim();
     const labelledby = labelledByName(element);
     if (labelsText || ariaLabel || labelledby) return { status: 'pass' };
@@ -65,10 +72,18 @@ export default {
       };
     }
     if (element.labels?.length) {
+      // The label may LOOK fine while announcing nothing: all its text
+      // sitting inside an aria-hidden subtree (the styled-twin custom
+      // control pattern) is excluded from the name computation.
+      const looksLabelled = visibleLabels.some((l) => l.textContent.trim());
       return {
         status: 'fail',
-        message: 'This field has a <label>, but the label is empty — it announces nothing.',
-        fix: 'Put visible text inside the label.',
+        message: looksLabelled
+          ? 'This field\'s <label> shows text, but all of it is inside aria-hidden content — the accessible name computes to nothing.'
+          : 'This field has a <label>, but the label is empty — it announces nothing.',
+        fix: looksLabelled
+          ? 'Move the visible text out of the aria-hidden wrapper, or add aria-label to the field.'
+          : 'Put visible text inside the label.',
       };
     }
     return {

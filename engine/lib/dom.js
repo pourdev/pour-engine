@@ -47,7 +47,13 @@ export function isVisible(element) {
 
 /** Selector for an element within its own root (document or shadow root). */
 function cssPathInRoot(element) {
-  if (element.id) return `#${CSS.escape(element.id)}`;
+  // An id anchors the selector only when it is UNIQUE in this root: real
+  // pages duplicate ids (three carousel pagers all id="default"), and a
+  // bare #id selector would round-trip every one of them to the first,
+  // collapsing distinct findings onto a single element.
+  const root = element.getRootNode();
+  const uniqueId = (el) => el.id && root.querySelectorAll(`#${CSS.escape(el.id)}`).length === 1;
+  if (uniqueId(element)) return `#${CSS.escape(element.id)}`;
   const parts = [];
   let current = element;
   while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
@@ -66,7 +72,7 @@ function cssPathInRoot(element) {
       if (repeated) part += `:nth-of-type(${index})`;
     }
     parts.unshift(part);
-    if (current.parentElement?.id) {
+    if (current.parentElement && uniqueId(current.parentElement)) {
       parts.unshift(`#${CSS.escape(current.parentElement.id)}`);
       break;
     }

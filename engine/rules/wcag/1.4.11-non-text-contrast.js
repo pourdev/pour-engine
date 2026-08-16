@@ -77,7 +77,12 @@ export default {
     // the visible boundary (border, or a fill contrasting with the page
     // around it). The FIELD the user perceives is the wrapper — but only a
     // SNUG wrapper counts: a page section's border is not a field boundary.
-    for (let wrapper = element.parentElement, depth = 0; wrapper && depth < 2; wrapper = wrapper.parentElement, depth++) {
+    // Snugness is the guard, so the walk continues through transparent
+    // intermediate wrappers (autocomplete shells, JS mount points) as long
+    // as each stays field-sized — a search plate three levels up is still
+    // the field the user sees, while a page section fails the size check
+    // long before any depth cap would matter.
+    for (let wrapper = element.parentElement, depth = 0; wrapper && depth < 4; wrapper = wrapper.parentElement, depth++) {
       const wrapperRect = wrapper.getBoundingClientRect();
       if (wrapperRect.height > ownRect.height + 24 || wrapperRect.width > ownRect.width + 160) break;
       const wrapperStyle = getComputedStyle(wrapper);
