@@ -38,7 +38,19 @@ export default {
         ?? IMPLICIT_CONTAINER[owner.tagName.toLowerCase()]);
       if (ownerRole && containers.includes(ownerRole)) return { status: 'pass' };
     }
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    // FLAT-TREE ancestry, not light-DOM ancestry: assistive technology sees
+    // the composed tree, so a slotted role="listitem" whose role="list"
+    // container lives inside the host component's shadow root IS inside a
+    // list (Adobe Spectrum's sidenav is exactly this — a light-DOM walk was
+    // 11 false asserts on one page). An element assigned to a slot continues
+    // through the slot's shadow-side ancestors; an element at a shadow root's
+    // top continues through the host.
+    const flatParent = (node) => node.assignedSlot
+      ?? node.parentElement
+      ?? (node.getRootNode() instanceof ShadowRoot ? node.getRootNode().host : null);
+    for (let parent = flatParent(element); parent; parent = flatParent(parent)) {
+      // A <slot> is rendering plumbing with no tree presence of its own.
+      if (parent.tagName === 'SLOT' && !parent.hasAttribute('role')) continue;
       const parentRole =
         parent.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase() ??
         IMPLICIT_CONTAINER[parent.tagName.toLowerCase()];
