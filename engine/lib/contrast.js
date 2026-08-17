@@ -938,17 +938,60 @@ export function textShadowNegligible(cssText, fontSize) {
  * hit-test can't reach. Open shadow roots aren't walked here; a known
  * approximation that errs toward failing (never toward a false pass).
  */
+/**
+ * The part of an element's border box its ancestors allow it to PAINT.
+ * An object-fit: cover video is routinely taller than its overflow-hidden
+ * crop, and the spilled region is guaranteed blank — treating the raw box
+ * as a possible backdrop sent captions sitting 16px past a cropped video
+ * to review. The walk respects positioning: an absolutely positioned
+ * element escapes the clips of ancestors below its containing block
+ * (position or transform/filter establish one), and a fixed element's
+ * clippers are rare enough that the walk stops rather than guess — every
+ * uncertain path keeps the FULL box, erring toward review, never past a
+ * real overlap. Returns null when the clip leaves nothing paintable.
+ */
+export function paintableRect(element, rect) {
+  let { left, top, right, bottom } = rect;
+  let mode = getComputedStyle(element).position;
+  for (let a = element.parentElement; a; a = a.parentElement) {
+    if (mode === 'fixed') break; // conservative: no clip assumed above
+    const s = getComputedStyle(a);
+    const containingBlock = s.position !== 'static' || s.transform !== 'none' || (s.filter && s.filter !== 'none');
+    if (mode === 'absolute' && !containingBlock) continue; // escapes this ancestor's clip
+    // Only overflow: hidden/clip cut paint scroll-independently. A
+    // scrollable ancestor (auto/scroll) clips the CURRENT scroll state —
+    // a carousel slide parked outside the strip swings back under the
+    // user's finger, image and its overlaid caption together, so its
+    // media must keep counting as a possible backdrop (BBC's promo
+    // carousel sent two white-on-photo headlines to a false pass here).
+    const clips = (o) => o === 'hidden' || o === 'clip';
+    if (clips(s.overflowX) || clips(s.overflowY)) {
+      const b = a.getBoundingClientRect();
+      if (clips(s.overflowX)) { left = Math.max(left, b.left); right = Math.min(right, b.right); }
+      if (clips(s.overflowY)) { top = Math.max(top, b.top); bottom = Math.min(bottom, b.bottom); }
+      if (right <= left || bottom <= top) return null;
+    }
+    // Above a consumed ancestor the element is clipped exactly as that
+    // ancestor is: continue the walk in its shoes.
+    mode = s.position;
+  }
+  return { left, top, right, bottom, width: right - left, height: bottom - top,
+    x: left, y: top };
+}
+
 export function mediaRects(doc) {
   if (!mediaRectsCache) {
     mediaRectsCache = [];
     for (const el of doc.querySelectorAll('img, video, canvas, svg')) {
-      const rect = el.getBoundingClientRect();
+      // The box an ancestor clips away can never paint, so it is not a
+      // backdrop hazard however far it reaches.
+      const rect = paintableRect(el, el.getBoundingClientRect());
       // Sub-icon-sized media can't plausibly serve as a text backdrop.
       // Decorative media with pointer-events: none (animated gradient
       // canvases, ambient video) paints under text yet never appears in
       // elementsFromPoint stacks — flagged so callers can distrust even a
       // hit-test-verified backdrop where such media overlaps.
-      if (rect.width >= 8 && rect.height >= 8) {
+      if (rect && rect.width >= 8 && rect.height >= 8) {
         mediaRectsCache.push({ element: el, rect, hitTestBlind: getComputedStyle(el).pointerEvents === 'none' });
       }
     }
