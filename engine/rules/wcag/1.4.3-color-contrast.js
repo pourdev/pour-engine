@@ -876,9 +876,25 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           : ''))
       : '';
 
+    // When the colour pair already clears the LARGE-scale minimum, the miss
+    // is about scale, not colour: name the boundary (14pt bold / 18pt), or
+    // a bold-but-just-under button reads as the checker ignoring its weight.
+    const largeScaleNote = (() => {
+      if (required !== thresholds.normal || ratio < thresholds.large) return '';
+      const sizePx = parseFloat(style.fontSize) || 0;
+      const weightNum = parseInt(style.fontWeight, 10) || 400;
+      const shown = `${Math.round(sizePx * 10) / 10}px`;
+      if (weightNum >= 700 && sizePx < 56 / 3) {
+        return ` This text is bold at ${shown}; bold text counts as large scale from 18.67px (14pt), where the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
+      }
+      if (weightNum < 700 && sizePx >= 56 / 3 && sizePx < 24) {
+        return ` At ${shown} regular weight this is not large scale; from 24px (18pt), or bold at this size, the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
+      }
+      return '';
+    })();
     return {
       status: 'fail',
-      message: `Contrast is ${showRatio(ratio)}:1 — below the ${required}:1 WCAG minimum for this text size.`,
+      message: `Contrast is ${showRatio(ratio)}:1 — below the ${required}:1 WCAG minimum for this text size.${largeScaleNote}`,
       fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${foregroundRgb} on ${backgroundRgb}).`
         + (authored ? ` Your CSS writes ${authored}, so searching it for the sRGB values above won't find them.` : '')
         + dimmedNote,

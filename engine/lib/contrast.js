@@ -1296,5 +1296,6 @@ export function rangeVerdict(foreground, range, required) {
 export function isLargeText(style) {
   const size = parseFloat(style.fontSize);
   const weight = parseInt(style.fontWeight, 10) || 400;
-  return size >= 24 || (size >= 18.66 && weight >= 700);
+  // 18pt and 14pt at CSS's 96dpi: 24px, and 56/3 = 18.666…px exactly.
+  return size >= 24 || (size >= 56 / 3 && weight >= 700);
 }
