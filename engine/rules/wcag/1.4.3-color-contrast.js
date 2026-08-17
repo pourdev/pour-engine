@@ -3,7 +3,7 @@ import {
   parseColor, contrastRatio, composite, effectiveBackground, backgroundObscured,
   backgroundImageSource, backgroundImagePaintRect, imagePaintRectInBox, imageLuminanceRange,
   gradientLuminanceRange, rangeVerdict, rangeWithBackdrop, isLargeText, cumulativeOpacity,
-  opacityAnimating, restingOpacity, mediaRects,
+  opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
   showRatio,
@@ -138,13 +138,15 @@ function textVisuallyHidden(element, style, foreground) {
   const indent = parseFloat(style.textIndent) || 0;
   const clipped = /hidden|clip/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)
     || style.clipPath !== 'none' || (style.clip !== 'auto' && style.position === 'absolute');
-  // Nothing hints at hiding: skip the getBoundingClientRect layout read —
-  // this runs for every text element on the page, and most are plainly shown.
-  if (!clipped && Math.abs(indent) <= 1000) return false;
+  // Nothing on the element itself hints at hiding: the recipe may still sit
+  // on a WRAPPER (a chart's sr-only data table hides the table; the judged
+  // cell inside computes clip: auto) — the ancestor walk is cached per
+  // container, so this stays affordable on every text element.
+  if (!clipped && Math.abs(indent) <= 1000) return inZeroClipSubtree(element);
   const rect = element.getBoundingClientRect();
   if ((rect.width <= 1 || rect.height <= 1) && clipped) return true;
   if (Math.abs(indent) > rect.width && (clipped || Math.abs(indent) > 1000)) return true;
-  return false;
+  return inZeroClipSubtree(element);
 }
 
 // Turn a luminance-range bracket into a rule outcome (or null = can't tell).

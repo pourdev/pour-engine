@@ -130,6 +130,7 @@ let opacityAnimatorsCache = null;
 let mediaRectsCache = null;
 let panelRectsCache = null;
 let pseudoCache = new WeakMap();
+let zeroClipCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -139,6 +140,49 @@ export function resetAuditCaches() {
   mediaRectsCache = null;
   panelRectsCache = null;
   pseudoCache = new WeakMap();
+  zeroClipCache = new WeakMap();
+}
+
+/**
+ * True when the element sits inside a subtree erased by a ZERO-AREA clip —
+ * the sr-only recipe (clip: rect(0,0,0,0) / clip-path: inset(50%) on an
+ * absolutely positioned wrapper) applied to an ANCESTOR, which is where it
+ * usually lives: a chart's accessible data table hides the table, and the
+ * judged element is a cell inside it. Only provably zero-area patterns
+ * count: a clip rect with no width or height (any `auto` component keeps
+ * the element judged), or a percentage inset consuming a full axis.
+ * Partial clips never hide. Verdicts cache per ancestor, so a page pays
+ * per container, not per descendant.
+ */
+export function inZeroClipSubtree(element) {
+  for (let a = element; a; a = a.parentElement) {
+    let hidden = zeroClipCache.get(a);
+    if (hidden === undefined) {
+      const s = getComputedStyle(a);
+      hidden = false;
+      if (s.clip !== 'auto' && s.position !== 'static') {
+        const m = /rect\(([^)]+)\)/.exec(s.clip);
+        if (m) {
+          const parts = m[1].split(',').map((v) => v.trim());
+          if (!parts.includes('auto') && parts.length === 4) {
+            const [t, r, b, l] = parts.map(parseFloat);
+            if (r - l <= 0 || b - t <= 0) hidden = true;
+          }
+        }
+      }
+      if (!hidden && s.clipPath && s.clipPath !== 'none') {
+        const m = /inset\(([^)]+)\)/.exec(s.clipPath);
+        if (m && !m[1].includes('px')) {
+          const parts = m[1].trim().split(/\s+/).map(parseFloat);
+          const [t, r = t, b = t, l = r] = parts;
+          if (t + b >= 100 || l + r >= 100) hidden = true;
+        }
+      }
+      zeroClipCache.set(a, hidden);
+    }
+    if (hidden) return true;
+  }
+  return false;
 }
 
 /**
