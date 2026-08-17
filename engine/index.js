@@ -185,7 +185,9 @@ export async function run(context = document, options = {}, onProgress) {
 
     let outcomes;
     if (rule.evaluateAll) {
-      outcomes = rule.evaluateAll(elements, ruleHelpers);
+      // Awaiting a plain array is a no-op, so sync evaluateAll rules are
+      // untouched — async ones (the deferred-reference probe) resolve here.
+      outcomes = await rule.evaluateAll(elements, ruleHelpers);
     } else {
       // Evaluate sequentially with periodic yields so ONE heavy rule on a
       // huge element set can't freeze the page for its whole duration —
