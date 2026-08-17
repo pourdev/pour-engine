@@ -9,6 +9,7 @@
 // better than false positives on real pages.
 export default {
   id: 'table-headers',
+  name: 'Table header associations',
   impact: 'serious',
   tags: ['wcag2a', 'wcag131'],
   help: 'Data tables must have properly associated header cells',

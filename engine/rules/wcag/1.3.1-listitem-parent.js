@@ -1,6 +1,7 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
 export default {
   id: 'listitem-parent',
+  name: 'List item placement',
   impact: 'serious',
   tags: ['wcag2a', 'wcag131'],
   help: '<li> must be inside a list',

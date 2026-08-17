@@ -6,6 +6,7 @@ const LANDMARK =
 
 export default {
   id: 'region',
+  name: 'Content outside landmarks',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'All readable content belongs inside a landmark region',

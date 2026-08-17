@@ -11,6 +11,7 @@
 // is, but no criterion provably fails.
 export default {
   id: 'embed-alt',
+  name: 'Embed accessible name',
   impact: 'serious',
   tags: ['wcag2a', 'wcag111'],
   help: '<embed> needs an accessible name',

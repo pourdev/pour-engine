@@ -8,6 +8,7 @@ const INTERACTIVE =
 
 export default {
   id: 'nested-interactive',
+  name: 'Nested controls',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'A control must not contain another control',

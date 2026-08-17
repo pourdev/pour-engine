@@ -1,6 +1,7 @@
 // WCAG SC 2.2.1 Timing Adjustable (Level A)
 export default {
   id: 'meta-refresh',
+  name: 'Timed page refresh',
   impact: 'critical',
   tags: ['wcag2a', 'wcag221'],
   help: 'The page must not use a timed refresh',

@@ -47,6 +47,7 @@ function candidateDescendants(element) {
 
 export default {
   id: 'aria-required-children',
+  name: 'Required ARIA children',
   impact: 'critical',
   tags: ['wcag2a', 'wcag131'],
   help: 'Composite ARIA roles must contain their required children',

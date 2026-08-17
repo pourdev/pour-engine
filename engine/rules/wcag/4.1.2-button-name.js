@@ -1,6 +1,7 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 export default {
   id: 'button-name',
+  name: 'Button names',
   impact: 'critical',
   tags: ['wcag2a', 'wcag412'],
   help: 'Buttons must have an accessible name',

@@ -1,5 +1,6 @@
 export default {
   id: 'accesskeys',
+  name: 'Duplicate access keys',
   impact: 'serious',
   tags: ['best-practice'],
   help: 'The same accesskey must not be assigned twice',

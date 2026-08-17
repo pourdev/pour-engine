@@ -1,5 +1,6 @@
 export default {
   id: 'redundant-tabindex',
+  name: 'Redundant tabindex',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'tabindex="0" is unnecessary on natively focusable elements',

@@ -6,6 +6,7 @@ const FOCUSABLE = 'a[href], area[href], button, input, select, textarea, summary
 
 export default {
   id: 'aria-hidden-focus',
+  name: 'Focusable hidden content',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Nothing focusable may sit inside aria-hidden="true"',

@@ -1,5 +1,6 @@
 export default {
   id: 'landmark-one-main',
+  name: 'One main landmark',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'The page should have exactly one main landmark',

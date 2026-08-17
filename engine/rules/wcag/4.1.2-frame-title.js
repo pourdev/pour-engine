@@ -1,6 +1,7 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 export default {
   id: 'frame-title',
+  name: 'Frame titles',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Frames must have a title describing their content',

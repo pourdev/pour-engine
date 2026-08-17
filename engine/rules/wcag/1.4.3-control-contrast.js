@@ -9,6 +9,7 @@ import {
 
 export default {
   id: 'control-contrast',
+  name: 'Form control contrast',
   impact: 'serious',
   tags: ['wcag2aa', 'wcag143'],
   help: 'Text inside form controls must have sufficient contrast',

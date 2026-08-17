@@ -1,5 +1,6 @@
 export default {
   id: 'empty-heading',
+  name: 'Empty headings',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'Headings must contain text',

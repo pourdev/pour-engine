@@ -71,6 +71,7 @@ function visibleText(nodes) {
 
 export default {
   id: 'label-in-name',
+  name: 'Label in accessible name',
   impact: 'serious',
   tags: ['wcag21a', 'wcag253'],
   help: 'The visible label must be part of the accessible name',

@@ -1,5 +1,6 @@
 export default {
   id: 'no-autofocus',
+  name: 'Autofocus on load',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'autofocus disorients assistive-technology users',

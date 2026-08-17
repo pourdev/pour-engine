@@ -12,6 +12,7 @@ const LANG_PATTERN = /^([a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*|[xXiI](-[a-zA-Z0-9]{1,
 
 export default {
   id: 'html-lang',
+  name: 'Page language',
   impact: 'serious',
   tags: ['wcag2a', 'wcag311'],
   help: 'The <html> element must declare a valid language',

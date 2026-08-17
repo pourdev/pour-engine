@@ -5,6 +5,7 @@ const level = (el) =>
 
 export default {
   id: 'heading-order',
+  name: 'Heading order',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'Headings should step down one level at a time',

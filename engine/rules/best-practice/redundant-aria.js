@@ -10,6 +10,7 @@ const NATIVE_PAIRS = [
 
 export default {
   id: 'redundant-aria',
+  name: 'Redundant ARIA attributes',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'aria attributes should not duplicate native HTML attributes',

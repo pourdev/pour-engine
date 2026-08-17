@@ -6,6 +6,7 @@ import { labelledByName } from '../../lib/accessible-name.js';
 
 export default {
   id: 'form-label',
+  name: 'Form field labels',
   impact: 'critical',
   tags: ['wcag2a', 'wcag131', 'wcag332', 'wcag412'],
   help: 'Every form field needs a label',

@@ -10,6 +10,7 @@
 // where the binary, assertable failure lives.
 export default {
   id: 'composite-widget-name',
+  name: 'Widget item names',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Tabs, menu items, options and tree items need an accessible name',

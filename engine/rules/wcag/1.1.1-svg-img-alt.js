@@ -3,6 +3,7 @@ import { labelledByName } from '../../lib/accessible-name.js';
 
 export default {
   id: 'svg-img-alt',
+  name: 'SVG accessible name',
   impact: 'serious',
   tags: ['wcag2a', 'wcag111'],
   help: 'Inline SVG and role="img" graphics need an accessible name',

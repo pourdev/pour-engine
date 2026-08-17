@@ -916,6 +916,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
 
 export default createContrastRule({
   id: 'color-contrast',
+  name: 'Text contrast',
   tags: ['wcag2aa', 'wcag143'],
   help: 'Text must have sufficient contrast against its background',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html',

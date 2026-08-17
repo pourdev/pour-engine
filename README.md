@@ -21,10 +21,6 @@ can verify are returned as a `manualReview` checklist instead of being
 silently skipped, and findings the engine can't judge conclusively land in
 `incomplete` rather than being guessed at.
 
-An experimental WCAG 3.0 draft mode (`engine/wcag30-draft.js`) reframes
-results against the draft's guidelines — clearly stamped as a draft, because
-no tool can honestly claim conformance to an unfinished standard.
-
 ## Getting started
 
 ```sh
@@ -39,7 +35,6 @@ const results = await run(document, {
   // optional: filter rules by tag. Tags are cumulative — WCAG 2.2 AA means
   // every A/AA rule from 2.0 through 2.2. Omit to run everything.
   tags: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'],
-  // standard: 'wcag30-draft', // optional: experimental WCAG 3.0 draft mode
 });
 
 console.log(results.violations, results.passes, results.incomplete);
@@ -89,7 +84,7 @@ static HTML strings. For Node-based testing, drive it through a real browser
   (`1.1.1-image-alt.js`), plus the catalog index.
 - `engine/lib/` — shared helpers: DOM traversal, accessible-name
   computation, contrast math, role model.
-- `engine/wcag22.js`, `engine/wcag30-draft.js` — the WCAG catalogs.
+- `engine/wcag22.js` — the WCAG catalog.
 - `config/project.config.js` — package-local stand-in for the pour
   monorepo's project config (engine name + version only).
 

@@ -16,6 +16,7 @@ const TOKENS = new Set([
 
 export default {
   id: 'autocomplete-valid',
+  name: 'Autocomplete tokens',
   impact: 'serious',
   tags: ['wcag21aa', 'wcag135'],
   help: 'autocomplete attributes must use valid tokens',

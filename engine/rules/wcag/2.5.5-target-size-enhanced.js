@@ -6,6 +6,7 @@ import { createTargetSizeRule } from './2.5.8-target-size.js';
 
 export default createTargetSizeRule({
   id: 'target-size-enhanced',
+  name: 'Enhanced target size',
   tags: ['wcag2aaa', 'wcag255'],
   help: 'Interactive targets must be at least 44×44 pixels (AAA)',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html',

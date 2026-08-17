@@ -32,6 +32,7 @@ const UNDESCRIPTIVE = new Set([
 
 export default {
   id: 'document-title',
+  name: 'Page title',
   impact: 'serious',
   tags: ['wcag2a', 'wcag242'],
   help: 'The page must have a title that describes its topic or purpose',

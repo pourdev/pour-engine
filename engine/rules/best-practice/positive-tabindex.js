@@ -1,5 +1,6 @@
 export default {
   id: 'positive-tabindex',
+  name: 'Positive tabindex',
   impact: 'serious',
   tags: ['best-practice'],
   help: 'Positive tabindex values disrupt the natural focus order',

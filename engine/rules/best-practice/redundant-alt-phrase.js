@@ -5,6 +5,7 @@ const REDUNDANT_PHRASE = /^(image|picture|graphic|icon)\b( of\b)?/i;
 
 export default {
   id: 'redundant-alt-phrase',
+  name: 'Redundant alt phrasing',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'alt text should not start with "image of" or similar',

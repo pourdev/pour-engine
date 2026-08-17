@@ -107,6 +107,7 @@ function outcome({ missing, ambiguous }, probed, element, accessibleName) {
 
 export default {
   id: 'aria-valid-refs',
+  name: 'ARIA id references',
   // Moderate, not critical: with 4.1.1 Parsing retired in WCAG 2.2 these
   // are 4.1.2 name/state defects, and aria-controls in particular has weak
   // assistive-technology support — real, but rarely blocking.

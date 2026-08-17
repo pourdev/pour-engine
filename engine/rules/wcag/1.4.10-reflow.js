@@ -6,6 +6,7 @@
 // and images are exempt content the geometry can't distinguish.
 export default {
   id: 'reflow',
+  name: 'Content reflow',
   impact: 'moderate',
   tags: ['wcag21aa', 'wcag1410'],
   help: 'Content should reflow to one-dimensional scrolling',

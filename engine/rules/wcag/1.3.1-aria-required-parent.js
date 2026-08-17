@@ -20,6 +20,7 @@ const IMPLICIT_CONTAINER = { ul: 'list', ol: 'list', menu: 'list', table: 'table
 
 export default {
   id: 'aria-required-parent',
+  name: 'Required ARIA parent',
   impact: 'critical',
   tags: ['wcag2a', 'wcag131'],
   help: 'ARIA child roles must be inside their required container role',

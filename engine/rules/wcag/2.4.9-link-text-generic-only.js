@@ -14,6 +14,7 @@ import { createLinkPurposeRule } from './2.4.4-link-text-generic.js';
 
 export default createLinkPurposeRule({
   id: 'link-text-generic-only',
+  name: 'Self-sufficient link text',
   impact: 'moderate',
   tags: ['wcag2aaa', 'wcag249'],
   help: 'Link text alone must identify where the link goes (AAA)',

@@ -8,6 +8,7 @@ const ITEM_ROLES = ['listitem', 'presentation', 'none'];
 
 export default {
   id: 'list-structure',
+  name: 'List structure',
   impact: 'serious',
   tags: ['wcag2a', 'wcag131'],
   help: 'Lists must only contain list items',

@@ -3,6 +3,7 @@ const LABELABLE = 'input, select, textarea, button, meter, output, progress';
 
 export default {
   id: 'label-for-valid',
+  name: 'Label target references',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'label[for] must reference a form control that exists',

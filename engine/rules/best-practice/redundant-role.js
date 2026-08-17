@@ -28,6 +28,7 @@ function implicitRole(element) {
 
 export default {
   id: 'redundant-role',
+  name: 'Redundant roles',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'role attributes should not repeat the element’s built-in role',

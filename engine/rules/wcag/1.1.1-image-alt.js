@@ -10,6 +10,7 @@ const GENERIC_ALT = /^(image|img|photo|photograph|picture|graphic|icon|untitled|
 
 export default {
   id: 'image-alt',
+  name: 'Image alt text',
   impact: 'critical',
   tags: ['wcag2a', 'wcag111'],
   help: 'Every <img> needs a text alternative',

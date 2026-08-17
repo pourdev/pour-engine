@@ -1,5 +1,6 @@
 export default {
   id: 'redundant-image-alt',
+  name: 'Redundant image alt',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'Image alt should not repeat adjacent link or button text',

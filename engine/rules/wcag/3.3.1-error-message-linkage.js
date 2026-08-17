@@ -25,6 +25,7 @@
 // value except false/undefined — "spelling" and "grammar" count.
 export default {
   id: 'error-message-linkage',
+  name: 'Error message linkage',
   impact: 'serious',
   tags: ['wcag2a', 'wcag331'],
   help: 'Fields marked invalid need their error described in text',

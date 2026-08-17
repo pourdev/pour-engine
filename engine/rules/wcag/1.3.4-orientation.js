@@ -46,6 +46,7 @@ function scanRules(rules, insideOrientation, findings) {
 
 export default {
   id: 'orientation-lock',
+  name: 'Orientation lock',
   impact: 'serious',
   tags: ['wcag21aa', 'wcag134'],
   help: 'Content must work in both portrait and landscape',

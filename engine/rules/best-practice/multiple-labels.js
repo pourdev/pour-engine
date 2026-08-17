@@ -5,6 +5,7 @@
 // pair usually reads better as label + aria-describedby.
 export default {
   id: 'multiple-labels',
+  name: 'Multiple labels',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'Form fields should not have multiple labels',

@@ -11,6 +11,7 @@
 // label ("Details").
 export default {
   id: 'summary-name',
+  name: 'Disclosure names',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Disclosure controls (<summary>) need an accessible name',

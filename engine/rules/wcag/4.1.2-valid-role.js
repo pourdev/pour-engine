@@ -24,6 +24,7 @@ const VALID_ROLES = new Set([
 
 export default {
   id: 'valid-role',
+  name: 'Valid roles',
   impact: 'critical',
   tags: ['wcag2a', 'wcag412'],
   help: 'role attributes must use valid ARIA roles',

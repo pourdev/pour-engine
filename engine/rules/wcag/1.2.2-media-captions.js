@@ -1,6 +1,7 @@
 // WCAG SC 1.2.2 Captions (Prerecorded) (Level A)
 export default {
   id: 'media-captions',
+  name: 'Video captions',
   impact: 'critical',
   tags: ['wcag2a', 'wcag122'],
   help: 'Video content must have captions',
@@ -21,17 +22,23 @@ export default {
     if (!element.currentSrc && !element.getAttribute('src') && !element.querySelector('source')) {
       return { status: 'pass' };
     }
-    // The decorative no-audio-path signature — the same boundary
-    // video-loop-motion draws for 2.2.2: muted, autoplaying, no controls.
-    // With no controls there is no user path to unmute, so whatever audio
-    // the file may carry is never presented to anyone; audio that cannot be
+    // The decorative no-audio-path signature: muted with no controls. With
+    // no controls there is no user path to unmute, so whatever audio the
+    // file may carry is never presented to anyone; audio that cannot be
     // presented is not audio content under 1.2.2, and asking a human to
     // verify captions for it is noise (measured on the benchmark corpus:
     // our own site's aria-hidden hero loops, ffprobe-confirmed to carry no
     // audio stream, plus the same family on four news/university homes).
+    // HOW playback starts is deliberately not part of the signature: an
+    // earlier autoplay condition missed the two other members of the same
+    // family, measured on our own site — a crossfade B-roll take that only
+    // ever plays via script (no autoplay attribute, so the review fired
+    // exactly when the script had wired its src), and heroes whose
+    // autoplay attribute a reduced-motion handler removes. Muteness and
+    // controls decide whether audio can reach anyone; autoplay never did.
     // Properties, not attributes: script-muted heroes count too. A muted
     // video WITH controls keeps its review — one click unmutes it.
-    if (element.muted && element.autoplay && !element.controls) {
+    if (element.muted && !element.controls) {
       return { status: 'pass' };
     }
     // Captions may be burned in or provided by the player — a human must check.

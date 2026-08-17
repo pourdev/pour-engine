@@ -467,6 +467,7 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
 
 export default createTargetSizeRule({
   id: 'target-size',
+  name: 'Target size',
   tags: ['wcag22aa', 'wcag258'],
   help: 'Interactive targets must be at least 24×24 pixels',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html',

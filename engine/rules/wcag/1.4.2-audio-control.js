@@ -1,6 +1,7 @@
 // WCAG SC 1.4.2 Audio Control (Level A)
 export default {
   id: 'audio-control',
+  name: 'Auto-playing audio control',
   impact: 'critical',
   tags: ['wcag2a', 'wcag142'],
   help: 'Auto-playing audio must be stoppable or muted',

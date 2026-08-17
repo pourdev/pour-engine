@@ -43,6 +43,7 @@ function hasTabbableContent(node) {
 
 export default {
   id: 'scrollable-region-focusable',
+  name: 'Keyboard-reachable scroll areas',
   impact: 'serious',
   tags: ['wcag2a', 'wcag211', 'wcag213'], // 2.1.3 is 2.1.1's AAA twin — same check satisfies both
   help: 'Scrollable regions must be reachable by keyboard',

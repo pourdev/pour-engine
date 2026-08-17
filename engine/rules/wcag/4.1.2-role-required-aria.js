@@ -11,6 +11,7 @@ const REQUIRED = {
 
 export default {
   id: 'role-required-aria',
+  name: 'Required role states',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Some roles require a state attribute to work',

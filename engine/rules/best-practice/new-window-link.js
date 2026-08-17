@@ -4,6 +4,7 @@ const MENTIONS_NEW_WINDOW = /new (window|tab)|opens? in/i;
 
 export default {
   id: 'new-window-link',
+  name: 'New-window warnings',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'Links opening a new window should say so',

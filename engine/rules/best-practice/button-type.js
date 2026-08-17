@@ -1,5 +1,6 @@
 export default {
   id: 'button-type',
+  name: 'Button types in forms',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'Buttons inside forms should declare their type',

@@ -42,6 +42,7 @@ const NAME_FROM_CONTENT = 'a[href], button, summary, h1, h2, h3, h4, h5, h6, th,
 
 export default {
   id: 'aria-label-misuse',
+  name: 'aria-label placement',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag412'],
   help: 'aria-label on a plain container is prohibited by ARIA, so its announcement is not guaranteed',

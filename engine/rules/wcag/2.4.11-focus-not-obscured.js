@@ -31,6 +31,7 @@ function edgeReserved(doc, edge, needed) {
 
 export default {
   id: 'focus-not-obscured',
+  name: 'Unobscured focus',
   impact: 'serious',
   tags: ['wcag22aa', 'wcag2411'],
   help: 'Focused elements must not be fully hidden behind overlays',

@@ -20,6 +20,7 @@ const NAVIGATES = /\blocation\s*(=|\.\s*(href|assign|replace|reload))|\.(submit|
 
 export default {
   id: 'on-input-navigation',
+  name: 'Unexpected context change',
   impact: 'serious',
   tags: ['wcag2a', 'wcag322', 'wcag321'],
   help: 'Changing or focusing a control must not unexpectedly change context',

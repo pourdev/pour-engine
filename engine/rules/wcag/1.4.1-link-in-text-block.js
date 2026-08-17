@@ -3,6 +3,7 @@ import { parseColor, contrastRatio } from '../../lib/contrast.js';
 
 export default {
   id: 'link-in-text-block',
+  name: 'Link distinction in text',
   impact: 'serious',
   tags: ['wcag2a', 'wcag141'],
   help: 'Links inside text must be distinguishable by more than colour',

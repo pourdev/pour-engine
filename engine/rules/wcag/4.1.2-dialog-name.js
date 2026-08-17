@@ -8,6 +8,7 @@ import { labelledByName } from '../../lib/accessible-name.js';
 
 export default {
   id: 'dialog-name',
+  name: 'Dialog names',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'Dialogs must have an accessible name',

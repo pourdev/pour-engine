@@ -3,6 +3,7 @@ import { isEmbeddedDocument } from '../../lib/dom.js';
 
 export default {
   id: 'meta-viewport',
+  name: 'Viewport zoom lock',
   impact: 'critical',
   tags: ['wcag2aa', 'wcag144'],
   help: 'The viewport must let users zoom to at least 200%',

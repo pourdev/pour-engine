@@ -1,6 +1,7 @@
 // WCAG SC 2.4.4 Link Purpose (In Context) (Level A) · SC 4.1.2 Name, Role, Value (Level A)
 export default {
   id: 'link-name',
+  name: 'Link names',
   impact: 'serious',
   tags: ['wcag2a', 'wcag244', 'wcag412'],
   help: 'Links must have an accessible name',

@@ -4,6 +4,7 @@ import { createContrastRule } from './1.4.3-color-contrast.js';
 
 export default createContrastRule({
   id: 'color-contrast-enhanced',
+  name: 'Enhanced text contrast',
   tags: ['wcag2aaa', 'wcag146'],
   help: 'Text must have enhanced contrast against its background (AAA)',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html',

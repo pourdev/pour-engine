@@ -13,6 +13,7 @@
 // case worth asserting.
 export default {
   id: 'auth-field-obstruction',
+  name: 'Accessible login fields',
   impact: 'serious',
   tags: ['wcag22aa', 'wcag338'],
   help: 'Login fields must not block paste or password managers',

@@ -3,6 +3,7 @@ const ALLOWED = new Set(['DT', 'DD', 'DIV', 'SCRIPT', 'TEMPLATE']);
 
 export default {
   id: 'definition-list',
+  name: 'Definition list structure',
   impact: 'serious',
   tags: ['wcag2a', 'wcag131'],
   help: '<dl> must be structured as term/description pairs',

@@ -79,6 +79,7 @@ function endlesslyMoving(doc) {
 
 export default {
   id: 'pause-stop-hide',
+  name: 'Pausable moving content',
   impact: 'serious',
   tags: ['wcag2a', 'wcag222'],
   help: 'Moving content must be pausable',

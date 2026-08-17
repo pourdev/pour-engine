@@ -3,6 +3,7 @@ import { collectRoots, isEmbeddedDocument } from '../../lib/dom.js';
 
 export default {
   id: 'bypass-blocks',
+  name: 'Skip to content',
   impact: 'serious',
   tags: ['wcag2a', 'wcag241'],
   help: 'The page must offer a way to skip repeated blocks',

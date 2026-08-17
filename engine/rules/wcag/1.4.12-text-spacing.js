@@ -16,6 +16,7 @@ const clipped = (element) =>
 
 export default {
   id: 'text-spacing',
+  name: 'Text spacing overrides',
   impact: 'serious',
   tags: ['wcag21aa', 'wcag1412'],
   help: 'Text must survive user spacing overrides without being cut off',

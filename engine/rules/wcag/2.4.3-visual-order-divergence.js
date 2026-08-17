@@ -48,6 +48,7 @@ function visualSequence(entries, rightToLeft) {
 
 export default {
   id: 'visual-order-divergence',
+  name: 'Focus order vs visual order',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag243'],
   help: 'CSS reordering should not make Tab jump against the visual order',

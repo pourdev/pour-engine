@@ -11,6 +11,7 @@ const NAME_FROM_CONTENT = new Set(['button', 'link', 'menuitem', 'menuitemcheckb
 
 export default {
   id: 'redundant-aria-label',
+  name: 'Redundant aria-label',
   impact: 'minor',
   tags: ['best-practice'],
   help: 'aria-label should not repeat the visible text',

@@ -1,6 +1,7 @@
 // WCAG SC 1.1.1 Non-text Content (Level A)
 export default {
   id: 'object-alt',
+  name: 'Object alt text',
   impact: 'serious',
   tags: ['wcag2a', 'wcag111'],
   help: '<object> embeds must have a text alternative',

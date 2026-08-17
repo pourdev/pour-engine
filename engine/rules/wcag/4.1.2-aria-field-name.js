@@ -23,6 +23,7 @@ function authorName(element) {
 
 export default {
   id: 'aria-field-name',
+  name: 'ARIA field names',
   impact: 'serious',
   tags: ['wcag2a', 'wcag412'],
   help: 'ARIA fields and value widgets must have an accessible name',

@@ -3,6 +3,7 @@
 import { labelledByName } from '../../lib/accessible-name.js';
 export default {
   id: 'fieldset-legend',
+  name: 'Grouped field labels',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'Radio and checkbox groups should be grouped with a label',

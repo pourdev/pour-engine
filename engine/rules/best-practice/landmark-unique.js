@@ -22,6 +22,7 @@ const landmarkName = (element) =>
 
 export default {
   id: 'landmark-unique',
+  name: 'Distinguishable landmarks',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'Landmarks of the same type need distinguishing labels',

@@ -15,6 +15,7 @@
 // matters.
 export default {
   id: 'canvas-alt',
+  name: 'Canvas accessible name',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag111'],
   help: 'Meaningful <canvas> graphics need an accessible name or fallback',

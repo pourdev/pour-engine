@@ -24,6 +24,7 @@ const ENUMS = {
 
 export default {
   id: 'aria-attr-valid',
+  name: 'Valid ARIA values',
   impact: 'critical',
   tags: ['wcag2a', 'wcag412'],
   help: 'aria attributes must exist and have valid values',

@@ -6,6 +6,7 @@ const LANG_PATTERN = /^([a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*|[xXiI](-[a-zA-Z0-9]{1,
 
 export default {
   id: 'valid-lang-parts',
+  name: 'Part language tags',
   impact: 'serious',
   tags: ['wcag2aa', 'wcag312'],
   help: 'lang attributes on page parts must be valid',

@@ -10,6 +10,7 @@ import { parseColor, contrastRatio, composite, effectiveBackground, showRatio } 
 
 export default {
   id: 'non-text-contrast',
+  name: 'Control & icon contrast',
   impact: 'serious',
   tags: ['wcag21aa', 'wcag1411'],
   help: 'Form fields and icons need a 3:1 visible boundary',

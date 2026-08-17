@@ -22,6 +22,7 @@ function landmarkAncestor(element) {
 
 export default {
   id: 'landmark-top-level',
+  name: 'Top-level landmarks',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'banner, main and contentinfo landmarks must be top level',

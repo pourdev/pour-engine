@@ -39,6 +39,7 @@ const HANDLED_ELSEWHERE = new Set(['label', 'labelledby']);
 
 export default {
   id: 'aria-allowed-attr',
+  name: 'Allowed ARIA attributes',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag412'],
   help: 'ARIA attributes must be supported by the element’s role',

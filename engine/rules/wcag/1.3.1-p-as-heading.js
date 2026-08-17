@@ -1,6 +1,7 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
 export default {
   id: 'p-as-heading',
+  name: 'Styled text as heading',
   impact: 'serious',
   tags: ['wcag2a', 'wcag131'],
   help: 'Bold paragraphs should not stand in for headings',

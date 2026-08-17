@@ -1,5 +1,6 @@
 export default {
   id: 'page-heading-one',
+  name: 'Leading page heading',
   impact: 'moderate',
   tags: ['best-practice'],
   help: 'Every page should start its outline with an <h1>',

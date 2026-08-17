@@ -78,6 +78,7 @@ export function createLinkPurposeRule({ id, impact, tags, help, helpUrl, verdict
 
 export default createLinkPurposeRule({
   id: 'link-text-generic',
+  name: 'Generic link text',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag244'],
   help: 'Link text should describe where the link goes',

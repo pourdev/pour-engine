@@ -52,6 +52,7 @@ function focusSuppressors(doc) {
 
 export default {
   id: 'focus-visible',
+  name: 'Visible focus',
   impact: 'serious',
   tags: ['wcag2aa', 'wcag247'],
   help: 'Keyboard focus must remain visible',

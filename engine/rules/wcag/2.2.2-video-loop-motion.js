@@ -15,6 +15,7 @@
 // abstaining, not clearing.
 export default {
   id: 'video-loop-motion',
+  name: 'Looping video control',
   impact: 'serious',
   tags: ['wcag2a', 'wcag222'],
   help: 'Looping autoplay video must be pausable',

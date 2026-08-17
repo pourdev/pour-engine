@@ -4,7 +4,6 @@
 import config from '../config/project.config.js';
 import rules from './rules/index.js';
 import wcagCatalog from './wcag22.js';
-import wcag30Draft from './wcag30-draft.js';
 import { isVisible, isRendered, cssPath, htmlSnippet, ownText, collectRoots } from './lib/dom.js';
 import { accessibleName } from './lib/accessible-name.js';
 import { resetAuditCaches } from './lib/contrast.js';
@@ -79,16 +78,11 @@ function toResultNode(element, outcome) {
 /**
  * Run the audit.
  * @param {Document|Element} context - what to scan
- * @param {{ tags?: string[], exclude?: string, standard?: string, signal?: AbortSignal }} options -
+ * @param {{ tags?: string[], exclude?: string, signal?: AbortSignal }} options -
  *   rule selection by tag (wcag2a…wcag22aa, best-practice), empty selects
  *   every rule; exclude is a CSS selector — elements matching it, or inside
  *   a match (including across shadow boundaries), are left out of every
- *   rule; standard 'wcag30-draft' reframes the report against the WCAG 3.0
- *   Working Draft (results.standard is stamped draft, the manual checklist
- *   becomes the draft guidelines, and each rule result carries the draft
- *   guideline it maps to) — the rules themselves stay WCAG 2.x, which is
- *   the only honest claim a tool can make about a draft;
- *   signal aborts the run between rules (throws AbortError)
+ *   rule; signal aborts the run between rules (throws AbortError)
  * @param {(progress: object) => void} [onProgress] - called before each rule
  *   starts ({rule, running}), during a rule at each renderer yield with a
  *   fractional done (completed rules + this rule's evaluated-element share,
@@ -97,17 +91,15 @@ function toResultNode(element, outcome) {
  */
 export async function run(context = document, options = {}, onProgress) {
   const auditStarted = performance.now();
-  const draft30 = options.standard === 'wcag30-draft';
   const results = {
     testEngine: { name, version },
     timestamp: new Date().toISOString(),
     url: context.location?.href ?? context.ownerDocument?.location?.href ?? '',
-    standard: draft30 ? wcag30Draft.draftInfo : null,
     violations: [],
     passes: [],
     incomplete: [],
     inapplicable: [],
-    manualReview: draft30 ? wcag30Draft.manualReviewChecklist() : manualReviewCriteria(options.tags),
+    manualReview: manualReviewCriteria(options.tags),
     ruleTimings: [],
   };
 
@@ -223,17 +215,15 @@ export async function run(context = document, options = {}, onProgress) {
 
     const ruleResult = {
       id: rule.id,
+      // Human display name ("Form field labels"); the id stays the
+      // machine handle everywhere (selectors, exports, docs anchors).
+      name: rule.name ?? rule.id,
       impact: rule.impact,
       tags: rule.tags,
       help: rule.help,
       description: rule.help,
       helpUrl: rule.helpUrl,
     };
-    if (draft30) {
-      // Which draft guideline this 2.x rule speaks to (null for rules with
-      // no draft counterpart, e.g. best-practice extras).
-      ruleResult.wcag30 = wcag30Draft.guidelineForTags(rule.tags);
-    }
     if (!elements.length) results.inapplicable.push({ ...ruleResult, nodes: [] });
     if (buckets.fail.length) results.violations.push({ ...ruleResult, nodes: buckets.fail });
     if (buckets.incomplete.length) results.incomplete.push({ ...ruleResult, nodes: buckets.incomplete });
@@ -252,6 +242,15 @@ export async function run(context = document, options = {}, onProgress) {
       ms,
       counts: { ...liveCounts },
       typeCounts: { ...liveTypeCounts },
+      // The completed rule's actual findings, so a UI can BUILD its list
+      // as rules finish rather than delivering everything at the end.
+      // Present only when the rule found something.
+      ...(buckets.fail.length || buckets.incomplete.length ? {
+        findings: {
+          ...(buckets.fail.length ? { violation: { ...ruleResult, nodes: buckets.fail } } : {}),
+          ...(buckets.incomplete.length ? { incomplete: { ...ruleResult, nodes: buckets.incomplete } } : {}),
+        },
+      } : {}),
     });
   }
 
