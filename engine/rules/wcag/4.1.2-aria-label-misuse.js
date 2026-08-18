@@ -45,9 +45,13 @@ export default {
   name: 'aria-label placement',
   impact: 'moderate',
   tags: ['wcag2a', 'wcag412'],
-  help: 'aria-label on a plain container is prohibited by ARIA, so its announcement is not guaranteed',
+  help: 'aria-label or aria-labelledby on a plain container is prohibited by ARIA, so its announcement is not guaranteed',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
-  selector: 'div[aria-label]:not([role]):not([tabindex]), span[aria-label]:not([role]):not([tabindex]), p[aria-label]:not([role]):not([tabindex])',
+  // §5.2.8.6 prohibits BOTH naming attributes on generic — aria-labelledby
+  // pointing at perfectly real text is the same authoring error as an inline
+  // aria-label, and the more tempting one (a card labelled by its own title).
+  selector: 'div[aria-label]:not([role]):not([tabindex]), span[aria-label]:not([role]):not([tabindex]), p[aria-label]:not([role]):not([tabindex]),'
+    + ' div[aria-labelledby]:not([role]):not([tabindex]), span[aria-labelledby]:not([role]):not([tabindex]), p[aria-labelledby]:not([role]):not([tabindex])',
   evaluate(element) {
     // Inside a name-from-content ancestor the label is NOT ignored: accname
     // applies the whole algorithm to each descendant while building the
@@ -55,9 +59,20 @@ export default {
     // Chromium reports exactly that. Claiming it does nothing is false, and
     // the advised fix would delete the control's only name.
     if (element.closest(NAME_FROM_CONTENT)) return { status: 'pass' };
+    const label = element.getAttribute('aria-label');
+    const attempt = label !== null
+      ? `aria-label="${label}"`
+      : (() => {
+          const text = (element.getAttribute('aria-labelledby') ?? '').trim().split(/\s+/)
+            .map((id) => element.ownerDocument.getElementById(id)?.textContent?.trim())
+            .filter(Boolean).join(' ');
+          return text
+            ? `aria-labelledby (naming it "${text.slice(0, 80)}")`
+            : 'aria-labelledby (whose references resolve to no text)';
+        })();
     return {
       status: 'incomplete',
-      message: `aria-label="${element.getAttribute('aria-label')}" on a plain <${element.tagName.toLowerCase()}> is prohibited by ARIA: this element's role does not support naming, so although many browser and screen reader pairings announce the label today, that support is not guaranteed anywhere and can differ between assistive technologies. Where it is announced it replaces the element's visible text; where it is not, users get the visible text alone. Check both presentations read correctly, and that nothing here relies on the label being heard.`,
+      message: `${attempt} on a plain <${element.tagName.toLowerCase()}> is prohibited by ARIA: this element's role does not support naming, so although many browser and screen reader pairings announce the label today, that support is not guaranteed anywhere and can differ between assistive technologies. Where it is announced it replaces the element's visible text; where it is not, users get the visible text alone. Check both presentations read correctly, and that nothing here relies on the label being heard.`,
       fix: 'If this element must reliably announce something of its own, give it the role it is playing (a landmark, group, or widget role) so the name is legal and exposure is guaranteed — or move the spoken text into visible or visually-hidden real text. If the label is stray, remove it. Do not add a role solely to legalise the label.',
     };
   },

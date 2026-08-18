@@ -1,5 +1,8 @@
-// ARIA APG landmark pattern: banner, main, and contentinfo are page-level
-// regions — nesting them inside other landmarks breaks the page outline.
+// ARIA APG landmark pattern: banner, main, contentinfo and complementary
+// are page-level regions — nesting them inside other landmarks breaks the
+// page outline. Complementary joins via the aside demotion semantics in
+// lib/roles.js: only an aside that actually reaches the accessibility tree
+// as complementary owes top-levelness.
 import { implicitRole } from '../../lib/roles.js';
 
 const LANDMARK_ROLES = new Set([
@@ -25,9 +28,9 @@ export default {
   name: 'Top-level landmarks',
   impact: 'moderate',
   tags: ['best-practice'],
-  help: 'banner, main and contentinfo landmarks must be top level',
+  help: 'banner, main, contentinfo and complementary landmarks must be top level',
   helpUrl: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',
-  selector: 'header, footer, main, [role="banner"], [role="contentinfo"], [role="main"]',
+  selector: 'header, footer, main, aside, [role="banner"], [role="contentinfo"], [role="main"], [role="complementary"]',
   evaluate(element) {
     const tag = element.tagName.toLowerCase();
     // <header>/<footer> inside sectioning content are not landmarks at all.
@@ -35,9 +38,20 @@ export default {
         element.closest('article, aside, main, nav, section')) {
       return { status: 'pass' };
     }
+    // An <aside> is complementary only when implicitRole says so: unnamed
+    // inside sectioning content it is generic (Chromium exposes NO
+    // complementary node for a news home full of related-content asides,
+    // measured live) — there is no landmark to be top level. An aside
+    // directly inside <main> is NOT demoted (main is not sectioning
+    // content), so an ad-slot aside nested in main is a real finding.
+    if (tag === 'aside' && !element.hasAttribute('role') &&
+        implicitRole(element) !== 'complementary') {
+      return { status: 'pass' };
+    }
     const container = landmarkAncestor(element);
     if (!container) return { status: 'pass' };
-    const role = element.getAttribute('role') ?? { header: 'banner', footer: 'contentinfo', main: 'main' }[tag];
+    const role = element.getAttribute('role') ??
+      { header: 'banner', footer: 'contentinfo', main: 'main', aside: 'complementary' }[tag];
     return {
       status: 'fail',
       message: `This ${role} landmark is nested inside a ${container.role} landmark (<${container.element.tagName.toLowerCase()}>) — page-level regions lose their meaning when nested.`,

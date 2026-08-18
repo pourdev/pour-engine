@@ -1,7 +1,20 @@
+import { effectiveRole } from '../../lib/roles.js';
+
 const level = (el) =>
   el.hasAttribute('aria-level')
     ? parseInt(el.getAttribute('aria-level'), 10)
     : parseInt(el.tagName[1], 10) || 2; // role="heading" without aria-level defaults to 2
+
+// An honoured presentational role (or any other role override, e.g. role="tab")
+// removes the element from the page's heading outline: Chromium exposes no
+// heading node for <h3 role="none">, so it can neither skip a level nor set
+// the level the next heading is judged against. A null effective role means an
+// unknown explicit role, which browsers ignore in favour of the implicit one —
+// still a heading for everything this selector matches.
+const inOutline = (el) => {
+  const role = effectiveRole(el);
+  return role === 'heading' || role === null;
+};
 
 export default {
   id: 'heading-order',
@@ -15,6 +28,7 @@ export default {
   evaluateAll(elements) {
     let previous = 0;
     return elements.map((element) => {
+      if (!inOutline(element)) return { status: 'pass' };
       const current = level(element);
       const skipped = previous > 0 && current > previous + 1;
       const outcome = skipped

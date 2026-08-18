@@ -1,8 +1,17 @@
+// header/footer are banner/contentinfo ONLY outside sectioning content
+// (HTML-AAM; mirrored from lib/roles.js implicitRole): a footer buried in an
+// <article> is generic, so treating it as a landmark hid its stray content.
+// Divs do NOT demote — a header wrapped in plain divs is still a banner.
+// role="alertdialog" joins dialog: both are modal containers whose content
+// region navigation reaches through the dialog itself, and consent banners
+// (measured on a live news home) are exactly this shape.
 const LANDMARK =
-  'main, nav, header, footer, aside, form[aria-label], form[aria-labelledby], ' +
+  'main, nav, aside, form[aria-label], form[aria-labelledby], ' +
+  'header:not(:is(article, aside, main, nav, section) header), ' +
+  'footer:not(:is(article, aside, main, nav, section) footer), ' +
   'section[aria-label], section[aria-labelledby], [role="main"], [role="navigation"], ' +
   '[role="banner"], [role="contentinfo"], [role="complementary"], [role="region"], ' +
-  '[role="search"], [role="form"], [role="dialog"]';
+  '[role="search"], [role="form"], [role="dialog"], [role="alertdialog"]';
 
 export default {
   id: 'region',
@@ -29,8 +38,12 @@ export default {
     // Any perceivable content counts, not just text — but only content in
     // the accessibility tree: decorative images (alt="", presentation) and
     // unnamed inline svg are invisible to AT, so they can't be "unreachable".
+    // Bare form controls belong here too: an input has no text of its own,
+    // yet it is exactly the content a region-navigating user needs to reach
+    // (a booking form outside every landmark was invisible to this rule).
     const isMedia = element.matches(
-      'img:not([alt=""]):not([role="presentation"]):not([role="none"]), svg[role="img"], video, audio, canvas, iframe',
+      'img:not([alt=""]):not([role="presentation"]):not([role="none"]), svg[role="img"], video, audio, canvas, iframe, ' +
+        'input:not([type="hidden"]), select, textarea, button',
     );
     if (!ownText(element) && !isMedia) return { status: 'pass' };
     if (element.closest(LANDMARK)) return { status: 'pass' };

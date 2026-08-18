@@ -1,3 +1,5 @@
+import { collectRoots } from '../../lib/dom.js';
+
 export default {
   id: 'landmark-one-main',
   name: 'One main landmark',
@@ -9,8 +11,14 @@ export default {
   visibleOnly: false,
   evaluate(element, { isVisible }) {
     // Hidden mains (responsive/SPA double-renders kept display:none) are
-    // not exposed and must not count as duplicates.
-    const count = [...element.ownerDocument.querySelectorAll('main, [role="main"]')].filter(isVisible).length;
+    // not exposed and must not count as duplicates. The count spans every
+    // open shadow root: a web-component SPA whose only <main> renders
+    // inside its app shell's shadow tree HAS a main (measured on a live
+    // archive home, where the light-DOM-only count reported a false
+    // "no main" on a page whose shadow main is plainly exposed).
+    const count = collectRoots(element.ownerDocument)
+      .flatMap((root) => [...root.querySelectorAll('main, [role="main"]')])
+      .filter(isVisible).length;
     if (count === 1) return { status: 'pass' };
     return {
       status: 'fail',
