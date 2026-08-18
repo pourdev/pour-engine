@@ -211,7 +211,26 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     // usually) belongs to the name rules, not to size judgment. Pointer-
     // invisible targets (clipped skip links etc.) are excluded the same
     // way, on both sides of the crowding test.
-    const laidOut = rects.map((r, i) => r.width > 0 && r.height > 0 && !isHiddenFromPointer(elements[i], r));
+    //
+    // Content-visibility-skipped subtrees have PLACEHOLDER geometry, not
+    // geometry: an offscreen article under content-visibility:auto skips
+    // layout, its 40×40 icon buttons measure 12×12 and stack on top of each
+    // other, and the rule read that as "tiny AND crowded" (measured live on
+    // a long-feed blog home: the same button is 40×40 the moment it scrolls
+    // into view). The browser itself knows the difference — checkVisibility
+    // with contentVisibilityAuto reports skipped subtrees as not visible —
+    // so those targets are unmeasurable in this state and sit out of the
+    // judgment AND the crowding field. Engines that don't recognise the
+    // option ignore unknown keys and behave as before.
+    const layoutSkipped = (element) => {
+      try {
+        return typeof element.checkVisibility === 'function'
+          && element.checkVisibility({ visibilityProperty: true })
+          && !element.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true });
+      } catch { return false; }
+    };
+    const laidOut = rects.map((r, i) =>
+      r.width > 0 && r.height > 0 && !isHiddenFromPointer(elements[i], r) && !layoutSkipped(elements[i]));
     const undersized = rects.map((r, i) => laidOut[i] && (r.width < min || r.height < min));
     // One rect fully inside another is one control drawn twice (stretched-
     // link cards, overlay + inner button) — not two targets crowding.
