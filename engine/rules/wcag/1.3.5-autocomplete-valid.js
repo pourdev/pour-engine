@@ -1,17 +1,19 @@
 // WCAG SC 1.3.5 Identify Input Purpose (Level AA)
 // WCAG 1.3.5: autocomplete tokens from the HTML spec's input-purposes list.
+// Membership set, so order is free: kept a-z rather than mirroring the spec
+// table's own sequence.
 const TOKENS = new Set([
-  'on', 'off', 'name', 'honorific-prefix', 'given-name', 'additional-name', 'family-name',
-  'honorific-suffix', 'nickname', 'organization-title', 'username', 'new-password',
-  'current-password', 'one-time-code', 'organization', 'street-address', 'address-line1',
-  'address-line2', 'address-line3', 'address-level1', 'address-level2', 'address-level3',
-  'address-level4', 'country', 'country-name', 'postal-code', 'cc-name', 'cc-given-name',
-  'cc-additional-name', 'cc-family-name', 'cc-number', 'cc-exp', 'cc-exp-month', 'cc-exp-year',
-  'cc-csc', 'cc-type', 'transaction-currency', 'transaction-amount', 'language', 'bday',
-  'bday-day', 'bday-month', 'bday-year', 'sex', 'url', 'photo', 'tel', 'tel-country-code',
-  'tel-national', 'tel-area-code', 'tel-local', 'tel-local-prefix', 'tel-local-suffix',
-  'tel-extension', 'email', 'impp', 'webauthn', 'shipping', 'billing', 'home', 'work',
-  'mobile', 'fax', 'pager',
+  'additional-name', 'address-level1', 'address-level2', 'address-level3', 'address-level4',
+  'address-line1', 'address-line2', 'address-line3', 'bday', 'bday-day', 'bday-month',
+  'bday-year', 'billing', 'cc-additional-name', 'cc-csc', 'cc-exp', 'cc-exp-month',
+  'cc-exp-year', 'cc-family-name', 'cc-given-name', 'cc-name', 'cc-number', 'cc-type',
+  'country', 'country-name', 'current-password', 'email', 'family-name', 'fax', 'given-name',
+  'home', 'honorific-prefix', 'honorific-suffix', 'impp', 'language', 'mobile', 'name',
+  'new-password', 'nickname', 'off', 'on', 'one-time-code', 'organization',
+  'organization-title', 'pager', 'photo', 'postal-code', 'sex', 'shipping', 'street-address',
+  'tel', 'tel-area-code', 'tel-country-code', 'tel-extension', 'tel-local', 'tel-local-prefix',
+  'tel-local-suffix', 'tel-national', 'transaction-amount', 'transaction-currency', 'url',
+  'username', 'webauthn', 'work',
 ]);
 
 export default {
