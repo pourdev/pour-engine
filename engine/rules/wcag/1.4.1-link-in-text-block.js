@@ -26,20 +26,31 @@ export default {
     if (ownText(parent).replace(/\s+/g, '').length < 10) return { status: 'pass' };
 
     const style = getComputedStyle(element);
-    if ((style.textDecorationLine ?? style.textDecoration ?? '').includes('underline')) return { status: 'pass' };
-    // Underline substitutes count as non-colour cues too: border-bottom
-    // "underlines", box-shadow underlines, and background chips/pills all
-    // mark the link by shape, not colour alone.
-    if (parseFloat(style.borderBottomWidth) > 0 && style.borderBottomStyle !== 'none') return { status: 'pass' };
-    if (style.boxShadow && style.boxShadow !== 'none') return { status: 'pass' };
-    const ownBackground = parseColor(style.backgroundColor);
-    if (ownBackground && ownBackground.a > 0) return { status: 'pass' };
-    if (style.backgroundImage !== 'none') return { status: 'pass' }; // gradient/image underline technique
-
-    // A clear weight difference is a non-colour distinction too.
     const parentStyle = getComputedStyle(parent);
     const weight = (s) => parseInt(s.fontWeight, 10) || 400;
-    if (Math.abs(weight(style) - weight(parentStyle)) >= 300) return { status: 'pass' };
+    // A cue counts wherever it is painted: sites routinely reset
+    // text-decoration on the anchor and underline (or embolden) an inner
+    // span that carries the text, so every visible text-bearing element in
+    // the link vouches, not just the anchor. The >1px rect floor keeps
+    // 1×1 sr-only clip spans from vouching for a cue nobody can see.
+    const cueBearers = [style];
+    for (const el of element.querySelectorAll('*')) {
+      if (!el.textContent.trim()) continue;
+      if ([...el.getClientRects()].some((r) => r.width > 1 && r.height > 1)) cueBearers.push(getComputedStyle(el));
+    }
+    for (const s of cueBearers) {
+      if ((s.textDecorationLine ?? s.textDecoration ?? '').includes('underline')) return { status: 'pass' };
+      // Underline substitutes count as non-colour cues too: border-bottom
+      // "underlines", box-shadow underlines, and background chips/pills all
+      // mark the link by shape, not colour alone.
+      if (parseFloat(s.borderBottomWidth) > 0 && s.borderBottomStyle !== 'none') return { status: 'pass' };
+      if (s.boxShadow && s.boxShadow !== 'none') return { status: 'pass' };
+      const ownBackground = parseColor(s.backgroundColor);
+      if (ownBackground && ownBackground.a > 0) return { status: 'pass' };
+      if (s.backgroundImage !== 'none') return { status: 'pass' }; // gradient/image underline technique
+      // A clear weight difference is a non-colour distinction too.
+      if (Math.abs(weight(s) - weight(parentStyle)) >= 300) return { status: 'pass' };
+    }
 
     const linkColor = parseColor(style.color);
     const textColor = parseColor(parentStyle.color);
