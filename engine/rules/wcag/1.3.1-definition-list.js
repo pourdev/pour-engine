@@ -11,12 +11,28 @@ export default {
   selector: 'dl:not([role])', // a role attribute replaces the dl semantics
   evaluate(element) {
     const invalid = [...element.children].filter((child) => !ALLOWED.has(child.tagName));
-    if (!invalid.length) return { status: 'pass' };
-    const tags = [...new Set(invalid.map((child) => `<${child.tagName.toLowerCase()}>`))].join(', ');
-    return {
-      status: 'fail',
-      message: `This <dl> contains ${tags} directly — only <dt>, <dd> (optionally grouped in <div>) are allowed, otherwise the term/description pairing breaks.`,
-      fix: 'Restructure the list into <dt>/<dd> pairs, or use a different element.',
-    };
+    if (invalid.length) {
+      const tags = [...new Set(invalid.map((child) => `<${child.tagName.toLowerCase()}>`))].join(', ');
+      return {
+        status: 'fail',
+        message: `This <dl> contains ${tags} directly — only <dt>, <dd> (optionally grouped in <div>) are allowed, otherwise the term/description pairing breaks.`,
+        fix: 'Restructure the list into <dt>/<dd> pairs, or use a different element.',
+      };
+    }
+    // A <div> child is only a valid wrapper when it holds the dt/dd group
+    // ITSELF (HTML: each div contains one or more dt followed by one or
+    // more dd). Pairs buried another level down (dl > div > div > dt) fall
+    // out of the dl's content model, so the term/description association is
+    // no longer guaranteed to assistive technology.
+    const emptyWrappers = [...element.children].filter((child) =>
+      child.tagName === 'DIV' && ![...child.children].some((inner) => inner.tagName === 'DT' || inner.tagName === 'DD'));
+    if (emptyWrappers.length) {
+      return {
+        status: 'fail',
+        message: `${emptyWrappers.length} <div> wrapper(s) in this <dl> hold no <dt>/<dd> directly — the term/description pairing breaks when the pairs sit deeper than the wrapper.`,
+        fix: 'Make each <div> child of the <dl> contain its <dt>/<dd> pair directly, or flatten the pairs into the <dl> itself.',
+      };
+    }
+    return { status: 'pass' };
   },
 };

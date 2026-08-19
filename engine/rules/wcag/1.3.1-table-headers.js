@@ -26,11 +26,13 @@ export default {
     if (!isGrid || textCells < 4) return { status: 'pass' }; // likely layout or trivial
     // Nested tables are the signature of legacy LAYOUT markup, not data —
     // asserting "missing headers" there flags email-style scaffolding. A
-    // human can tell in a glance; the machine can't.
-    if (!element.querySelector('th') && element.querySelector('table')) {
+    // human can tell in a glance; the machine can't. The signature reads in
+    // both directions: a table INSIDE another table (Hacker News's story
+    // list inside its page-scaffold table) is the same legacy layout.
+    if (!element.querySelector('th') && (element.querySelector('table') || element.parentElement?.closest('table'))) {
       return {
         status: 'incomplete',
-        message: 'This table has no header cells but contains nested tables — a layout-table signature. If it really presents data, mark its header cells with <th>; if it is layout scaffolding, add role="presentation".',
+        message: 'This table has no header cells and is part of a nested-table structure — a layout-table signature. If it really presents data, mark its header cells with <th>; if it is layout scaffolding, add role="presentation".',
       };
     }
 

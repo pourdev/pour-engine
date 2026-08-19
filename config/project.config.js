@@ -6,6 +6,6 @@
 export default {
   engine: {
     name: 'pour engine',
-    version: '1.31.3',
+    version: '1.32.0',
   },
 };
