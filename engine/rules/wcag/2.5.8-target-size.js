@@ -98,7 +98,22 @@ function reachableRects(element, rect) {
     if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) continue;
     const stack = doc.elementsFromPoint(x, y);
     const index = stack.indexOf(element);
-    if (index < 0) continue; // this fragment isn't hit-testable; try the next
+    if (index < 0) {
+      // The probe ran and the stack came back without the element.
+      // elementsFromPoint reports covered elements too, so for a light-DOM
+      // element this is not don't-know but a definitive no: nothing at this
+      // point accepts a pointer for it. The sr-only WRAPPER pattern makes
+      // exactly this shape — the clipped 1×1 box is the wrapper, the skip
+      // link inside keeps its full-size rect, and every self-applied hiding
+      // check (own rect, own opacity, own clip) passes; that phantom rect
+      // crowded frame.work's 160×21 header wordmark out of the spacing
+      // exception its layout plainly earns. Shadow-tree elements are
+      // invisible to the document's hit-test by design (the stack shows
+      // their host), so absence proves nothing there and the fragment keeps
+      // the benefit of the doubt.
+      if (element.getRootNode() === doc) testable = true;
+      continue;
+    }
     testable = true;
     // Anything above it that is part of the same control is not an
     // obstruction: a button's own icon paints over the button, an overlay
@@ -107,9 +122,9 @@ function reachableRects(element, rect) {
       reachable.push(fragment);
     }
   }
-  // Nothing could be probed at all (entirely out of viewport,
-  // pointer-events: none, nothing laid out): the OCCLUSION question is
-  // unanswerable, and don't-know must not silence a finding — but the
+  // Nothing could be probed at all (entirely out of viewport, or a
+  // shadow-tree element the document's hit-test cannot see): the OCCLUSION
+  // question is unanswerable, and don't-know must not silence a finding — but the
   // fragment GEOMETRY is measurable regardless, so the fragments stand,
   // never the bounding box. A wrapped link's box is mostly leading and
   // line-gap no pointer can activate; counting that empty space as

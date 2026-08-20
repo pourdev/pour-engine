@@ -51,10 +51,37 @@ export default {
       // A clear weight difference is a non-colour distinction too.
       if (Math.abs(weight(s) - weight(parentStyle)) >= 300) return { status: 'pass' };
     }
+    // A weight step of 200–299 (600-semibold links in 400 prose, the common
+    // case) is a REAL non-colour cue, just not a clear one: whether it reads
+    // as "bolded" (F73's word) depends on the face and the size, which is a
+    // judgment by eye, not arithmetic. Adjudicated on the 2026-08-16 corpus
+    // run (PostgreSQL ×32, visibly semibold): asserting fail overclaims,
+    // passing waves through faces where the step is invisible — so it goes
+    // to review. Below 200 the step is imperceptible at body sizes and earns
+    // nothing.
+    const weightStep = Math.max(...cueBearers.map((s) => Math.abs(weight(s) - weight(parentStyle))));
 
     const linkColor = parseColor(style.color);
     const textColor = parseColor(parentStyle.color);
     if (!linkColor || !textColor) return { status: 'pass' };
+
+    // A link styled to look NO different from the surrounding prose is not
+    // a 1.4.1 failure — Understanding 1.4.1, in its own words: "a hyperlink
+    // which has been styled to appear no different than neighboring static
+    // text would not fail this success criterion, as there would be no
+    // color differentiation between the actionable hyperlink text and the
+    // adjacent static text." Colour conveys nothing when there is no colour
+    // difference. A terrible link, but no WCAG criterion requires links to
+    // look like links, and asserting one invents spec text (measured live:
+    // hsbc.co.uk's footer, rgb(215,216,214) on both link and prose).
+    // Channel equality, NOT the luminance ratio: a hue-only difference at
+    // equal luminance also lands at 1.00:1, and that is the clearest F73
+    // failure there is — the two cases are opposites and the ratio cannot
+    // tell them apart.
+    if (linkColor.r === textColor.r && linkColor.g === textColor.g
+      && linkColor.b === textColor.b && (linkColor.a ?? 1) === (textColor.a ?? 1)) {
+      return { status: 'pass' };
+    }
 
     const ratio = contrastRatio(linkColor, textColor);
     // WCAG technique G183: 3:1 against the surrounding text is a sufficient
@@ -89,6 +116,13 @@ export default {
       }
       if (!sharesLine) return { status: 'pass' };
     }
+    if (weightStep >= 200) {
+      return {
+        status: 'incomplete',
+        message: `This link has no underline and only ${ratio.toFixed(2)}:1 colour difference from the surrounding text, but its font weight differs from the prose by ${weightStep}: a visible non-colour cue that falls short of a clear bold step. Judge by eye whether the weight alone identifies it as a link in this face and size; if it does not, this fails SC 1.4.1.`,
+        fix: 'Underline links inside text (text-decoration: underline), raise the weight difference to a clear bold step, or add another non-colour indicator.',
+      };
+    }
     return {
       status: 'fail',
       // The measured fact is the ratio against G183's threshold, and that is
@@ -97,7 +131,7 @@ export default {
       // staying perfectly distinct to most people, including most red-green
       // colour blindness, where the red darkens and the gap widens.
       message: ratio < 1.01
-        ? 'This link has no underline and the same colour as the surrounding text, so there is nothing at all to mark it as a link.'
+        ? 'This link has no underline and its colour differs from the surrounding text in hue alone, with no luminance difference: the distinction disappears entirely without colour vision, the exact failure F73 describes.'
         : `This link has no underline and only ${ratio.toFixed(2)}:1 colour difference from the surrounding text, below the 3:1 WCAG technique G183 asks for when colour is the only thing marking a link.`,
       fix: 'Underline links inside text (text-decoration: underline), or add a non-colour indicator.',
     };

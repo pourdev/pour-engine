@@ -68,7 +68,7 @@ export default {
     const names = disallowed.map((n) => `aria-${n}`);
     return {
       status: 'incomplete',
-      message: `${names.join(', ')} is not supported on role "${role}", so the browser drops it and assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. Does this element really have that state? If it does, it is invisible to a screen reader and this is a 4.1.2 failure. If it does not, the attribute is simply stray and no one is affected.`,
+      message: `${names.join(', ')} is not supported on role "${role}", so the browser drops it and assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. Does this element really have that state? If it does, it is invisible to a screen reader and this is a 4.1.2 failure. If it does not, the attribute is simply stray and no one is affected. Invalid markup is not by itself a WCAG failure: the criterion that policed validity, 4.1.1 Parsing, was removed in WCAG 2.2 (w3.org/WAI/WCAG22/Understanding/parsing.html), so what decides this is whether the state reaches users, not the syntax.`,
       fix: `Move ${names.join('/')} to the element whose role supports it, usually the control that toggles this one, or remove it if the element has no such state. Adding a role to this element to make the attribute legal is rarely right: the host language restricts which roles each element may take.`,
     };
   },
