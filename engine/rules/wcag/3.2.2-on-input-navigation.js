@@ -16,7 +16,12 @@
 // Writes and calls only: reading location (analytics, hash checks) is not
 // navigation, so the pattern demands an assignment to location or one of
 // the navigating members/calls.
-const NAVIGATES = /\blocation\s*(=|\.\s*(href|assign|replace|reload))|\.(submit|requestSubmit)\s*\(|window\.open\s*\(/;
+// The href branch demands an assignment too (2026-08-25 overnight audit):
+// `location.href` READ as an argument (track(location.href, …)) matched the
+// old pattern, so an analytics handler was reported as navigation. Now
+// `location =`, `location.href =` (or `+=`) write, and assign / replace /
+// reload must be called.
+const NAVIGATES = /\blocation\s*(\+?=(?!=)|\.\s*(href\s*\+?=(?!=)|(assign|replace|reload)\s*\())|\.(submit|requestSubmit)\s*\(|window\.open\s*\(/;
 
 export default {
   id: 'on-input-navigation',
@@ -35,13 +40,18 @@ export default {
         fix: 'Trigger navigation from activation (click/Enter), never from focus.',
       };
     }
-    const onchange = element.getAttribute('onchange') ?? element.getAttribute('oninput');
-    if (onchange && NAVIGATES.test(onchange)) {
-      return {
-        status: 'incomplete',
-        message: 'Changing this control appears to navigate or submit (its onchange handler reaches for location/submit). WCAG 3.2.2 allows that only when users are told beforehand — check the page says so before the control.',
-        fix: 'Describe the behaviour before the control, or navigate from an explicit Go button instead of the change event.',
-      };
+    // Both change-shaped events are read on their own (2026-08-25 overnight
+    // audit): a harmless onchange used to hide a submitting oninput, and F36
+    // applies whichever event fires the submit.
+    for (const attr of ['onchange', 'oninput']) {
+      const handler = element.getAttribute(attr);
+      if (handler && NAVIGATES.test(handler)) {
+        return {
+          status: 'incomplete',
+          message: `Changing this control appears to navigate or submit (its ${attr} handler reaches for location/submit). WCAG 3.2.2 allows that only when users are told beforehand: check the page says so before the control.`,
+          fix: 'Describe the behaviour before the control, or navigate from an explicit Go button instead of the change event.',
+        };
+      }
     }
     return { status: 'pass' };
   },

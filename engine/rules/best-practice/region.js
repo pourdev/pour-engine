@@ -4,14 +4,18 @@
 // Divs do NOT demote — a header wrapped in plain divs is still a banner.
 // role="alertdialog" joins dialog: both are modal containers whose content
 // region navigation reaches through the dialog itself, and consent banners
-// (measured on a live news home) are exactly this shape.
+// (measured on a live news home) are exactly this shape. The native
+// <dialog> element has the same implicit role and the same policy; only a
+// showing one (the open attribute is set by show() and showModal()) counts,
+// so a closed dialog cannot make a landmark-less page look landmarked
+// (2026-08-25 overnight audit).
 const LANDMARK =
   'main, nav, aside, form[aria-label], form[aria-labelledby], ' +
   'header:not(:is(article, aside, main, nav, section) header), ' +
   'footer:not(:is(article, aside, main, nav, section) footer), ' +
   'section[aria-label], section[aria-labelledby], [role="main"], [role="navigation"], ' +
   '[role="banner"], [role="contentinfo"], [role="complementary"], [role="region"], ' +
-  '[role="search"], [role="form"], [role="dialog"], [role="alertdialog"]';
+  '[role="search"], [role="form"], [role="dialog"], [role="alertdialog"], dialog[open]';
 
 export default {
   id: 'region',

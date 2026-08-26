@@ -22,17 +22,19 @@
 // grid-auto-flow: dense) reorders without `order` or `*-reverse` and is not
 // treated as evidence. Both are honest gaps to widen later with measured
 // cases, not silently.
-const FLEXGRID = /^(inline-)?(flex|grid)$/;
+export const FLEXGRID = /^(inline-)?(flex|grid)$/;
 
 /** DOM-order focusable children grouped per flex/grid parent. */
-function tabbable(element) {
+export function tabbable(element) {
   if (element.disabled || element.tabIndex < 0) return false;
   return true;
 }
 
 /** Visual reading order of sibling rects: group into rows by vertical
- *  overlap, rows top-to-bottom, within a row along the inline direction. */
-function visualSequence(entries, rightToLeft) {
+ *  overlap, rows top-to-bottom, within a row along the inline direction.
+ *  Shared with 1.3.2's reading-order rule — same geometry, different
+ *  audience (Tab order there, screen-reader reading order here). */
+export function visualSequence(entries, rightToLeft) {
   const rows = [];
   for (const entry of [...entries].sort((a, b) => a.rect.top - b.rect.top)) {
     const row = rows.find((candidates) => {

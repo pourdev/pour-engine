@@ -43,6 +43,17 @@ function keyframesBlink(keyframes) {
   return opacities.some((value) => value <= 0.25) && opacities.some((value) => value >= 0.75);
 }
 
+/** Does a pseudo-element's generated content put TEXT on the screen? A
+ *  quoted string with something in it, an attr() or counter() value, or
+ *  quotes do; "none", "normal", the empty string and url() images do not. */
+function generatedText(content) {
+  if (!content || content === 'none' || content === 'normal') return false;
+  const withoutImages = content.replace(/url\([^)]*\)/g, '');
+  const strings = withoutImages.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g) ?? [];
+  if (strings.some((string) => string.slice(1, -1).trim())) return true;
+  return /\b(?:attr|counters?)\(|(?:open|close)-quote/.test(withoutImages);
+}
+
 /**
  * Elements that an endlessly repeating animation is currently moving,
  * mapped to the evidence. One document-wide getAnimations() call, never one
@@ -69,9 +80,21 @@ function endlesslyMoving(doc) {
     try { keyframes = effect.getKeyframes(); } catch { continue; }
     const moves = keyframesMove(keyframes);
     if (!moves && !keyframesBlink(keyframes)) continue;
-    // A pseudo-element's motion is still the host element's motion.
+    // A pseudo-element's motion is still the host element's motion, but
+    // the text gate belongs to the pseudo-element: a ::after spinner on a
+    // button labelled "Saving" carries no text of its own, so it is the
+    // text-free indicator this rule leaves alone, whatever the host says.
+    // One getComputedStyle per endless pseudo animation, never per element
+    // (2026-08-25 overnight audit).
+    let pseudoText = false;
+    if (effect.pseudoElement) {
+      let content = '';
+      try { content = target.ownerDocument.defaultView.getComputedStyle(target, effect.pseudoElement).content; } catch { /* detached */ }
+      if (!generatedText(content)) continue;
+      pseudoText = true;
+    }
     if (!moving.has(target)) {
-      moving.set(target, { name: animation.animationName, verb: moves ? 'moves' : 'blinks' });
+      moving.set(target, { name: animation.animationName, verb: moves ? 'moves' : 'blinks', pseudoText });
     }
   }
   return moving;
@@ -107,7 +130,7 @@ export default {
         };
       }
       const animation = moving.get(element);
-      if (!animation || !element.textContent.trim()) return { status: 'pass' };
+      if (!animation || !(animation.pseudoText || element.textContent.trim())) return { status: 'pass' };
       const named = animation.name ? ` (the “${animation.name}” animation)` : '';
       return {
         status: 'incomplete',

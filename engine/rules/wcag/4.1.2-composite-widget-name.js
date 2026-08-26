@@ -8,6 +8,10 @@
 // The container roles (tablist, menu, listbox, tree) are name-recommended
 // rather than required and are deliberately not judged here; the items are
 // where the binary, assertable failure lives.
+import { effectiveRole } from '../../lib/roles.js';
+
+const ITEM_ROLES = new Set(['tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'treeitem']);
+
 export default {
   id: 'composite-widget-name',
   name: 'Widget item names',
@@ -17,13 +21,15 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: '[role="tab"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="treeitem"]',
   evaluate(element, { accessibleName }) {
-    // <button role="tab"> and <a href role="tab"> are already selected by
-    // button-name/link-name (their selectors match the tag regardless of
-    // the role override) — one nameless control must not become two
-    // findings, so this rule owns only the div/span/li-style hosts.
-    if (element.matches('button, a[href], input, select, textarea, summary')) return { status: 'pass' };
+    // This rule owns every element whose EFFECTIVE role is one of the six,
+    // <button role="tab"> and <a href role="tab"> included: button-name and
+    // link-name defer to the effective role since 2026-08-25 (overnight
+    // audit), so the tab wording now reaches the tab, and one nameless
+    // control still yields one finding. A host whose role resolves elsewhere
+    // (presentation discarded back to a native role, say) is not ours.
+    const role = effectiveRole(element);
+    if (!ITEM_ROLES.has(role)) return { status: 'pass' };
     if (accessibleName(element)) return { status: 'pass' };
-    const role = element.getAttribute('role');
     return {
       status: 'fail',
       message: `This ${role} has no accessible name — a screen reader announces an unnamed ${role}, and users cannot tell what choosing it does.`,

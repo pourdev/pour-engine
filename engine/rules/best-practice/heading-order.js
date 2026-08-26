@@ -1,6 +1,7 @@
 import { effectiveRole } from '../../lib/roles.js';
 
-const level = (el) =>
+// Shared with page-heading-one so both rules agree on what level 1 is.
+export const level = (el) =>
   el.hasAttribute('aria-level')
     ? parseInt(el.getAttribute('aria-level'), 10)
     : parseInt(el.tagName[1], 10) || 2; // role="heading" without aria-level defaults to 2

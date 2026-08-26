@@ -11,7 +11,8 @@ export default {
     // Judge the FLAT-tree parent — what assistive technology actually sees:
     // a slotted <li> belongs to the <ul> around its slot, and an <li> at the
     // top of a shadow tree belongs to its host element.
-    let parent = element.assignedSlot?.parentElement ?? element.parentElement ?? element.getRootNode()?.host;
+    const flatParent = (el) => el.assignedSlot?.parentElement ?? el.parentElement ?? el.getRootNode()?.host;
+    let parent = flatParent(element);
     while (parent?.tagName === 'SLOT') parent = parent.assignedSlot?.parentElement ?? parent.parentElement;
     // List ownership passes through presentation/none wrappers and
     // role-less div/span grouping wrappers (generic nodes) — an <li> in a
@@ -32,16 +33,31 @@ export default {
       if (el.matches('ul, ol, menu')) return !role || ['list', 'presentation', 'none'].includes(role);
       return role === 'list';
     };
-    while (parent && !listContainer(parent) && (
-      ['presentation', 'none'].includes(parent.getAttribute('role') ?? '')
-      || (!parent.hasAttribute('role') && (parent.tagName === 'DIV' || parent.tagName === 'SPAN'))
-    )) {
-      parent = parent.assignedSlot?.parentElement ?? parent.parentElement ?? parent.getRootNode()?.host;
-    }
+    const transparent = (el) => ['presentation', 'none'].includes(el.getAttribute('role') ?? '')
+      || (!el.hasAttribute('role') && (el.tagName === 'DIV' || el.tagName === 'SPAN'));
+    while (parent && !listContainer(parent) && transparent(parent)) parent = flatParent(parent);
     if (parent && listContainer(parent)) return { status: 'pass' };
     const parentLabel = parent
       ? `<${parent.tagName.toLowerCase()}${parent.getAttribute('role') ? ` role="${parent.getAttribute('role')}"` : ''}>`
       : 'nothing';
+    // A role="group" wrapper BETWEEN a list and its items: the list is
+    // there (Chromium exposes list > group > listitem), but ARIA 1.2 gives
+    // list one required owned element, listitem, so the group is not
+    // permitted in between and the items are no longer the list's own. The
+    // verdict stands; the old message blamed a missing list and the fix
+    // sent the author to add one that already existed (2026-08-25
+    // overnight audit).
+    if (parent?.getAttribute('role') === 'group') {
+      let above = flatParent(parent);
+      while (above && !listContainer(above) && (transparent(above) || above.getAttribute('role') === 'group')) above = flatParent(above);
+      if (above && listContainer(above)) {
+        return {
+          status: 'fail',
+          message: `This <li> sits inside ${parentLabel} within its list. A list may only own list items directly, and role="group" is not permitted between a list and its items, so screen readers lose the item's list context.`,
+          fix: 'Remove role="group" from the wrapper (a plain <div> keeps the items owned by the list), or move the group label onto the list element with aria-label.',
+        };
+      }
+    }
     return {
       status: 'fail',
       message: `This <li> sits inside ${parentLabel} — ${parent?.matches('ul, ol, menu') && parent.getAttribute('role')

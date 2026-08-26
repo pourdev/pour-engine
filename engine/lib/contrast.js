@@ -131,6 +131,7 @@ let mediaRectsCache = null;
 let panelRectsCache = null;
 let pseudoCache = new WeakMap();
 let zeroClipCache = new WeakMap();
+let firstLineRulesCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -141,6 +142,7 @@ export function resetAuditCaches() {
   panelRectsCache = null;
   pseudoCache = new WeakMap();
   zeroClipCache = new WeakMap();
+  firstLineRulesCache = new WeakMap();
 }
 
 /**
@@ -357,6 +359,87 @@ export function cumulativeOpacity(element) {
     opacityCache.set(element, cached);
   }
   return cached;
+}
+
+/** One node's own opacity at rest: the landing value of a running
+ *  animation on it, otherwise its computed opacity. */
+function nodeRestingOpacity(node) {
+  const animators = opacityAnimators(node.ownerDocument);
+  if (animators.has(node)) {
+    const rest = animators.get(node);
+    return rest === null ? 1 : rest;
+  }
+  const value = parseFloat(getComputedStyle(node).opacity);
+  return Number.isFinite(value) ? value : 1;
+}
+
+/**
+ * The pair a viewer is presented with when the text sits inside an
+ * opacity group that also paints its own background.
+ *
+ * CSS group opacity renders an element and its subtree together, then
+ * blends that whole picture over what lies behind the element. Folding the
+ * opacity into the text colour alone and judging it against the group's
+ * own (undimmed) background describes a pair the page never paints: black
+ * text in a white card at opacity .5 over a mid-grey page is presented as
+ * rgb(64) on rgb(191), 5.6:1, while "half-black on white" scores 3.97:1.
+ *
+ * Walks the flat tree from the text to the OUTERMOST node with opacity
+ * below 1, compositing each node's background beneath the accumulated text
+ * and background pixels and then scaling both by that node's opacity, which
+ * is exactly the order the renderer applies. The result is composited over
+ * the background resolved behind the outermost carrier.
+ *
+ * Returns null when the chain carries no opacity, or no background paint
+ * inside the group (the old text-only blend is then correct), or paint this
+ * arithmetic cannot follow (an image, a blend mode, a filter inside the
+ * group). Returns { unresolved: true, opacity } when the backdrop behind the
+ * carrier is itself an image: the pair is then a human call, not a guess.
+ * Otherwise { foreground, background, opacity, text, paint }: the presented
+ * pair (both opaque) and the group's own pixels before compositing.
+ * (2026-08-25 overnight audit, defect 1.)
+ */
+export function opacityGroupPaint(element, foreground) {
+  const flatParent = (node) => node.parentElement ?? node.getRootNode()?.host ?? null;
+  let top = null;
+  let opacity = 1;
+  for (let node = element; node && node.nodeType === 1; node = flatParent(node)) {
+    const own = nodeRestingOpacity(node);
+    if (own < 1) { top = node; opacity *= own; }
+  }
+  if (!top) return null;
+  let text = { ...foreground };
+  let paint = { r: 0, g: 0, b: 0, a: 0 };
+  let painted = false;
+  for (let node = element; node && node.nodeType === 1; node = flatParent(node)) {
+    const style = getComputedStyle(node);
+    if (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage)) return null;
+    if ((style.mixBlendMode && style.mixBlendMode !== 'normal')
+      || (style.filter && style.filter !== 'none')
+      || (style.backdropFilter && style.backdropFilter !== 'none')) return null;
+    const color = parseColor(style.backgroundColor);
+    if (color && color.a > 0) {
+      // A node's background lies beneath its content and inside its own
+      // opacity group, so it composites in before that group's alpha applies.
+      text = composite(text, color);
+      paint = composite(paint, color);
+      painted = true;
+    }
+    const own = nodeRestingOpacity(node);
+    if (own < 1) {
+      text = { ...text, a: text.a * own };
+      paint = { ...paint, a: paint.a * own };
+    }
+    if (node === top) break;
+  }
+  if (!painted) return null;
+  const behindNode = flatParent(top);
+  const behind = behindNode ? effectiveBackground(behindNode) : canvasColor(element.ownerDocument);
+  if (!behind) return { unresolved: true, opacity };
+  // `text` and `paint` are the group's own rendered pixels, alpha intact,
+  // so a caller can re-present the pair over a different backdrop (an
+  // overlapping panel the walk cannot see) without walking again.
+  return { foreground: composite(text, behind), background: composite(paint, behind), opacity, text, paint };
 }
 
 /**
@@ -805,17 +888,26 @@ export function paintedBackdrop(element) {
   // the stack. Its background-image was already adjudicated upstream by the
   // image-sampling path, so only its colour participates here.
   let acc = null;
+  // The translucent layers met on the way down, nearest the text first, in
+  // the shape backgroundImageSource hands out as `overlays`. When the walk
+  // ends on an image they are the paint BETWEEN the image and the glyphs
+  // (the hero pattern: a photo as <img>, a 70% black scrim div, a white
+  // heading), and the sampled pixels must be seen through them. Dropping
+  // them judged the raw photo and failed text that sat on the dimmed one.
+  // (2026-08-25 overnight audit, defect 2.)
+  const overlays = [];
   const own = parseColor(getComputedStyle(element).backgroundColor);
   if (own && own.a > 0) {
     if (own.a >= 1) return { color: own, scrim };
     acc = own;
+    overlays.push(own);
   }
   if (start === -1) return 'unresolved';
   for (const layer of stack.slice(start + 1)) {
     // Replaced elements paint their content, not a background — a photo or
     // video in the stack is an image backdrop whatever its styles say.
     if (/^(img|video|canvas|svg|picture|object|embed|iframe)$/i.test(layer.tagName)) {
-      return { image: layer, scrim };
+      return { image: layer, scrim, overlays };
     }
     const style = getComputedStyle(layer);
     // A shadow HOST in the stack hides its shadow tree from the hit-test
@@ -846,7 +938,7 @@ export function paintedBackdrop(element) {
       // layer paints is a reason to ask a human, never to rule it out.
       const covers = (r) => !r
         || (point.x >= r.left && point.x < r.right && point.y >= r.top && point.y < r.bottom);
-      if (!rects.length || rects.some(covers)) return { image: layer, scrim };
+      if (!rects.length || rects.some(covers)) return { image: layer, scrim, overlays };
     }
     let color = parseColor(style.backgroundColor);
     if (!color) return 'unresolved';
@@ -857,6 +949,7 @@ export function paintedBackdrop(element) {
     if (color.a === 0) continue;
     acc = acc ? composite(acc, color) : color;
     if (acc.a >= 1) return { color: acc, scrim };
+    overlays.push(color);
   }
   // Every layer was translucent: the canvas shows through underneath.
   const canvas = canvasColor(doc);
@@ -1085,8 +1178,37 @@ const overlayKey = (overlays) =>
  * one. Cached per URL.
  */
 const imageRangeCache = new Map();
-export function imageLuminanceRange(url, overlays = []) {
-  const cacheKey = overlays.length ? `${url}|${overlayKey(overlays)}` : url;
+/** The largest sampling grid an image is read through, per axis. Above it
+ *  the read is `reduced` (see sampleGridFor) and callers must not assert a
+ *  pass from the range: detail finer than the grid could hide under the
+ *  glyphs. A 1024-square read is a million samples, once per image. */
+const MAX_SAMPLE_AXIS = 1024;
+
+/**
+ * How finely to sample an image painted over `extent` CSS pixels: one sample
+ * per four painted pixels, never fewer than the historical 32 per axis, and
+ * capped at MAX_SAMPLE_AXIS. A 32-square read of a 1024px hero averaged
+ * every 32x32 block into one value, so 16px black squares in a white image
+ * (logos, lettering, texture, anything glyph-sized) vanished from the range
+ * and a pass was asserted from pixels that never contained them. Four
+ * painted pixels per sample is finer than a glyph stroke; whatever is
+ * narrower than that is the dither WCAG's relative-luminance Note 4 lets an
+ * average stand for. `reduced` says the cap bit, so the grid is coarser than
+ * that. (2026-08-25 overnight audit, defect 4.)
+ */
+export function sampleGridFor(extent) {
+  if (!extent || !(extent.width > 0) || !(extent.height > 0)) return null;
+  const axis = (value) => Math.min(MAX_SAMPLE_AXIS, Math.max(32, Math.ceil(value / 4)));
+  const width = axis(extent.width);
+  const height = axis(extent.height);
+  return { width, height, reduced: extent.width / width > 4.5 || extent.height / height > 4.5 };
+}
+
+export function imageLuminanceRange(url, overlays = [], grid = null) {
+  const width = grid?.width ?? 32;
+  const height = grid?.height ?? 32;
+  const sizeKey = width === 32 && height === 32 ? '' : `|${width}x${height}`;
+  const cacheKey = `${url}${overlays.length ? `|${overlayKey(overlays)}` : ''}${sizeKey}`;
   if (imageRangeCache.has(cacheKey)) return imageRangeCache.get(cacheKey);
   const promise = new Promise((resolve) => {
     const img = new Image();
@@ -1095,13 +1217,12 @@ export function imageLuminanceRange(url, overlays = []) {
     img.onload = () => {
       clearTimeout(timer);
       try {
-        const size = 32;
         const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0, size, size);
-        const data = ctx.getImageData(0, 0, size, size).data;
+        ctx.drawImage(img, 0, 0, width, height);
+        const data = ctx.getImageData(0, 0, width, height).data;
         let min = 1;
         let max = 0;
         // The colours at those extremes, kept for the same reason the
@@ -1143,8 +1264,13 @@ export function imageLuminanceRange(url, overlays = []) {
           resolve({ transparent: true, width: img.naturalWidth, height: img.naturalHeight });
           return;
         }
+        // `reduced`: the grid was capped below four painted pixels per sample
+        // AND the image really holds more pixels than the grid, so detail
+        // was averaged away. An icon stretched across a huge box loses
+        // nothing to the cap and is not flagged.
+        const reduced = Boolean(grid?.reduced) && (img.naturalWidth > width || img.naturalHeight > height);
         resolve(min <= max
-          ? { min, max, minColor, maxColor, hasAlpha: alphaSeen, width: img.naturalWidth, height: img.naturalHeight }
+          ? { min, max, minColor, maxColor, hasAlpha: alphaSeen, width: img.naturalWidth, height: img.naturalHeight, reduced }
           : null);
       } catch {
         resolve(null); // tainted canvas: cross-origin image without CORS headers
@@ -1260,7 +1386,10 @@ function splitLayers(value) {
 
 export function backgroundImagePaintRect(element, intrinsic) {
   const style = getComputedStyle(element);
-  if ((style.backgroundImage.match(/url\(|gradient\(/g) ?? []).length !== 1) return null;
+  // Layers are counted at the top level of the list: an SVG data URI that
+  // references a pattern with url(#p) inside itself is still one layer.
+  // (2026-08-25 overnight audit, defect 8.)
+  if (splitLayers(style.backgroundImage).filter((layer) => layer !== 'none').length !== 1) return null;
   const box = element.getBoundingClientRect();
   return imagePaintRectInBox(
     { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
@@ -1357,6 +1486,125 @@ export function gradientLuminanceRange(backgroundImageCss, overlays = []) {
   };
 }
 
+/** The layers of a computed background-image list, split on top-level
+ *  commas only: commas inside url() and gradient() belong to the layer. */
+export function splitBackgroundLayers(backgroundImageCss) {
+  return splitLayers(backgroundImageCss);
+}
+
+/**
+ * The URL inside one url() layer, or null when the layer is not a url().
+ * The whole layer is the function call, so the URL runs to the layer's own
+ * closing paren: a regex that stopped at the FIRST ")" cut an SVG data URI
+ * short at the url(#pattern) reference inside it, and the truncated image
+ * then failed to load. (2026-08-25 overnight audit, defect 8.)
+ */
+export function backgroundLayerUrl(layer) {
+  const match = /^url\(([\s\S]*)\)$/.exec((layer ?? '').trim());
+  if (!match) return null;
+  let inner = match[1].trim();
+  const quote = inner[0];
+  if ((quote === '"' || quote === "'") && inner.endsWith(quote)) {
+    inner = inner.slice(1, -1).replace(new RegExp(`\\\\${quote}`, 'g'), quote);
+  }
+  return inner;
+}
+
+/** Tokens that open a gradient argument without naming a colour: angles,
+ *  side keywords, shapes, positions and colour hints. */
+const GRADIENT_NON_COLOR = /^(?:(?:to|at|from|in|circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)\b|calc\(|-?\d|\.\d)/i;
+
+/**
+ * The colour stops of ONE gradient layer, every stop run through parseColor
+ * so modern syntaxes (oklch(), lab(), color()) count as stops instead of
+ * being skipped by an rgb()-only regex. Returns
+ *   { colors, unparsed, translucent, space }
+ * where `unparsed` counts stops no parser could read, `translucent` says at
+ * least one stop has alpha below 1 (the gradient reveals what is beneath
+ * it), and `space` names an interpolation colour space other than sRGB when
+ * the gradient declares one (in-between colours cannot then be computed by
+ * sRGB arithmetic). (2026-08-25 overnight audit, defect 8.)
+ */
+export function gradientStops(layer) {
+  const result = { colors: [], unparsed: 0, translucent: false, space: null };
+  const open = layer.indexOf('(');
+  const close = layer.lastIndexOf(')');
+  if (open === -1 || close <= open) return result;
+  for (const part of splitLayers(layer.slice(open + 1, close))) {
+    const space = /(?:^|\s)in\s+([a-z0-9-]+)/i.exec(part);
+    if (space && space[1].toLowerCase() !== 'srgb') result.space = space[1].toLowerCase();
+    // The colour token: the first function call in the part (rgb(), oklch(),
+    // color()...), read to its matching paren, or else the leading word.
+    let token = null;
+    const call = /([a-z][a-z0-9-]*)\(/i.exec(part);
+    if (call) {
+      let depth = 0;
+      for (let i = call.index; i < part.length; i++) {
+        if (part[i] === '(') depth += 1;
+        if (part[i] === ')') { depth -= 1; if (depth === 0) { token = part.slice(call.index, i + 1); break; } }
+      }
+    } else {
+      token = part.trim().split(/\s+/)[0] ?? '';
+    }
+    if (!token || GRADIENT_NON_COLOR.test(token)) continue;
+    // currentcolor survives into some computed serialisations and the canvas
+    // probe would happily paint it black: that is not a parse, it is a guess.
+    const color = /^currentcolor$/i.test(token) ? null : parseColor(token);
+    if (!color) { result.unparsed += 1; continue; }
+    if (color.a < 1) result.translucent = true;
+    result.colors.push(color);
+  }
+  return result;
+}
+
+/**
+ * Luminance range of ONE gradient layer, from the colours it actually
+ * paints: the interpolation between each pair of adjacent stops is sampled
+ * at `steps` points, not just its ends. Interpolated colours do NOT stay
+ * inside the stops' luminance range: sRGB interpolation trades the channels
+ * off against each other, and luminance is convex per channel, so a hue-
+ * crossing gradient (red to blue) is darkest in the middle, where black text
+ * that passes at both ends drops to 3.5:1. Sixteen steps per segment
+ * resolves that curve to well within the ratio's second decimal. Returns
+ * null when the stops cannot be sampled (unparseable, translucent, or a
+ * non-sRGB interpolation space); gradientStops() says which.
+ * Positions and colour hints are ignored: they move colours along the
+ * gradient line, they do not add or remove any, so the sampled set is the
+ * painted set (a hard stop paints fewer colours than sampled, which only
+ * ever widens the range, and a wider range asserts less).
+ * (2026-08-25 overnight audit, defect 3.)
+ */
+export function sampledGradientRange(layer, overlays = [], steps = 16) {
+  const { colors, unparsed, translucent, space } = gradientStops(layer);
+  if (!colors.length || unparsed || translucent || space) return null;
+  const samples = [];
+  if (colors.length === 1) samples.push(colors[0]);
+  for (let i = 0; i + 1 < colors.length; i++) {
+    const from = colors[i];
+    const to = colors[i + 1];
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      samples.push({
+        r: from.r + (to.r - from.r) * t,
+        g: from.g + (to.g - from.g) * t,
+        b: from.b + (to.b - from.b) * t,
+        a: 1,
+      });
+    }
+  }
+  const composited = samples.map((sample) => (overlays.length ? applyOverlays(sample, overlays) : sample));
+  let min = Infinity;
+  let max = -Infinity;
+  let minColor = null;
+  let maxColor = null;
+  for (const sample of composited) {
+    const l = luminance(sample);
+    if (l < min) { min = l; minColor = sample; }
+    if (l > max) { max = l; maxColor = sample; }
+  }
+  return { min, max, minColor, maxColor, sampled: true };
+}
+
 /** Contrast ratio from two luminances. */
 function ratioFromLuminance(l1, l2) {
   const [lighter, darker] = l1 > l2 ? [l1, l2] : [l2, l1];
@@ -1377,6 +1625,63 @@ export function rangeVerdict(foreground, range, required) {
   if (worst >= required) return { verdict: 'pass', worst, best };
   if (best < required) return { verdict: 'fail', worst, best };
   return { verdict: 'mixed', worst, best };
+}
+
+/**
+ * Does any stylesheet in this tree scope style ::first-line or
+ * ::first-letter at all? Walked once per root per audit (nested rules and
+ * imports included) so the two extra pseudo computed-style reads below are
+ * paid only on pages that can need them. An unreadable cross-origin sheet
+ * counts as "yes": not knowing is a reason to look, never to skip.
+ */
+function rootHasFirstLineRules(root) {
+  let has = firstLineRulesCache.get(root);
+  if (has !== undefined) return has;
+  has = false;
+  const scan = (rules) => {
+    for (const rule of rules) {
+      if (rule.selectorText && /::?first-(?:line|letter)\b/.test(rule.selectorText)) return true;
+      const inner = rule.cssRules ?? rule.styleSheet?.cssRules;
+      if (inner && scan(inner)) return true;
+    }
+    return false;
+  };
+  const sheets = [...(root.styleSheets ?? []), ...(root.adoptedStyleSheets ?? [])];
+  for (const sheet of sheets) {
+    try {
+      if (scan(sheet.cssRules)) { has = true; break; }
+    } catch {
+      has = true;
+      break;
+    }
+  }
+  firstLineRulesCache.set(root, has);
+  return has;
+}
+
+/**
+ * Colours that repaint part of this element's own text through ::first-line
+ * or ::first-letter, when they differ from the colour the element itself
+ * computes. Each entry is { pseudo, color, style } with the pseudo's computed
+ * style attached, because a drop cap may also change size and weight and so
+ * its own large-scale threshold. Only block containers get a first line of
+ * their own; inline elements are left to their base colour.
+ * (2026-08-25 overnight audit, defect 6.)
+ */
+export function pseudoTextColors(element, style) {
+  if (style.display === 'inline' || style.display === 'contents') return [];
+  if (!rootHasFirstLineRules(element.getRootNode())) return [];
+  const paintedColor = (s) => (s.webkitTextFillColor && s.webkitTextFillColor !== s.color ? s.webkitTextFillColor : s.color);
+  const base = paintedColor(style);
+  const found = [];
+  for (const pseudo of ['::first-line', '::first-letter']) {
+    const pseudoStyle = getComputedStyle(element, pseudo);
+    const css = paintedColor(pseudoStyle);
+    if (!css || css === base) continue;
+    const color = parseColor(css);
+    if (color) found.push({ pseudo, color, style: pseudoStyle });
+  }
+  return found;
 }
 
 /** WCAG "large text": ≥24px, or ≥18.66px (14pt) bold. */

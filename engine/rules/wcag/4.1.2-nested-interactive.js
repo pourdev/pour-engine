@@ -26,12 +26,29 @@ export default {
     // role="button" with no tabindex is not in the tab order — keyboard
     // users cannot reach it, so it cannot be a competing stop).
     const NATIVE = 'a[href], button, input, select, textarea, summary, audio[controls], video[controls]';
+    // Any negative tabindex is unreachable by Tab (HTML: "a negative
+    // integer"), not only the literal "-1"; hasAttribute guards the default
+    // -1 Chromium reports for attribute-less contenteditable elements.
+    // 2026-08-25 overnight audit.
     const nested = [...element.querySelectorAll(INTERACTIVE)].find((el) =>
-      !el.matches(':disabled') && el.getAttribute('tabindex') !== '-1'
+      !el.matches(':disabled') && !(el.hasAttribute('tabindex') && el.tabIndex < 0)
       && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el)
       && !el.closest('[aria-hidden="true"]')
       && (el.matches(NATIVE) || el.hasAttribute('tabindex')));
     if (!nested) return { status: 'pass' };
+    // <summary> is the one outer control HTML does not forbid this on: its
+    // content model is phrasing content with no "no interactive content
+    // descendant" clause (a and button both carry one), it maps to no ARIA
+    // role that is Children Presentational, and browsers keep a link inside
+    // it as a link. Both controls have their name and role, so nothing is
+    // announced wrongly; whether Enter on the link versus the disclosure
+    // confuses is a question for a person. 2026-08-25 overnight audit.
+    if (element.tagName === 'SUMMARY') {
+      return {
+        status: 'incomplete',
+        message: `This summary contains another interactive element (<${nested.tagName.toLowerCase()}>). HTML allows it and both controls keep their name and role, but the disclosure and the control inside it are separate keyboard stops in one label. Check that activating each does what a user expects.`,
+      };
+    }
     return {
       status: 'fail',
       message: `This ${element.tagName.toLowerCase()} contains another interactive element (<${nested.tagName.toLowerCase()}>) — focus order and announcements become unpredictable.`,

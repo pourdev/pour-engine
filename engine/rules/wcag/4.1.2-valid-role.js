@@ -57,6 +57,22 @@ export default {
     const hasAriaProps = [...element.attributes].some(
       (attr) => attr.name.startsWith('aria-') && attr.name !== 'aria-hidden');
     if (genericFallback && !focusable && !hasAriaProps) return { status: 'pass' };
+    // The same two triggers decide for EVERY tag (2026-08-25 overnight
+    // audit). ARIA 1.2 section 9.1: an unrecognised role token is treated as
+    // if no role had been provided, so <h2 role="text"> is exposed exactly
+    // as <h2>. Name, role and value are all intact and determinable; what
+    // the DOM cannot tell is what the author meant, so when the element is
+    // not focusable and carries no ARIA state on the back of the bogus role
+    // this is a question, not an assertion. Focusable or state-bearing
+    // elements keep failing: a focusable element left generic, or a state
+    // riding on a role the browser threw away, is the real 4.1.2 harm.
+    if (!focusable && !hasAriaProps) {
+      return {
+        status: 'incomplete',
+        message: `role="${element.getAttribute('role')}" is not a valid ARIA role, so assistive technology ignores it and exposes the element's native <${tag}> semantics. Nothing is announced wrongly, but the author reached for a role that does not exist. Is the native <${tag}> role the right one here? If a different role was intended, that role is missing.`,
+        fix: 'Use a valid role from the ARIA specification, or remove the attribute to keep the element’s native role.',
+      };
+    }
     return {
       status: 'fail',
       message: `role="${element.getAttribute('role')}" is not a valid ARIA role, so assistive technology ignores it${genericFallback ? '' : ` and falls back to the element’s native <${tag}> semantics`}.`,

@@ -11,7 +11,10 @@ export default {
     if (accessibleName(element)) return { status: 'pass' };
     return {
       status: 'fail',
-      message: 'This image button has no alt text — screen readers announce just "button".',
+      // HTML-AAM: a nameless image input takes an implementation-defined
+      // name such as "Submit", which says nothing about what THIS button
+      // does (2026-08-25 overnight audit).
+      message: 'This image button has no alt text, so browsers fall back to a generic "Submit" name that does not describe what the button does.',
       fix: 'Add alt="What the button does", e.g. alt="Search".',
     };
   },

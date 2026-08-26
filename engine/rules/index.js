@@ -90,6 +90,15 @@ import embedAlt from './wcag/1.1.1-embed-alt.js';
 import canvasAlt from './wcag/1.1.1-canvas-alt.js';
 import videoLoopMotion from './wcag/2.2.2-video-loop-motion.js';
 import visualOrderDivergence from './wcag/2.4.3-visual-order-divergence.js';
+// 2026-08-25 gap batch (reports/coverage-gaps/2026-08-25-1915.html): the four
+// A/AA criteria neither engine covered where an honest review question
+// exists. All four ask, none asserts — each SC's failure hinges on a fact
+// (a transcript nearby, an essential confirmation, a no-drag path, meaning
+// in a sequence) the DOM cannot prove.
+import audioTranscript from './wcag/1.2.1-audio-transcript.js';
+import readingOrderDivergence from './wcag/1.3.2-reading-order-divergence.js';
+import dragAlternative from './wcag/2.5.7-drag-alternative.js';
+import redundantEntry from './wcag/3.3.7-redundant-entry.js';
 import onInputNavigation from './wcag/3.2.2-on-input-navigation.js';
 import errorMessageLinkage from './wcag/3.3.1-error-message-linkage.js';
 import compositeWidgetName from './wcag/4.1.2-composite-widget-name.js';
@@ -185,6 +194,10 @@ export default [
   canvasAlt,
   videoLoopMotion,
   visualOrderDivergence,
+  audioTranscript,
+  readingOrderDivergence,
+  dragAlternative,
+  redundantEntry,
   onInputNavigation,
   errorMessageLinkage,
   compositeWidgetName,

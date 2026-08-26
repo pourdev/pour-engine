@@ -21,11 +21,22 @@ export default {
   visibleOnly: false,
   evaluate(element) {
     const lang = element.getAttribute('lang')?.trim();
-    if (!lang) {
+    if (!element.hasAttribute('lang')) {
       return {
         status: 'fail',
         message: 'No lang attribute: screen readers will guess the language and may mispronounce everything.',
         fix: 'Add lang to the html element, e.g. <html lang="en">.',
+      };
+    }
+    // H57 step 1 (the attribute exists) passes here and step 2 (a BCP 47
+    // value) fails: an empty value declares nothing. Named separately so
+    // the author looks at the value, not for a missing attribute
+    // (2026-08-25 overnight audit).
+    if (!lang) {
+      return {
+        status: 'fail',
+        message: 'The lang attribute is present but empty, so the page declares no language: screen readers will guess it and may mispronounce everything.',
+        fix: 'Give lang a BCP 47 value, e.g. <html lang="en">.',
       };
     }
     if (!LANG_PATTERN.test(lang)) {

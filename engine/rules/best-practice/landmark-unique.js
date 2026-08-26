@@ -6,6 +6,14 @@ import { labelledByName } from '../../lib/accessible-name.js';
 
 const SINGLETON = new Set(['banner', 'contentinfo', 'main']);
 
+// ARIA 1.2, Landmark Roles: the eight roles that are landmarks. An explicit
+// non-landmark role on a landmark element (<nav role="menubar">) makes it a
+// widget, not a landmark, so it has nothing to be distinguished from
+// (2026-08-25 overnight audit).
+const LANDMARK_ROLES = new Set([
+  'banner', 'complementary', 'contentinfo', 'form', 'main', 'navigation', 'region', 'search',
+]);
+
 /** Landmark role of the element in the accessibility tree — explicit role
  *  first, else the implicit role (which handles header/footer demotion
  *  inside sectioning content and unlabelled sections being generic). */
@@ -39,7 +47,7 @@ export default {
     const outcomes = elements.map(() => ({ status: 'pass' }));
     const landmarkIndexes = elements
       .map((element, index) => ({ element, index, role: roles[index] }))
-      .filter(({ role }) => role && role !== 'generic' && role !== 'presentation' && role !== 'none');
+      .filter(({ role }) => LANDMARK_ROLES.has(role));
 
     // Singleton roles: more than one banner/contentinfo/main is a failure
     // regardless of labels.

@@ -10,14 +10,25 @@ import { parseColor, contrastRatio, composite, effectiveBackground, showRatio } 
 
 export default {
   id: 'non-text-contrast',
-  name: 'Control & icon contrast',
+  // Named for what the rule measures: field fills and borders. It never
+  // examines an icon, and the Understanding document says a boundary is not
+  // required when the field has other visible identifiers, so the old
+  // "icons need a visible boundary" wording overclaimed twice (2026-08-25
+  // overnight audit).
+  name: 'Form field boundary contrast',
   impact: 'serious',
   tags: ['wcag21aa', 'wcag1411'],
-  help: 'Form fields and icons need a 3:1 visible boundary',
+  help: 'Form field fills and borders below 3:1 need checking against the field\'s other identifiers',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html',
+  // range and file are excluded: untouched, both are drawn by the user agent
+  // (the 1.4.11 user-agent exception), and Chrome's UA default for file is
+  // already appearance:none so the appearance test cannot tell an author
+  // restyle from the default. An author-styled range needs a track-and-thumb
+  // judgment this rule does not attempt, so the field-boundary message would
+  // be wrong for it either way (2026-08-25 overnight audit).
   selector:
     'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"])'
-    + ':not([type="button"]):not([type="reset"]):not([type="image"]), select, textarea',
+    + ':not([type="button"]):not([type="reset"]):not([type="image"]):not([type="range"]):not([type="file"]), select, textarea',
   visibility: 'visual',
   evaluate(element) {
     // Inactive controls are exempt (same carve-out 1.4.3 makes).
@@ -55,6 +66,19 @@ export default {
       if (!color || color.a === 0) continue;
       boundaries.push(color.a >= 1 ? color : composite(color, surrounding));
       if (color.a < 1) translucentSeen = true;
+    }
+    // An outline drawn at rest IS a boundary: "border: none; outline: 1px
+    // solid" is used in place of a border to avoid layout shift, and a 1px
+    // black outline on white is 21:1 with nothing left to review. Same
+    // tests as a border side: width, a style, a visible colour, composited
+    // the same way (2026-08-25 overnight audit).
+    if (parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none') {
+      const color = parseColor(style.outlineColor);
+      if (color && color.a > 0) {
+        hasBorder = true;
+        boundaries.push(color.a >= 1 ? color : composite(color, surrounding));
+        if (color.a < 1) translucentSeen = true;
+      }
     }
     const best = Math.max(1, ...boundaries.map((color) => contrastRatio(color, surrounding)));
     if (best >= 3) return { status: 'pass' };

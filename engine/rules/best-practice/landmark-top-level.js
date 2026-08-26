@@ -9,6 +9,15 @@ const LANDMARK_ROLES = new Set([
   'main', 'navigation', 'banner', 'contentinfo', 'complementary', 'region', 'search', 'form',
 ]);
 
+/** HTML-AAM (form, section): "If a form has no accessible name, do not
+ *  expose the element as a landmark", and a section is a region only with
+ *  an accessible name. An unnamed page-wrapping <form> (the WebForms
+ *  form runat="server" shape) is therefore no landmark container at all,
+ *  and the banner, main and contentinfo inside it are top level. Mirrors
+ *  region.js, decided locally here (2026-08-25 overnight audit). */
+const named = (element) =>
+  element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby') || element.hasAttribute('title');
+
 /** The nearest ancestor that is a landmark in the accessibility tree —
  *  explicit role OR implicit (nav, labelled section/form, top-level
  *  header/footer). A selector can't express the implicit cases; a
@@ -18,6 +27,7 @@ function landmarkAncestor(element) {
   for (let parent = element.parentElement; parent; parent = parent.parentElement) {
     const explicit = parent.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase();
     const role = explicit ?? implicitRole(parent);
+    if (!explicit && (role === 'form' || role === 'region') && !named(parent)) continue;
     if (role && LANDMARK_ROLES.has(role)) return { element: parent, role };
   }
   return null;

@@ -55,6 +55,22 @@ export function normalizeName(name) {
   return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// A name WRAPPED in a paired bracket or quote reads as a literal token —
+// "<details>" names an element, and the brackets are the signal — so the
+// phrase inside it is not provably generic. One-sided decoration cannot
+// change a phrase's meaning and stays provable: python.org's links are
+// named ">>>More" because a CSS-generated REPL prompt joins the accessible
+// name, and "Read more →" identifies no more than "Read more". Apostrophes
+// fold to spaces so the French entries compare in their listed form.
+function provablyGeneric(name) {
+  const trimmed = name.trim();
+  if (/^[<\[({"'«‹「『].*[>\])}"'»›」』]$/su.test(trimmed)) return false;
+  const plain = trimmed.toLowerCase().replace(/[’']/gu, ' ')
+    .replace(/^[^\p{L}\p{N}\s]+\s*/u, '').replace(/[^\p{L}\p{N}\s]+\s*$/u, '')
+    .replace(/\s+/g, ' ').trim();
+  return GENERIC.has(plain);
+}
+
 export function createLinkPurposeRule({ id, impact, tags, help, helpUrl, verdict }) {
   return {
     id,
@@ -71,7 +87,12 @@ export function createLinkPurposeRule({ id, impact, tags, help, helpUrl, verdict
       if (!name) return { status: 'pass' }; // nameless: link-name reports it
       const normalized = normalizeName(name);
       if (!GENERIC.has(normalized)) return { status: 'pass' };
-      return verdict(name);
+      // The link's declared language (closest lang attribute, falling back
+      // to the document's), so a verdict can tell whether a French-only
+      // entry sits on a French page. Reached only for list matches, so the
+      // ancestor walk costs nothing on the page as a whole (2026-08-25).
+      const lang = (element.closest('[lang]')?.getAttribute('lang') ?? element.ownerDocument.documentElement.getAttribute('lang') ?? '').trim();
+      return verdict(name, { provable: provablyGeneric(name), normalized, lang });
     },
   };
 }

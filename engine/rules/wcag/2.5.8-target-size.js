@@ -173,6 +173,68 @@ function isInTextLine(element) {
   return false;
 }
 
+// ── User Agent Control, proved from the stylesheets ──────────────────
+// The exception covers a native control whose size "is determined by the
+// user agent and is not modified by the author". A bare <button>Save</button>
+// at 46×21 was asserted under 2.5.5, and two stacked ones under 2.5.8's
+// spacing test, until this proof existed (2026-08-25 overnight audit).
+// Proof: no inline style and no readable author rule that matches the
+// element declares a property that can change its box. An unreadable
+// (cross-origin) sheet, or a selector the browser cannot parse, leaves the
+// proof open: the finding then reviews instead of asserting. The sheet walk
+// happens once per root and is cached on it for the audit; media rules that
+// do not apply now are skipped, since they size nothing now.
+const NATIVE_CONTROL = /^(button|input|select|textarea)$/i;
+const SIZING = /^(width|height|(min|max)-(width|height|inline-size|block-size)|inline-size|block-size|padding(-.+)?|border(-.+)?|font(-.+)?|line-height|box-sizing|transform|scale|zoom|appearance|all)$/;
+const sizingRulesByRoot = new WeakMap();
+
+function declaresSizing(style) {
+  for (let k = 0; k < style.length; k++) if (SIZING.test(style[k])) return true;
+  return false;
+}
+
+function authorSizingRules(root) {
+  const sheets = [...(root.styleSheets ?? []), ...(root.adoptedStyleSheets ?? [])];
+  const key = sheets.map((s) => { try { return s.cssRules.length; } catch { return 'x'; } }).join(',');
+  const cached = sizingRulesByRoot.get(root);
+  if (cached?.key === key) return cached;
+  const win = (root.ownerDocument ?? root).defaultView;
+  const probe = (root.ownerDocument ?? root).createElement('div');
+  const entry = { key, selectors: [], open: false };
+  const walk = (rules, parent) => {
+    for (const rule of rules) {
+      if (rule.media && win?.matchMedia && !win.matchMedia(rule.media.mediaText).matches) continue;
+      let selector = rule.selectorText ?? parent; // nested declarations belong to the parent
+      // CSS nesting: "& .x" means ":is(parent) .x", and a child with no "&" is
+      // a descendant of the parent.
+      if (parent && rule.selectorText) {
+        selector = /&/.test(selector) ? selector.replace(/&/g, `:is(${parent})`) : `:is(${parent}) ${selector}`;
+      }
+      if (selector && rule.style && declaresSizing(rule.style)) {
+        try { probe.matches(selector); entry.selectors.push(selector); } catch { entry.open = true; }
+      }
+      if (rule.cssRules?.length) walk(rule.cssRules, rule.selectorText ? selector : parent);
+    }
+  };
+  for (const sheet of sheets) {
+    try { walk(sheet.cssRules, null); } catch { entry.open = true; }
+  }
+  entry.combined = entry.selectors.join(', ');
+  sizingRulesByRoot.set(root, entry);
+  return entry;
+}
+
+/** 'yes' when the browser provably sized this native control, 'no' when the
+ *  author touched its box (or it is not a native control), 'open' when a
+ *  sheet or selector could not be read. */
+function uaSized(element) {
+  if (!NATIVE_CONTROL.test(element.tagName) || element.type === 'image') return 'no';
+  if (declaresSizing(element.style)) return 'no';
+  const entry = authorSizingRules(element.getRootNode());
+  if (entry.combined && element.matches(entry.combined)) return 'no';
+  return entry.open ? 'open' : 'yes';
+}
+
 /** Nearest distance from a point to a rectangle (0 when inside it). */
 function pointToRectDistance(point, rect) {
   const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
@@ -188,6 +250,21 @@ function pointToRectDistance(point, rect) {
  * lists only equivalent/inline/user-agent/essential there)
  */
 export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingException }) {
+  // The verdict compares exact floats, so display must not round a failing
+  // dimension up to the minimum: a 43.8px-tall button failing the AAA 44px
+  // bar must not read "44×44px — below the 44×44px minimum" (World Bank,
+  // 2026-08-25). One decimal only where integer rounding would cross the line,
+  // and a second decimal where one decimal STILL rounds up to it: toFixed
+  // rounds too, so 23.98 printed "24.0" and 43.98 printed "44.0" (2026-08-25
+  // overnight audit). Anything closer than that reads "just under".
+  const px = (v) => {
+    if (!(Math.round(v) >= min && v < min)) return String(Math.round(v));
+    for (const digits of [1, 2]) {
+      const shown = v.toFixed(digits);
+      if (Number(shown) < min) return shown;
+    }
+    return `just under ${min}`;
+  };
   return {
   id,
   impact: 'serious',
@@ -396,6 +473,36 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       return effective;
     };
 
+    // ── Equivalent targets ────────────────────────────────────────────
+    // Both criteria except a target whose function is available through
+    // another control on the same page that meets the minimum. Same
+    // destination is the one form of "same function" the DOM can prove,
+    // and obscuredRect above already reads matching hrefs that way. The
+    // card pattern (a 200×150 image link over a 16px title link to the
+    // same article) failed on the title link until the undersized path
+    // asked the same question (2026-08-25 overnight audit). A bare "#" or
+    // a javascript: URL names no destination, so it never pairs.
+    const destinationOf = (element) => {
+      if (typeof element.href !== 'string' || !element.href) return null;
+      const attr = (element.getAttribute('href') ?? '').trim();
+      if (!attr || attr === '#' || /^javascript:/i.test(attr)) return null;
+      return element.href;
+    };
+    let adequateDestinations = null;
+    const equivalentElsewhere = (i) => {
+      const destination = destinationOf(elements[i]);
+      if (!destination) return false;
+      if (!adequateDestinations) {
+        adequateDestinations = new Set();
+        elements.forEach((other, j) => {
+          if (!laidOut[j] || undersized[j] || other.ownerDocument !== elements[i].ownerDocument) return;
+          const d = destinationOf(other);
+          if (d) adequateDestinations.add(d);
+        });
+      }
+      return adequateDestinations.has(destination);
+    };
+
     return elements.map((element, i) => {
       if (!laidOut[i]) return { status: 'pass' }; // not laid out / not a pointer target
       if (!undersized[i]) {
@@ -432,7 +539,7 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         const rect = rects[i];
         return {
           status: 'fail',
-          message: `This target's box is ${Math.round(rect.width)}×${Math.round(rect.height)}px, but another target overlaps it and clicks in the overlap go there — the part that still accepts the pointer is ${Math.round(effective.width)}×${Math.round(effective.height)}px, below the ${min}×${min}px minimum.`,
+          message: `This target's box is ${Math.round(rect.width)}×${Math.round(rect.height)}px, but another target overlaps it and clicks in the overlap go there — the part that still accepts the pointer is ${px(effective.width)}×${px(effective.height)}px, below the ${min}×${min}px minimum.`,
           fix: 'Space the targets so they no longer overlap, or enlarge this one until the uncovered part reaches the minimum.',
           data: {
             box: { width: Math.round(rect.width), height: Math.round(rect.height) },
@@ -441,6 +548,11 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         };
       }
       if (uaControlled(element)) return { status: 'pass' }; // UA Control exception
+      // The same exception for every other native control, proved from the
+      // sheets; an open proof (unreadable sheet) reviews at the end instead
+      // of asserting, and only if nothing else rescues the target first.
+      const uaProof = uaSized(element);
+      if (uaProof === 'yes') return { status: 'pass' };
       if (isInTextLine(element)) return { status: 'pass' };
       if (spacingException) {
         // Spacing exception: the min-sized circle around this target must
@@ -486,12 +598,19 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         // dismissed, and suppressing it would hide a real defect behind a
         // transient overlay, which is the wrong way round.
       }
+      if (equivalentElsewhere(i)) return { status: 'pass' }; // Equivalent exception, proved by href
       const rect = rects[i];
+      if (uaProof === 'open') {
+        return {
+          status: 'incomplete',
+          message: `This native control is ${px(rect.width)}×${px(rect.height)}px, under the ${min}×${min}px minimum${spacingException ? ', and another target crowds it' : ''}. The browser sizes an unstyled control (the User Agent Control exception), but a stylesheet this audit cannot read might set its size. Check whether author CSS sizes this control; if nothing does, it passes.`,
+        };
+      }
       return {
         status: 'fail',
         message: spacingException
-          ? `This target is ${Math.round(rect.width)}×${Math.round(rect.height)}px AND another target crowds it (within ${min}px) — small targets are only acceptable with clear space around them; crowded ones are hard to hit for users with motor impairments.`
-          : `This target is ${Math.round(rect.width)}×${Math.round(rect.height)}px — below the ${min}×${min}px minimum, hard to hit for users with motor impairments.`,
+          ? `This target is ${px(rect.width)}×${px(rect.height)}px AND another target crowds it (within ${min}px) — small targets are only acceptable with clear space around them; crowded ones are hard to hit for users with motor impairments.`
+          : `This target is ${px(rect.width)}×${px(rect.height)}px — below the ${min}×${min}px minimum, hard to hit for users with motor impairments.`,
         fix: `Increase the element’s size or padding to at least ${min}×${min}px${spacingException ? ', or add spacing between the targets' : ''}.`,
       };
     });

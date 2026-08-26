@@ -28,10 +28,21 @@ export default {
     // aria-hidden styled twin names NOTHING — the browser's tree computes an
     // empty name), while aria-label on the label itself or on things inside
     // it (icon-only labels) and image alts DO feed the name per accname.
+    //
+    // An UNRENDERED descendant is excluded the same way: accname step 2A
+    // returns the empty string for a hidden node that is not the root of
+    // the label traversal, and hidden covers display:none and
+    // visibility:hidden (the hidden attribute is display:none). A label
+    // whose only text sits in a display:none span names nothing (Chromium
+    // computes ""), the mirror of the aria-hidden twin above (2026-08-25
+    // overnight audit). Computed style rather than checkVisibility: an SVG
+    // <title> has no box yet still names its graphic.
     const accessibleText = (node) => {
       if (node.nodeType === Node.TEXT_NODE) return node.textContent;
       if (node.nodeType !== Node.ELEMENT_NODE) return '';
       if (node.getAttribute('aria-hidden') === 'true') return '';
+      const nodeStyle = getComputedStyle(node);
+      if (nodeStyle.display === 'none' || nodeStyle.visibility === 'hidden') return '';
       const aria = node.getAttribute('aria-label');
       if (aria?.trim()) return aria;
       const alt = (node.tagName === 'IMG' || node.tagName === 'AREA') ? node.getAttribute('alt') : null;
@@ -66,9 +77,25 @@ export default {
       };
     }
     if (element.labels?.length && !visibleLabels.length) {
+      // aria-hidden has no visual effect: a label hidden ONLY that way is
+      // still painted for sighted users and lost only to assistive
+      // technology (Chromium computes an empty name). Telling the author
+      // to "make the label visible" sent them to fix the wrong thing; the
+      // fix is to remove aria-hidden (2026-08-25 overnight audit).
+      const onlyAriaHidden = [...element.labels].some((label) => {
+        const style = getComputedStyle(label);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      if (onlyAriaHidden) {
+        return {
+          status: 'fail',
+          message: 'This field\'s only <label> is inside aria-hidden="true": sighted users still see it, but it is removed from the accessibility tree, so the field has no accessible name.',
+          fix: 'Remove aria-hidden from the label (or from the ancestor that hides it). If the label must stay hidden from assistive technology, name the field another way with aria-label or aria-labelledby.',
+        };
+      }
       return {
         status: 'fail',
-        message: 'This field\'s only <label> is hidden (display:none or aria-hidden) — no one can see or rely on it.',
+        message: 'This field\'s only <label> is hidden (display:none or visibility:hidden), so no one can see or rely on it.',
         fix: 'Make the label visible, or use a visually-hidden-but-rendered technique (clip/sr-only) if it must not show.',
       };
     }
@@ -77,6 +104,17 @@ export default {
       // sitting inside an aria-hidden subtree (the styled-twin custom
       // control pattern) is excluded from the name computation.
       const looksLabelled = visibleLabels.some((l) => l.textContent.trim());
+      const ariaHiddenText = visibleLabels.some((l) =>
+        [...l.querySelectorAll('[aria-hidden="true"]')].some((twin) => twin.textContent.trim()));
+      if (looksLabelled && !ariaHiddenText) {
+        // The text is there in the markup but nothing renders it (defect
+        // 8's shape): the sighted user sees an empty label too.
+        return {
+          status: 'fail',
+          message: 'This field\'s <label> holds text, but all of it is inside unrendered content (display:none or visibility:hidden), so the accessible name computes to nothing and nobody sees a label.',
+          fix: 'Render the text inside the label, move it out of the hidden element, or add aria-label to the field.',
+        };
+      }
       return {
         status: 'fail',
         message: looksLabelled

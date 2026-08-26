@@ -1,5 +1,24 @@
 // WCAG SC 2.4.1 Bypass Blocks (Level A)
 import { collectRoots, isEmbeddedDocument } from '../../lib/dom.js';
+import { effectiveRole } from '../../lib/roles.js';
+
+// ARIA11 lists the landmark roles: banner, complementary, contentinfo,
+// form, main, navigation, region, search. Judged by EFFECTIVE role, not tag
+// (2026-08-25 overnight audit): HTML-AAM makes a <header>/<footer> inside
+// article, aside, main, nav or section generic rather than a landmark, and
+// a named <section> or <form> IS one. The tag selector counted the first
+// and missed the second. region and form are landmarks only when named
+// (ARIA 1.2 requires an accessible name for region; HTML-AAM maps form to
+// the form landmark only with one), so the name is checked here.
+const LANDMARK_ROLES = new Set(['banner', 'complementary', 'contentinfo', 'form', 'main', 'navigation', 'region', 'search']);
+const NAMED_ONLY = new Set(['form', 'region']);
+const LANDMARK_CANDIDATES = 'main, header, footer, nav, aside, section, form, [role]';
+const hasName = (el) => Boolean(
+  el.getAttribute('aria-label')?.trim() || el.getAttribute('aria-labelledby')?.trim() || el.getAttribute('title')?.trim());
+const isLandmark = (el) => {
+  const role = effectiveRole(el);
+  return LANDMARK_ROLES.has(role) && (!NAMED_ONLY.has(role) || hasName(el));
+};
 
 export default {
   id: 'bypass-blocks',
@@ -10,7 +29,7 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html',
   selector: 'html',
   visibleOnly: false,
-  evaluate(element) {
+  evaluate(element, { isRendered }) {
     // 2.4.1 governs blocks "repeated on multiple Web pages", and a WCAG
     // Web page is a non-embedded resource: an embedded frame's document
     // owes no skip link of its own (the frame's title is itself the bypass
@@ -28,17 +47,22 @@ export default {
     // banner and a navigation region are exactly what landmark navigation
     // skips between. Requiring `main` failed pages that were already using
     // the technique the spec names.
-    const LANDMARKS = 'main, [role="main"], header, [role="banner"], nav, [role="navigation"],'
-      + ' aside, [role="complementary"], footer, [role="contentinfo"], [role="search"], form[role="search"]';
-    if (inAnyRoot(LANDMARKS)) return { status: 'pass' };
+    if (roots.some((root) => [...(root.querySelectorAll?.(LANDMARK_CANDIDATES) ?? [])].some(isLandmark))) {
+      return { status: 'pass' };
+    }
     if (inAnyRoot('h1, h2, h3, h4, h5, h6, [role="heading"]')) return { status: 'pass' };
     // G1/G123/G124: ANY in-page link that resolves is a bypass mechanism.
     // Reading only the first one hid a real skip link behind the href="#"
-    // that scripts use as a button.
+    // that scripts use as a button. The link must be RENDERED to count:
+    // G1's test is that it is visible, or visible on keyboard focus, and
+    // a display:none link is never in the tab order, so nobody can use it.
+    // Clip/sr-only skip links are rendered and still count (2026-08-25
+    // overnight audit).
     for (const root of roots) {
       for (const link of root.querySelectorAll?.('a[href^="#"]') ?? []) {
         const id = link.getAttribute('href').slice(1);
         if (!id) continue;
+        if (isRendered && !isRendered(link)) continue;
         if (roots.some((r) => r.getElementById?.(id) || r.querySelector?.(`[id="${CSS.escape(id)}"]`))) {
           return { status: 'pass' };
         }

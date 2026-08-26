@@ -23,8 +23,13 @@ export default {
     // Transparency is measured up the flat tree: opacity is not an inherited
     // property, so a faded WRAPPER (the standard off-canvas drawer) leaves
     // every control inside it computing opacity: 1 while none of them paint.
+    // Any NEGATIVE tabindex takes an element out of sequential focus (HTML:
+    // "a negative integer"), not only the literal "-1"; tabIndex parses the
+    // attribute the way the browser does. Guarded by hasAttribute because
+    // Chromium reports tabIndex -1 for a contenteditable div that has no
+    // attribute at all, and that one IS reachable. 2026-08-25 overnight audit.
     const focusable = [element, ...element.querySelectorAll(FOCUSABLE)].filter(
-      (el) => el.matches?.(FOCUSABLE) && el.getAttribute('tabindex') !== '-1' && !el.matches(':disabled')
+      (el) => el.matches?.(FOCUSABLE) && !(el.hasAttribute('tabindex') && el.tabIndex < 0) && !el.matches(':disabled')
         // `inert` removes focusability outright — aria-hidden + inert is
         // the CORRECT modern pattern for off-canvas content, not a defect.
         && !el.closest('[inert]')

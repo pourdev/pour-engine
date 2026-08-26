@@ -50,21 +50,30 @@ function visuallyErased(element) {
   return false;
 }
 
-/** The text a sighted user actually sees inside the component (slot-aware). */
-function visibleText(nodes) {
+// Form controls a wrapping <label> may contain. Their subtrees are the
+// control's VALUES (a <select>'s options, a <button>'s caption), not the
+// label's text, so a label walk skips them (2026-08-25 overnight audit:
+// "Country <select>" used to read as "Country United KingdomFrance").
+const CONTROL_TAGS = new Set(['input', 'select', 'textarea', 'button', 'meter', 'progress', 'output']);
+
+/** The text a sighted user actually sees inside the component (slot-aware).
+ *  With skipControls, form controls inside the walk are left out: that is
+ *  the wrapping-<label> case, where only the label's own text is the label. */
+function visibleText(nodes, skipControls = false) {
   let text = '';
   for (const node of nodes) {
     if (node.nodeType === 3 /* TEXT_NODE */) { text += node.textContent; continue; }
     if (node.nodeType !== 1 /* ELEMENT_NODE */) continue;
     const tag = node.tagName.toLowerCase();
     if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'template') continue;
+    if (skipControls && CONTROL_TAGS.has(tag)) continue;
     if (node.hasAttribute('hidden') || visuallyErased(node)) continue;
     if (tag === 'slot') {
       const assigned = node.assignedNodes?.() ?? [];
-      text += visibleText(assigned.length ? assigned : node.childNodes);
+      text += visibleText(assigned.length ? assigned : node.childNodes, skipControls);
       continue;
     }
-    text += visibleText(node.childNodes);
+    text += visibleText(node.childNodes, skipControls);
   }
   return text;
 }
@@ -90,7 +99,7 @@ export default {
       // form-label's finding, not a 2.5.3 mismatch.
       rawVisible = [...(element.labels ?? [])]
         .filter((label) => !visuallyErased(label))
-        .map((label) => visibleText(label.childNodes))
+        .map((label) => visibleText(label.childNodes, true))
         .join(' ');
     } else {
       rawVisible = visibleText(element.childNodes);

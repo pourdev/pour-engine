@@ -31,6 +31,15 @@ export default {
     // Text rendered at font-size 0 (icon buttons whose value is a
     // screen-reader label) is not visually presented — nothing to judge.
     if (parseFloat(style.fontSize) === 0) return { status: 'pass' };
+    // A submit, button or reset input whose value attribute is present and
+    // empty renders no label at all (HTML: the button's label is its value
+    // when the attribute is present), the icon-button-with-aria-label
+    // pattern. No glyph is presented, so there is nothing for 1.4.3 to
+    // judge (2026-08-25 overnight audit).
+    if (/^(submit|button|reset)$/i.test(element.getAttribute('type') ?? '')
+      && element.hasAttribute('value') && element.getAttribute('value') === '') {
+      return { status: 'pass' };
+    }
     // Controls parked wholly left of or above the document are unreachable
     // by scrolling (sr-only duplicates): same exemption as the main rule.
     {
@@ -71,12 +80,13 @@ export default {
     }
     const required = isLargeText(style) ? 3 : 4.5;
 
-    const judge = (color, what) => {
+    const judge = (color, what, ownOpacity = 1) => {
       const parsed = parseColor(color);
       if (!parsed || parsed.a === 0) return null;
       // Same treatment the main rule gives faded text: what reaches the eye
       // is the declared colour thinned by the opacity it is painted at.
-      const faded = opacity < 1 ? { ...parsed, a: parsed.a * opacity } : parsed;
+      const painted = opacity * ownOpacity;
+      const faded = painted < 1 ? { ...parsed, a: parsed.a * painted } : parsed;
       const fg = faded.a < 1 ? composite(faded, background) : faded;
       const ratio = contrastRatio(fg, background);
       if (ratio >= required) return null;
@@ -90,9 +100,20 @@ export default {
     // computed colour via the ::placeholder pseudo-element.
     if (element.getAttribute('placeholder')?.trim()) {
       let placeholderColor = null;
-      try { placeholderColor = getComputedStyle(element, '::placeholder').color; } catch { /* unsupported */ }
-      if (placeholderColor && placeholderColor !== style.color) {
-        const verdict = judge(placeholderColor, 'placeholder text');
+      let placeholderOpacity = 1;
+      try {
+        const placeholderStyle = getComputedStyle(element, '::placeholder');
+        placeholderColor = placeholderStyle.color;
+        // ::placeholder { opacity: .3 } is a widespread idiom (framework
+        // resets, Firefox's own UA default of 0.54), and the criterion is on
+        // the visual presentation of the text, which is the faded colour.
+        // The opacity folds into the colour's alpha exactly as element
+        // opacity already does for value text (2026-08-25 overnight audit).
+        const parsedOpacity = parseFloat(placeholderStyle.opacity);
+        if (Number.isFinite(parsedOpacity)) placeholderOpacity = Math.min(1, Math.max(0, parsedOpacity));
+      } catch { /* unsupported */ }
+      if (placeholderColor && (placeholderColor !== style.color || placeholderOpacity < 1)) {
+        const verdict = judge(placeholderColor, 'placeholder text', placeholderOpacity);
         if (verdict) failures.push(verdict);
       }
     }

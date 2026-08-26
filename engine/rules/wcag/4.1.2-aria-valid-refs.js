@@ -6,39 +6,16 @@ const REF_ATTRIBUTES = [
   'aria-activedescendant', 'aria-owns', 'aria-errormessage', 'aria-details',
 ];
 
-// Deferred-tooltip pattern: libraries (Deque's own docs component included)
-// write aria-describedby="tooltip7" at rest and only CREATE #tooltip7 when
-// the trigger is hovered or focused — which is exactly when a screen reader
-// announces the description, so the pattern works. Only DESCRIPTIVE refs
-// get this benefit of the doubt: a NAME that exists only on hover is broken
-// for rotor navigation even when the deferral works, so aria-labelledby
-// (and the rest) keep failing at rest.
-const PROBEABLE = new Set(['aria-describedby', 'aria-details']);
-// A handful of probes covers any real page; a template bug that dangles
-// fifty refs is broken enough that the un-probed remainder failing as
-// before is the right answer.
-const PROBE_BUDGET = 8;
-const PROBE_WAIT_MS = 250;
-
-/** Fire the events a tooltip library listens for, wait for it to react,
- *  check whether the ids materialised, then put the page back. */
-async function probeDeferred(element, ids) {
-  const over = ['pointerover', 'mouseover', 'mouseenter'];
-  const out = ['pointerout', 'mouseout', 'mouseleave'];
-  for (const type of over) element.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter' }));
-  element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-  try { element.focus?.({ preventScroll: true }); } catch { /* non-focusable */ }
-  await new Promise((resolve) => setTimeout(resolve, PROBE_WAIT_MS));
-  const root = element.getRootNode();
-  const appeared = ids.every((id) => root.getElementById?.(id));
-  // Restore: the audit must leave the page as it found it, and later rules
-  // must not meet a tooltip that only exists because we hovered.
-  for (const type of out) element.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseleave' }));
-  element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-  try { element.blur?.(); } catch { /* ignore */ }
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  return appeared;
-}
+// No hover/focus probe (removed 2026-08-26, David). From 1.2.81 to this
+// change the rule dispatched hover and focus events at elements whose
+// aria-describedby pointed nowhere, to catch tooltip libraries that create
+// the target on demand. That mutated the page under audit: focus was taken
+// and not given back, hover-driven menus opened, page scripts ran, mobile
+// keyboards popped, and 300 ms went by per element. Once a dead describedby
+// became a review rather than a fail (same morning) the probe only bought
+// fewer review rows, which is not worth an audit that is no longer
+// read-only. The deferred-tooltip pattern is now named in the review
+// message instead, for the human to confirm.
 
 function inspect(element) {
   // ARIA id references cannot cross shadow boundaries: they resolve only
@@ -67,29 +44,42 @@ function inspect(element) {
   return { missing, ambiguous };
 }
 
-function outcome({ missing, ambiguous }, probed, element, accessibleName) {
+function outcome({ missing, ambiguous }, element, accessibleName) {
   if (missing.length) {
     // A dangling ref is skipped by the accname computation, so the HARM
-    // depends on what remains. A labelledby that dangles while the element
-    // still names itself (contents, aria-label) is inert clutter — real,
-    // fragile, validator-flagged, but announced correctly today. The same
-    // dangle on an otherwise nameless element is the 4.1.2 failure proper:
-    // names are consumed at REST (element lists, rotor), so the finding
-    // says which of the two this is instead of one blanket accusation.
+    // depends on what remains, and 4.1.2 only cares about name, role and
+    // user-settable value (re-decided by David 2026-08-26 with axe-core's
+    // measured verdicts as the second opinion; the old "fragile,
+    // validator-flagged" argument was 4.1.1's, and 2.2 retired it):
+    //   - aria-labelledby that dangles while the element still names
+    //     itself from elsewhere: the name is fully determinable (accname
+    //     step 2B processes the valid IDREFs), so it is not a finding here;
+    //   - aria-labelledby that leaves the element nameless, and
+    //     aria-activedescendant (a focused composite reports the wrong
+    //     active item): the 4.1.2 failure proper, asserted;
+    //   - aria-describedby that points nowhere at rest: a description is
+    //     not name, role or a user-set value, and tooltip libraries create
+    //     the target on hover or focus, so the DOM proves an authoring
+    //     error at most. Asked, never asserted;
+    //   - aria-controls, aria-owns, aria-details, aria-errormessage: the
+    //     standing policy (asserted; the comparator asserts these too).
     const restingName = (accessibleName?.(element) ?? '').trim();
-    const detail = missing
-      .map(({ attr, id }) => {
-        if (attr === 'aria-labelledby') {
-          return restingName
-            ? `aria-labelledby="${id}" points to nothing — the reference is ignored and this element's name ("${restingName.slice(0, 40)}") currently comes from elsewhere; announced correctly today, but the dead reference is fragile`
-            : `aria-labelledby="${id}" points to nothing and leaves this element without an accessible name`;
-        }
-        return `${attr}="${id}" points to nothing — assistive technology silently ignores it`;
-      })
-      .join('; ');
+    const relevant = missing.filter(({ attr }) => !(attr === 'aria-labelledby' && restingName));
+    if (!relevant.length) return { status: 'pass' };
+    const line = ({ attr, id }) => attr === 'aria-labelledby'
+      ? `aria-labelledby="${id}" points to nothing and leaves this element without an accessible name`
+      : `${attr}="${id}" points to nothing — assistive technology silently ignores it`;
+    const asserted = relevant.filter(({ attr }) => attr !== 'aria-describedby');
+    if (asserted.length) {
+      return {
+        status: 'fail',
+        message: `Broken ARIA references: ${relevant.map(line).join('; ')}.`,
+        fix: 'Correct or remove the reference, or give the target element that id.',
+      };
+    }
     return {
-      status: 'fail',
-      message: `Broken ARIA references: ${detail}.${probed ? ' Probed with focus and hover in case the target is created on demand — it never appeared.' : ''}`,
+      status: 'incomplete',
+      message: `${relevant.map(line).join('; ')} at rest. The element keeps its name and role, so this is not a proven 4.1.2 failure: if the description is created when the element is hovered or focused (a tooltip library), this works; otherwise correct the reference.`,
       fix: 'Correct or remove the reference, or give the target element that id.',
     };
   }
@@ -116,26 +106,7 @@ export default {
   help: 'ARIA id references must point to elements that exist',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: REF_ATTRIBUTES.map((attr) => `[${attr}]`).join(', '),
-  async evaluateAll(elements, { accessibleName } = {}) {
-    let budget = PROBE_BUDGET;
-    const outcomes = new Array(elements.length);
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-      const found = inspect(element);
-      const deferredOnly = found.missing.length > 0
-        && found.missing.every(({ attr }) => PROBEABLE.has(attr));
-      if (deferredOnly && budget > 0) {
-        budget--;
-        if (await probeDeferred(element, found.missing.map(({ id }) => id))) {
-          // The description materialises exactly when it would be announced.
-          outcomes[i] = { status: 'pass' };
-          continue;
-        }
-        outcomes[i] = outcome(found, true, element, accessibleName);
-        continue;
-      }
-      outcomes[i] = outcome(found, false, element, accessibleName);
-    }
-    return outcomes;
+  evaluate(element, { accessibleName } = {}) {
+    return outcome(inspect(element), element, accessibleName);
   },
 };

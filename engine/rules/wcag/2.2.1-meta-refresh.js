@@ -1,4 +1,28 @@
 // WCAG SC 2.2.1 Timing Adjustable (Level A)
+
+/**
+ * The destination the browser would navigate to, read the way the HTML
+ * "shared declarative refresh steps" read it: after the time and its
+ * separator (";", "," or whitespace) everything that remains is the URL,
+ * with or without a "url" keyword, an "=" and quotes, none of which the
+ * parser requires. Only a bare number, or a number followed by nothing,
+ * points the refresh back at the page itself. (2026-08-25 overnight audit:
+ * the old test demanded the literal "url=", so content="0;https://…" was
+ * asserted as a reload loop while the browser redirected from it.)
+ */
+function refreshDestination(content) {
+  let rest = content.replace(/^\s*[\d.]*\s*(?:[;,]\s*)?/, '');
+  // "url" is consumed letter by letter, then optional whitespace and "=".
+  rest = rest.replace(/^url\s*(?:=\s*)?/i, '');
+  const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : '';
+  if (quote) {
+    rest = rest.slice(1);
+    const close = rest.indexOf(quote);
+    if (close !== -1) rest = rest.slice(0, close);
+  }
+  return rest.trim();
+}
+
 export default {
   id: 'meta-refresh',
   name: 'Timed page refresh',
@@ -14,7 +38,7 @@ export default {
     // A refresh with no destination reloads THIS page. At zero seconds that
     // is not the allowed instant redirect — it is a loop that throws the
     // user back to the top of the page over and over (failure F41).
-    const hasDestination = /;\s*url\s*=/i.test(content);
+    const hasDestination = refreshDestination(content) !== '';
     if (delay === 0 && !hasDestination) {
       return {
         status: 'fail',

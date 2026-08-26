@@ -13,7 +13,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | SC | Name | Level | Coverage | Rules |
 |---|---|---|---|---|
 | 1.1.1 | [Non-text Content](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html) | A | Partially automated | area-alt, canvas-alt, embed-alt, image-alt, input-image-alt, object-alt, svg-img-alt |
-| 1.2.1 | [Audio-only and Video-only (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-only-and-video-only-prerecorded.html) | A | Manual review | — |
+| 1.2.1 | [Audio-only and Video-only (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-only-and-video-only-prerecorded.html) | A | Partially automated | audio-transcript |
 | 1.2.2 | [Captions (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html) | A | Partially automated | media-captions |
 | 1.2.3 | [Audio Description or Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-or-media-alternative-prerecorded.html) | A | Manual review | — |
 | 1.2.4 | [Captions (Live)](https://www.w3.org/WAI/WCAG22/Understanding/captions-live.html) | AA | Manual review | — |
@@ -23,7 +23,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 1.2.8 | [Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/media-alternative-prerecorded.html) | AAA | Manual review | — |
 | 1.2.9 | [Audio-only (Live)](https://www.w3.org/WAI/WCAG22/Understanding/audio-only-live.html) | AAA | Manual review | — |
 | 1.3.1 | [Info and Relationships](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html) | A | Partially automated | aria-required-children, aria-required-parent, definition-list, dlitem-parent, form-label, list-structure, listitem-parent, p-as-heading, table-headers |
-| 1.3.2 | [Meaningful Sequence](https://www.w3.org/WAI/WCAG22/Understanding/meaningful-sequence.html) | A | Manual review | — |
+| 1.3.2 | [Meaningful Sequence](https://www.w3.org/WAI/WCAG22/Understanding/meaningful-sequence.html) | A | Partially automated | reading-order-divergence |
 | 1.3.3 | [Sensory Characteristics](https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html) | A | Manual review | — |
 | 1.3.4 | [Orientation](https://www.w3.org/WAI/WCAG22/Understanding/orientation.html) | AA | Partially automated | orientation-lock |
 | 1.3.5 | [Identify Input Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html) | AA | Partially automated | autocomplete-valid |
@@ -78,7 +78,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.5.4 | [Motion Actuation](https://www.w3.org/WAI/WCAG22/Understanding/motion-actuation.html) | A | Manual review | — |
 | 2.5.5 | [Target Size (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html) | AAA | Partially automated | target-size-enhanced |
 | 2.5.6 | [Concurrent Input Mechanisms](https://www.w3.org/WAI/WCAG22/Understanding/concurrent-input-mechanisms.html) | AAA | Manual review | — |
-| 2.5.7 | [Dragging Movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html) | AA | Manual review | — |
+| 2.5.7 | [Dragging Movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html) | AA | Partially automated | drag-alternative |
 | 2.5.8 | [Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) | AA | Partially automated | target-size |
 
 ## Understandable
@@ -103,7 +103,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 3.3.4 | [Error Prevention (Legal, Financial, Data)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html) | AA | Manual review | — |
 | 3.3.5 | [Help](https://www.w3.org/WAI/WCAG22/Understanding/help.html) | AAA | Manual review | — |
 | 3.3.6 | [Error Prevention (All)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-all.html) | AAA | Manual review | — |
-| 3.3.7 | [Redundant Entry](https://www.w3.org/WAI/WCAG22/Understanding/redundant-entry.html) | A | Manual review | — |
+| 3.3.7 | [Redundant Entry](https://www.w3.org/WAI/WCAG22/Understanding/redundant-entry.html) | A | Partially automated | redundant-entry |
 | 3.3.8 | [Accessible Authentication (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) | AA | Partially automated | auth-field-obstruction |
 | 3.3.9 | [Accessible Authentication (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-enhanced.html) | AAA | Manual review | — |
 
@@ -114,4 +114,4 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 34 partially automated · 52 manual — with 82 rules.
+**Totals:** 38 partially automated · 48 manual — with 86 rules.

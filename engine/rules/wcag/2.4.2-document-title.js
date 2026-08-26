@@ -10,6 +10,11 @@
 // defaults. Almost always a leftover, but a gallery page really can be about
 // an artwork called "Untitled", and "Example Domain" really is the subject
 // of example.com. Those are somebody's call to make, not the engine's.
+// "New document", "New page" and "New tab" sit in tier two as well: a
+// document editor's creation screen, a wiki's new-page form or a
+// browser-style app's new-tab page is about exactly that, so only the
+// numbered editor default ("New Page 1", F25's example) is a certain
+// placeholder (2026-08-25 overnight audit).
 //
 // Deliberately NOT judged: whether a real-looking title matches the page it
 // sits on. That needs someone who can read the page, and guessing at it
@@ -18,12 +23,13 @@ import { isEmbeddedDocument } from '../../lib/dom.js';
 
 const PLACEHOLDER = new Set([
   'untitled document', 'untitled page', 'untitled-1', 'untitled 1',
-  'new document', 'new page', 'new tab', 'no title',
+  'no title',
   'insert title here', 'title here', 'page title', 'document title',
   'web page', 'webpage',
 ]);
 const UNDESCRIPTIVE = new Set([
   'untitled', 'document', 'page', 'title', 'default', 'index',
+  'new document', 'new page', 'new tab',
   'react app', 'create react app', 'vite app', 'vite + react', 'vite + vue', 'vite + svelte',
   'next app', 'create next app', 'vue app', 'nuxt app', 'svelte app', 'angular app',
   'my app', 'my site', 'my website', 'site title', 'your site title',
@@ -55,7 +61,7 @@ export default {
     }
     // Collapsed and lowercased so "Untitled   Document" is caught too.
     const normalized = title.replace(/\s+/g, ' ').toLowerCase();
-    if (PLACEHOLDER.has(normalized) || /^untitled[\s-]*\d+$/.test(normalized)) {
+    if (PLACEHOLDER.has(normalized) || /^(?:untitled|new (?:document|page|tab))[\s-]*\d+$/.test(normalized)) {
       return {
         status: 'fail',
         message: `“${title}” is a placeholder left by an editor or template. It gives no topic and no purpose, so a screen reader announces nothing useful when the page loads, and a row of open tabs, bookmarks or history entries becomes impossible to tell apart.`,

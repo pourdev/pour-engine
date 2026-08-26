@@ -21,6 +21,32 @@ const roleOf = (element) =>
   implicitRole(element);
 
 /**
+ * Every element in the COMPOSED subtree of `element`: its light-DOM
+ * descendants plus, for each element carrying an open shadow root
+ * (`element` itself included), everything inside that shadow tree, again
+ * recursively. Assistive technology reads the flat tree, so a role="list"
+ * whose items are custom elements rendering role="listitem" inside their
+ * own shadow roots is a list of listitems (Chromium exposes list > listitem,
+ * listitem); querySelectorAll stops at the shadow boundary and reported it
+ * as empty (2026-08-25 overnight audit; same reasoning as
+ * aria-required-parent's flat-tree walk). Closed roots stay invisible, as
+ * everywhere else in the engine.
+ */
+function composedDescendants(element) {
+  const found = [];
+  const pending = [element];
+  for (let i = 0; i < pending.length; i++) {
+    const scope = pending[i];
+    if (scope.shadowRoot) pending.push(scope.shadowRoot);
+    for (const el of scope.querySelectorAll('*')) {
+      found.push(el);
+      if (el.shadowRoot) pending.push(el.shadowRoot);
+    }
+  }
+  return found;
+}
+
+/**
  * Everything the container could plausibly own: its whole subtree, plus any
  * element it claims by aria-owns.
  *
@@ -33,13 +59,13 @@ const roleOf = (element) =>
  * container is not empty, and that is the only claim this rule should make.
  */
 function candidateDescendants(element) {
-  const found = [...element.querySelectorAll('*')].filter((el) => !el.matches('script, style, template'));
+  const found = composedDescendants(element).filter((el) => !el.matches('script, style, template'));
   const owns = element.getAttribute('aria-owns');
   if (owns) {
     const root = element.getRootNode();
     for (const id of owns.split(/\s+/).filter(Boolean)) {
       const target = root.getElementById?.(id);
-      if (target) found.push(target, ...target.querySelectorAll('*'));
+      if (target) found.push(target, ...composedDescendants(target));
     }
   }
   return found;
@@ -57,7 +83,8 @@ export default {
     if (element.getAttribute('aria-busy') === 'true') return { status: 'pass' }; // still loading
     const role = element.getAttribute('role').trim().split(/\s+/)[0].toLowerCase();
     const required = REQUIRED_CHILDREN[role];
-    const children = [...element.children].filter((c) => !c.matches('script, style, template'));
+    const children = [...element.children, ...(element.shadowRoot?.children ?? [])]
+      .filter((c) => !c.matches('script, style, template'));
     // A completely empty container is a lazy-load placeholder more often
     // than a defect — it announces as an empty list, which is accurate.
     if (!children.length && !element.hasAttribute('aria-owns')) return { status: 'pass' };

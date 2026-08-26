@@ -1,5 +1,13 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
-const ALLOWED = new Set(['DT', 'DD', 'DIV', 'SCRIPT', 'TEMPLATE']);
+const ALLOWED = new Set(['DT', 'DD', 'DIV']);
+// Nothing here reaches the accessibility tree, so none of it can corrupt
+// the term/description pairing: the same set list-structure keeps, for the
+// same reason (CSS-in-JS injects <style> right beside the markup). HTML's
+// content model does exclude style from dl, but validity is not the
+// criterion; 1.3.1 is about relationships assistive technology can
+// determine, and every dt/dd pair stays intact around an element that has
+// no tree presence (2026-08-25 overnight audit).
+const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'META']);
 
 export default {
   id: 'definition-list',
@@ -9,8 +17,12 @@ export default {
   help: '<dl> must be structured as term/description pairs',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html',
   selector: 'dl:not([role])', // a role attribute replaces the dl semantics
-  evaluate(element) {
-    const invalid = [...element.children].filter((child) => !ALLOWED.has(child.tagName));
+  evaluate(element, { isRendered }) {
+    // A child the browser never renders (display:none, hidden) is not in
+    // the accessibility tree either, so it cannot break the pairing a
+    // reader hears; list-structure applies the same gate.
+    const invalid = [...element.children].filter((child) =>
+      !ALLOWED.has(child.tagName) && !NEVER_RENDERED.has(child.tagName) && (!isRendered || isRendered(child)));
     if (invalid.length) {
       const tags = [...new Set(invalid.map((child) => `<${child.tagName.toLowerCase()}>`))].join(', ');
       return {

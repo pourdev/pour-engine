@@ -22,10 +22,16 @@ function ruleMatchesTags(rule, tags) {
 /** Which WCAG version/level was requested, judged from the selected tags. */
 function scopeFromTags(tags) {
   if (!tags?.length) return { version: '2.2', level: 'AAA' }; // no filter → everything
-  const version = tags.some((t) => t.startsWith('wcag22')) ? '2.2'
-    : tags.some((t) => t.startsWith('wcag21')) ? '2.1' : '2.0';
-  const level = tags.some((t) => /aaa$/.test(t)) ? 'AAA'
-    : tags.some((t) => /aa$/.test(t)) ? 'AA' : 'A';
+  // Only version/level tags (wcag2a … wcag22aaa) define a scope. Criterion
+  // tags such as wcag221 must not read as version markers, and a tag list
+  // with no WCAG scope at all (best-practice only) has no checklist: a
+  // run that asked for no criteria owes no criteria (2026-08-25 audit).
+  const scoped = tags.filter((t) => /^wcag(2|21|22)(a|aa|aaa)$/.test(t));
+  if (!scoped.length) return null;
+  const version = scoped.some((t) => t.startsWith('wcag22')) ? '2.2'
+    : scoped.some((t) => t.startsWith('wcag21')) ? '2.1' : '2.0';
+  const level = scoped.some((t) => /aaa$/.test(t)) ? 'AAA'
+    : scoped.some((t) => /aa$/.test(t)) ? 'AA' : 'A';
   return { version, level };
 }
 
@@ -39,6 +45,7 @@ const LEVEL_ORDER = { A: 0, AA: 1, AAA: 2 };
  */
 function manualReviewCriteria(tags) {
   const scope = scopeFromTags(tags);
+  if (!scope) return [];
   return wcagCatalog
     .filter((criterion) => criterion.automation !== 'auto')
     .filter((criterion) => VERSION_ORDER[criterion.since] <= VERSION_ORDER[scope.version])

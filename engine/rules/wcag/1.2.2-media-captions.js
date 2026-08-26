@@ -14,8 +14,23 @@ export default {
     // state — so a bare <track> is a subtitle track and counts. (An invalid
     // value defaults to metadata, which does not, so `kind=""` and
     // `kind="banana"` are deliberately left out.)
-    if (element.querySelector('track[kind="captions" i], track[kind="subtitles" i], track:not([kind])')) {
+    if (element.querySelector('track[kind="captions" i]')) {
       return { status: 'pass' };
+    }
+    // A subtitles track (explicit, or the kind-less default) is not proof
+    // of captions: HTML defines subtitles as dialogue for hearers who do
+    // not understand the language, captions as dialogue PLUS sound effects
+    // and other audio information for people who cannot hear it. H95 says
+    // a subtitles track "will not be sufficient" where other audio
+    // information matters, while a mislabelled one may be. The DOM cannot
+    // tell which, so this is a review, not a pass (David, 2026-08-26; it
+    // had passed since the rule was written).
+    if (element.querySelector('track[kind="subtitles" i], track:not([kind])')) {
+      return {
+        status: 'incomplete',
+        message: 'This video has a subtitles track but no captions track. Subtitles carry dialogue for people who can hear the audio; captions also carry sound effects and other audio information deaf and hard-of-hearing users need. Check the track covers those, or mark it kind="captions" if it does.',
+        fix: 'Use <track kind="captions" src="…" srclang="…" label="…"> for a track that includes non-speech audio information.',
+      };
     }
     // A video with no media resource at all presents nothing — there is no
     // audio content to caption (lazy players before their source is set).

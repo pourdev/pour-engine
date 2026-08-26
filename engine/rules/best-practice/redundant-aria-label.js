@@ -9,6 +9,29 @@ const NAME_FROM_CONTENT = new Set(['button', 'link', 'menuitem', 'menuitemcheckb
   'menuitemradio', 'option', 'tab', 'treeitem', 'checkbox', 'radio', 'switch', 'heading',
   'cell', 'gridcell', 'columnheader', 'rowheader', 'tooltip']);
 
+const EMPTY_CONTENT = new Set(['none', 'normal', '""', "''"]);
+
+/** Name-from-content is not textContent. accname 2F adds ::before/::after
+ *  text, image alternatives and svg titles, and drops hidden subtrees; when
+ *  any of those sit inside the element, the aria-label is what keeps the
+ *  announced name clean (an icon-font glyph before "Menu" would otherwise
+ *  be spoken as part of the name), so it is not redundant. Only computed
+ *  for elements whose label already matched their text, so the per-element
+ *  style reads stay bounded to real candidates (2026-08-25 overnight audit). */
+function contentBeyondText(element) {
+  const nodes = [element, ...element.querySelectorAll('*')];
+  for (const node of nodes) {
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'img' || tag === 'area' || tag === 'svg') return true;
+    if (node !== element && (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden'))) return true;
+    const style = getComputedStyle(node);
+    if (node !== element && (style.display === 'none' || style.visibility === 'hidden')) return true;
+    if (!EMPTY_CONTENT.has(getComputedStyle(node, '::before').content)) return true;
+    if (!EMPTY_CONTENT.has(getComputedStyle(node, '::after').content)) return true;
+  }
+  return false;
+}
+
 export default {
   id: 'redundant-aria-label',
   name: 'Redundant aria-label',
@@ -22,6 +45,7 @@ export default {
     const label = element.getAttribute('aria-label').replace(/\s+/g, ' ').trim().toLowerCase();
     const visible = element.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
     if (!visible || label !== visible) return { status: 'pass' };
+    if (contentBeyondText(element)) return { status: 'pass' };
     return {
       status: 'fail',
       message: `aria-label="${element.getAttribute('aria-label')}" is identical to the element's visible text — it adds nothing and will drift out of sync when the text changes.`,

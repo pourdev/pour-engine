@@ -2,12 +2,18 @@
 import {
   parseColor, contrastRatio, composite, effectiveBackground, backgroundObscured,
   backgroundImageSource, backgroundImagePaintRect, imagePaintRectInBox, imageLuminanceRange,
-  gradientLuminanceRange, rangeVerdict, rangeWithBackdrop, isLargeText, cumulativeOpacity,
+  sampledGradientRange, gradientStops, rangeVerdict, rangeWithBackdrop, isLargeText, cumulativeOpacity,
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio,
+  showRatio, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors,
 } from '../../lib/contrast.js';
+
+/** The first url() among a background-image list's layers, or null. */
+const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
+
+/** The painted size of a rect, for choosing an image sampling grid. */
+const extentOf = (rect) => (rect ? { width: rect.right - rect.left, height: rect.bottom - rect.top } : null);
 
 /** The strict separator set for the pure-decoration exemption: pipes,
  *  interpuncts, slashes, dashes and guillemets — one glyph, optionally
@@ -33,6 +39,58 @@ const veiledIncomplete = (resting, veiled) => ({
       : '')
     + ' — judge the page with the overlay dismissed, or the dimmed state by eye if the overlay is permanent.',
 });
+
+/** Roles whose element (and, for composites and groups, whose focusable
+ *  descendants) aria-disabled="true" really switches off, per WAI-ARIA's
+ *  list of roles that support the attribute. On anything else, above all a
+ *  plain <div>, the attribute has no effect on the content it wraps. */
+const ARIA_DISABLED_HOSTS = 'button, a[href], input, select, textarea, fieldset, optgroup, option, '
+  + '[role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], '
+  + '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], '
+  + '[role="slider"], [role="spinbutton"], [role="textbox"], [role="searchbox"], [role="combobox"], '
+  + '[role="gridcell"], [role="treeitem"], [role="scrollbar"], [role="separator"], [role="application"], '
+  + '[role="group"], [role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], '
+  + '[role="tablist"], [role="tree"], [role="treegrid"], [role="grid"], [role="toolbar"]';
+
+/**
+ * Is this text part of an inactive user interface component? 1.4.3 exempts
+ * exactly that, and the glossary defines a component as "a part of the
+ * content that is perceived by users as a single control for a distinct
+ * function". Two attributes used to exempt whatever they sat on:
+ *   - aria-disabled="true" on a wrapper that is not a control (a <div>
+ *     around paragraphs) disables nothing, so its prose keeps its verdict.
+ *   - a disabled <fieldset> leaves the content of its first <legend> active
+ *     (HTML: "except any descendants of the first legend element child");
+ *     the legend is the group's caption, not a disabled control.
+ * (2026-08-25 overnight audit, defect 7.)
+ */
+function inactiveComponentText(element) {
+  for (let node = element; node; node = node.parentElement) {
+    const disabled = node.closest(':disabled');
+    if (!disabled) break;
+    if (disabled.tagName !== 'FIELDSET') return true;
+    const legend = element.closest('legend');
+    if (!legend || legend.parentElement !== disabled
+      || disabled.querySelector(':scope > legend') !== legend) return true;
+    // Inside the first legend of this disabled fieldset: HTML keeps that
+    // content active. An outer disabled fieldset could still disable it,
+    // so the walk continues from above this one.
+    node = disabled;
+  }
+  const ariaDisabled = element.closest('[aria-disabled="true"]');
+  return Boolean(ariaDisabled && ariaDisabled.matches(ARIA_DISABLED_HOSTS));
+}
+
+/** A control the keyboard cannot reach either: with pointer-events: none
+ *  on top, nothing can operate it, which is what "inactive" means. Native
+ *  controls are focusable unless told otherwise; a role-only widget is
+ *  focusable only when the author gave it a tabindex. */
+function unreachableControl(control) {
+  if (control.matches(':disabled, [aria-disabled="true"], [tabindex="-1"]')) return true;
+  if (control.closest('[inert]')) return true;
+  const nativeFocusable = control.matches('button, a[href], input, select');
+  return !nativeFocusable && !control.hasAttribute('tabindex') && !control.isContentEditable;
+}
 
 /**
  * Is a duplicate copy of the same text painted exactly on top of this
@@ -91,7 +149,7 @@ function textIntersects(element, rect) {
  * `intrinsic` rides along so the caller can reason about icon-sized images.
  */
 async function imageVsText(imageSource, element, doc) {
-  const url = imageSource.css.match(/url\(["']?(.*?)["']?\)/)?.[1];
+  const url = firstLayerUrl(imageSource.css);
   let intrinsic = null;
   if (url) {
     try { intrinsic = await imageLuminanceRange(new URL(url, doc.baseURI).href); } catch { /* unknowable */ }
@@ -116,10 +174,10 @@ async function imageVsText(imageSource, element, doc) {
     sizedSmall = px.length > 0 && px.every((value) => value <= 40);
   }
   const paint = backgroundImagePaintRect(imageSource.element, dimensionless ? null : intrinsic);
-  if (!paint) return { relation: 'unknown', intrinsic, dimensionless, isGradient, sizedSmall };
+  if (!paint) return { relation: 'unknown', intrinsic, dimensionless, isGradient, sizedSmall, paint: null };
   return {
     relation: textIntersects(element, paint) ? 'under' : 'clear',
-    intrinsic, dimensionless, isGradient, sizedSmall,
+    intrinsic, dimensionless, isGradient, sizedSmall, paint,
   };
 }
 
@@ -150,10 +208,20 @@ function textVisuallyHidden(element, style, foreground) {
 }
 
 // Turn a luminance-range bracket into a rule outcome (or null = can't tell).
-function verdictFromRange(range, foreground, required, what) {
+// `reduced`: the image was sampled through a grid coarser than four painted
+// pixels per sample, so glyph-scale detail may be missing from the range; a
+// pass read off it is not provable and goes to a human instead.
+// (2026-08-25 overnight audit, defect 4.)
+function verdictFromRange(range, foreground, required, what, reduced = false) {
   if (!range) return null;
   const { verdict, worst, best } = rangeVerdict(foreground, range, required);
-  if (verdict === 'pass') return { status: 'pass' };
+  if (verdict === 'pass') {
+    if (!reduced) return { status: 'pass' };
+    return {
+      status: 'incomplete',
+      message: `The ${what} behind this text is too large to sample at glyph scale, so detail narrower than the sampling grid could sit under the text unseen. Every sampled pixel passes (worst ${showRatio(worst)}:1), so confirm by eye.`,
+    };
+  }
   if (verdict === 'fail') {
     return {
       status: 'fail',
@@ -222,24 +290,54 @@ function paintUnderImage(carrier) {
 // knows it: an image with see-through pixels shows that colour wherever the
 // ink is absent, so the judged range must include it — and without it no
 // verdict can be asserted from such an image at all.
-async function sampledVerdict(source, foreground, required, doc, overlays = [], under = null) {
+// `extent` is the painted size of the layer in CSS pixels, when the caller
+// knows it: the sampling grid is chosen from it (sampleGridFor).
+async function sampledVerdict(source, foreground, required, doc, overlays = [], under = null, extent = null) {
   if (!source) return null;
   let range = null;
   let what = 'image';
+  const grid = sampleGridFor(extent);
   if (source.tagName === 'IMG') {
-    range = await imageLuminanceRange(source.currentSrc || source.src, overlays);
+    range = await imageLuminanceRange(source.currentSrc || source.src, overlays, grid);
   } else {
     const css = source.css ?? getComputedStyle(source).backgroundImage;
     if (!css || css === 'none') return null;
-    if ((css.match(/url\(/g) ?? []).length + (css.match(/gradient\(/g) ?? []).length > 1) return null; // stacked layers: too complex
-    const url = css.match(/url\(["']?(.*?)["']?\)/)?.[1];
+    // Layers are counted at the top level of the list only: a url( or
+    // gradient( INSIDE a data URI (an SVG whose fill references url(#p))
+    // is part of that one layer, not a second one. And each abstention
+    // names its own reason, because "several stacked layers" was being
+    // said of a single gradient whose stops merely failed to parse.
+    // (2026-08-25 overnight audit, defect 8.)
+    const layers = splitBackgroundLayers(css).filter((layer) => layer !== 'none');
+    if (layers.length > 1) return null; // stacked layers: too complex
+    const layer = layers[0] ?? '';
+    const url = backgroundLayerUrl(layer);
     if (url) {
       let absolute;
       try { absolute = new URL(url, doc.baseURI).href; } catch { return null; }
-      range = await imageLuminanceRange(absolute, overlays);
-    } else if (css.includes('gradient(')) {
-      range = gradientLuminanceRange(css, overlays);
+      range = await imageLuminanceRange(absolute, overlays, grid);
+    } else if (layer.includes('gradient(')) {
       what = 'gradient';
+      const stops = gradientStops(layer);
+      if (!stops.colors.length || stops.unparsed) {
+        return {
+          status: 'incomplete',
+          message: 'The gradient behind this text has colour stops this engine could not parse, so its range of colours could not be sampled. Check the contrast by eye.',
+        };
+      }
+      if (stops.space) {
+        return {
+          status: 'incomplete',
+          message: `The gradient behind this text interpolates in ${stops.space}, not sRGB, so the colours between its stops cannot be computed here. Check the contrast by eye.`,
+        };
+      }
+      if (stops.translucent) {
+        return {
+          status: 'incomplete',
+          message: 'The gradient behind this text has translucent colour stops, so what shows behind the glyphs is a blend with whatever is painted beneath the gradient. Check the contrast by eye.',
+        };
+      }
+      range = sampledGradientRange(layer, overlays);
     } else {
       return null;
     }
@@ -299,7 +397,7 @@ async function sampledVerdict(source, foreground, required, doc, overlays = [], 
       message: 'The image painted behind this text can’t be read: it is cross-origin, or it failed to load, so a script can’t sample its colours. Check the contrast by eye.',
     };
   }
-  return verdictFromRange(range, foreground, required, what);
+  return verdictFromRange(range, foreground, required, what, Boolean(range?.reduced));
 }
 
 /**
@@ -308,7 +406,33 @@ async function sampledVerdict(source, foreground, required, doc, overlays = [], 
  * 1.4.6 Contrast (Enhanced), AAA — 7:1, or 4.5:1 for large text
  */
 export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
-  return {
+  // When the colour pair already clears the LARGE-scale minimum, the miss
+  // is about scale, not colour: name the boundary (14pt bold / 18pt), or
+  // a bold-but-just-under button reads as the checker ignoring its weight.
+  const largeScaleNoteFor = (style, required, ratio) => {
+    if (required !== thresholds.normal || ratio < thresholds.large) return '';
+    const sizePx = parseFloat(style.fontSize) || 0;
+    const weightNum = parseInt(style.fontWeight, 10) || 400;
+    // One decimal rounds 18.66px up to "18.7px", which then reads as
+    // clearing the 18.67px cutoff the same sentence names. Within a
+    // twentieth of a pixel of a cutoff the size is shown to two decimals,
+    // and when even that rounds onto the cutoff it is named as just under
+    // it. (2026-08-25 overnight audit, defect 9.)
+    const cutoff = weightNum >= 700 ? 56 / 3 : 24;
+    const cutoffText = weightNum >= 700 ? '18.67px' : '24px';
+    const nearCutoff = Math.abs(sizePx - cutoff) < 0.05;
+    let shown = nearCutoff ? `${sizePx.toFixed(2)}px` : `${Math.round(sizePx * 10) / 10}px`;
+    if (nearCutoff && parseFloat(shown) >= parseFloat(cutoffText)) shown = `just under ${cutoffText}`;
+    if (weightNum >= 700 && sizePx < 56 / 3) {
+      return ` This text is bold at ${shown}; bold text counts as large scale from 18.67px (14pt), where the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
+    }
+    if (weightNum < 700 && sizePx >= 56 / 3 && sizePx < 24) {
+      return ` At ${shown} regular weight this is not large scale; from 24px (18pt), or bold at this size, the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
+    }
+    return '';
+  };
+
+  const rule = {
   id,
   impact: 'serious',
   tags,
@@ -329,7 +453,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     if (!ownText(element)) return { status: 'pass' }; // no text of its own to judge
 
     // The criterion exempts "inactive user interface components".
-    if (element.closest(':disabled, [aria-disabled="true"]')) return { status: 'pass' };
+    if (inactiveComponentText(element)) return { status: 'pass' };
 
     // A shadow HOST's own text renders through its shadow tree: when a
     // <slot> projects it, the text inherits styles from the slot's
@@ -357,8 +481,16 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // inline, outside code and interactive content, with rendered content
     // on BOTH sides — so Python's `>>>` prompt, code operators, maths in
     // prose and meaning-bearing brackets all keep their verdicts.
+    // "Inline" here means LAID inline, not computed inline: a flex or grid
+    // container blockifies its children, so a separator <li> in a flex-row
+    // footer nav computes display:block while sitting visually between its
+    // neighbours on one line — the layout mode does not change what the
+    // glyph is (wasexamprep.com's footer dots, adjudicated 2026-08-22).
+    const laidInline = style.display.startsWith('inline')
+      || /flex|grid/.test(element.parentElement
+        ? getComputedStyle(element.parentElement).display : '');
     if (SEPARATOR_GLYPHS.test(ownText(element))
-      && style.display.startsWith('inline')
+      && laidInline
       && !element.closest('code, pre, samp, kbd, var, a[href], button, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="option"]')) {
       const hasContent = (start, dir) => {
         for (let node = start; node; node = node[dir]) {
@@ -382,8 +514,17 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // content someone is expected to read, and whether "temporarily
     // non-interactive" makes it an exempt inactive component under 1.4.3 is
     // a human judgement — never a silent pass.
+    //
+    // pointer-events only switches off mouse and touch hit-testing. It does
+    // not disable the control, drop it from the tab order or stop Enter from
+    // activating it, so a link styled that way is still a live component
+    // for the keyboard (a Tab reaches it and Enter fires its click). The
+    // shortcut therefore needs the control to be unreachable as well:
+    // tabindex="-1", inert, disabled, or a role-only widget with no tabindex
+    // at all. A reachable control is judged like any other text.
+    // (2026-08-25 overnight audit, defect 5.)
     const control = element.closest('button, a[href], input, select, [role="button"], [role="link"], [role="option"], [role="tab"]');
-    if (control && getComputedStyle(control).pointerEvents === 'none') {
+    if (control && getComputedStyle(control).pointerEvents === 'none' && unreachableControl(control)) {
       if ((control.textContent || '').trim().length <= 80) return { status: 'pass' };
       return {
         status: 'incomplete',
@@ -398,7 +539,8 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     const clipsText = /\btext\b/.test(style.webkitBackgroundClip ?? '') || /\btext\b/.test(style.backgroundClip ?? '');
     if (clipsText) {
       const behind = effectiveBackground(element.parentElement ?? element);
-      const fgRange = style.backgroundImage !== 'none' ? gradientLuminanceRange(style.backgroundImage) : null;
+      const fgRange = style.backgroundImage !== 'none'
+        ? sampledGradientRange(splitBackgroundLayers(style.backgroundImage)[0] ?? '') : null;
       if (fgRange && behind) {
         // Symmetric bracket: text luminance spans the gradient's stops.
         const required = isLargeText(style) ? thresholds.large : thresholds.normal;
@@ -419,8 +561,38 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     if (!foreground) {
       return { status: 'incomplete', message: 'The text colour could not be parsed — check contrast by eye.' };
     }
-    const required = isLargeText(style) ? thresholds.large : thresholds.normal;
+    let required = isLargeText(style) ? thresholds.large : thresholds.normal;
     const doc = element.ownerDocument;
+
+    // ::first-line and ::first-letter repaint part of this same text in
+    // another colour, and 1.4.3 applies to the visual presentation of all
+    // of it: a pale first line over a dark base colour was judged by the
+    // base alone and passed. Every colour that paints the text is a
+    // candidate, each with its own large-scale threshold (a drop cap is
+    // usually bigger), and the one with the least margin over its threshold
+    // is judged. The pick is made against the walked background here so
+    // the image and gradient paths below see it too, and remade against
+    // the resolved background on the flat-colour path.
+    // (2026-08-25 overnight audit, defect 6.)
+    let foregroundOrigin = null;
+    const baseForeground = foreground;
+    const baseRequired = required;
+    const alternates = pseudoTextColors(element, style)
+      .map(({ pseudo, color, style: pseudoStyle }) => ({
+        origin: pseudo, color, required: isLargeText(pseudoStyle) ? thresholds.large : thresholds.normal,
+      }));
+    const worstCandidate = (candidates, backdrop) => candidates.reduce((worst, candidate) => {
+      const shown = candidate.color.a < 1 ? composite(candidate.color, backdrop) : candidate.color;
+      const margin = contrastRatio(shown, backdrop) / candidate.required;
+      return !worst || margin < worst.margin ? { ...candidate, margin } : worst;
+    }, null);
+    if (alternates.length) {
+      const estimate = effectiveBackground(styleSource) ?? { r: 255, g: 255, b: 255, a: 1 };
+      const pick = worstCandidate([{ origin: null, color: foreground, required }, ...alternates], estimate);
+      foreground = pick.color;
+      required = pick.required;
+      foregroundOrigin = pick.origin;
+    }
 
     // Judge the opacity the text RESTS at, not a transient frame. Elements
     // with a RUNNING opacity animation anywhere up the flat tree are judged
@@ -431,20 +603,114 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // Near-zero resting opacity means the text isn't visually presented.
     const opacity = opacityAnimating(element) ? restingOpacity(element) : cumulativeOpacity(element);
     if (opacity < 0.05) return { status: 'pass' };
-    if (opacity < 1) foreground = { ...foreground, a: foreground.a * opacity };
+    if (opacity < 1) {
+      // Group opacity with a background INSIDE the group: the browser blends
+      // text and background together over what lies behind the carrier, so
+      // the presented pair is neither "dimmed text on the group's own
+      // background" nor "dimmed text on the page". opacityGroupPaint
+      // composites both the way the renderer does; when the backdrop behind
+      // the carrier is an image the pair is a human call.
+      // (2026-08-25 overnight audit, defect 1.)
+      // Text-shadow halos and unplaceable pseudo films are bracketed by the
+      // flat path below and not by this one, so text carrying either keeps
+      // that path (and its human calls) rather than a group verdict.
+      const groupEligible = (!style.textShadow || style.textShadow === 'none')
+        && !(pseudoBackdropForText(element)?.film > 0);
+      const group = groupEligible ? opacityGroupPaint(element, foreground) : null;
+      if (group?.unresolved) {
+        return {
+          status: 'incomplete',
+          message: `This text and its own background render together at ${Math.round(group.opacity * 100)}% opacity over an image or gradient, so the presented colours are a blend a script cannot resolve. Check the contrast by eye.`,
+        };
+      }
+      if (group) {
+        const groupRatio = contrastRatio(group.foreground, group.background);
+        // The backdrop behind the carrier came from the ancestor walk, which
+        // cannot see media or positioned panels painted where this text is
+        // (a promo card at opacity .999 over its own photo, BBC's carousel):
+        // the same hazard bracket the unverified flat path applies, before
+        // either verdict is asserted.
+        const groupRect = element.getBoundingClientRect();
+        const near = (r) => Math.min(groupRect.right, r.right) - Math.max(groupRect.left, r.left) >= 3
+          && Math.min(groupRect.bottom, r.bottom) - Math.max(groupRect.top, r.top) >= 3;
+        const overMedia = mediaRects(doc).some(({ element: media, rect: mediaRect }) =>
+          near(mediaRect) && !media.contains(element) && !element.contains(media) && textIntersects(element, mediaRect));
+        if (overMedia) {
+          return {
+            status: 'incomplete',
+            message: 'This text overlaps an image or video, so its real background can’t be computed — contrast must be checked by eye.',
+          };
+        }
+        const flipping = opaquePanelRects(doc).some(({ element: panel, rect, color }) =>
+          near(rect) && !panel.contains(element) && !element.contains(panel) && textIntersects(element, rect)
+          && (contrastRatio(composite(group.text, color), composite(group.paint, color)) >= required) !== (groupRatio >= required));
+        if (flipping) {
+          return {
+            status: 'incomplete',
+            message: 'This text overlaps a coloured block that isn’t its DOM ancestor, so its real background is ambiguous — check contrast by eye.',
+          };
+        }
+        // A translucent full-page veil (consent dimmer, modal scrim) over the
+        // text dims the presented pair exactly as it dims the flat path's,
+        // and the adjudicated overlay-state policy applies unchanged: assert
+        // only when the resting and the veiled states agree, otherwise ask.
+        // Returning before this check silenced every review under the
+        // OneTrust dimmer on pages whose content wrapper sits at opacity .99
+        // (apnews.com: 85 lost reviews in the corpus differential).
+        const groupPainted = paintedBackdrop(element);
+        let groupScrim = groupPainted?.scrim ?? null;
+        if (!groupScrim && groupPainted === 'offscreen') {
+          const veil = viewportVeil(doc);
+          if (veil && !veil.contains(element)) groupScrim = [veil];
+        }
+        if (groupScrim) {
+          const groupVeil = scrimPaint(groupScrim);
+          if (!groupVeil) return veiledIncomplete();
+          const veiledRatio = contrastRatio(applyOverlays(group.foreground, groupVeil), applyOverlays(group.background, groupVeil));
+          if ((veiledRatio >= required) !== (groupRatio >= required)) return veiledIncomplete(groupRatio, veiledRatio);
+        }
+        if (groupRatio >= required) return { status: 'pass' };
+        if (!groupRect.width || !groupRect.height) return { status: 'pass' };
+        const groupFg = asRgb(group.foreground);
+        const groupBg = asRgb(group.background);
+        return {
+          status: 'fail',
+          message: `Contrast is ${showRatio(groupRatio)}:1, below the ${required}:1 WCAG minimum for this text size.${largeScaleNoteFor(style, required, groupRatio)}`,
+          fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${groupFg} on ${groupBg}).`
+            + (style.color !== groupFg ? ` Your CSS writes the text as ${style.color}, so searching it for the sRGB values above won't find them.` : '')
+            + ` The gap is opacity: this element or an ancestor renders at ${Math.round(group.opacity * 100)}% opacity, so the text and its own background are both blended toward what lies behind them, into the sRGB values above.`,
+          data: {
+            foreground: groupFg,
+            background: groupBg,
+            ratio: Number(showRatio(groupRatio)),
+            required,
+          },
+        };
+      }
+      foreground = { ...foreground, a: foreground.a * opacity };
+    }
 
     // A background image on an ancestor: sample its pixels and bracket —
     // but only when it's actually painted under this text. Icon-in-padding
     // images (external-link arrows etc.) don't affect the text's contrast.
     const imageSource = backgroundImageSource(element);
     if (imageSource) {
-      const { relation, intrinsic, dimensionless, isGradient, sizedSmall } = await imageVsText(imageSource, element, doc);
+      const { relation, intrinsic, dimensionless, isGradient, sizedSmall, paint } = await imageVsText(imageSource, element, doc);
       if (relation !== 'clear') {
         // imageSource.overlays are the translucent layers painted between the
         // image and this text (hero scrims, tint panels). Judging the raw
         // image pixels would describe a page the user never sees.
+        // The painted extent picks the sampling grid: the paint rect when
+        // it resolved, otherwise the larger of the carrier's box and the
+        // image's own size (tiling paints at intrinsic scale; cover and
+        // contain within the box), which errs toward more samples.
+        const carrierBox = imageSource.element.getBoundingClientRect();
+        const extent = paint ? extentOf(paint) : {
+          width: Math.max(carrierBox.width, dimensionless ? 0 : intrinsic.width),
+          height: Math.max(carrierBox.height, dimensionless ? 0 : intrinsic.height),
+        };
         let sampled = await sampledVerdict(imageSource, foreground, required, doc, imageSource.overlays,
-          paintUnderImage(imageSource.element));
+          paintUnderImage(imageSource.element), extent);
         // A layer with no opaque pixels changes nothing about what is behind
         // the glyphs, so it must not block the verdict: fall through and
         // judge the background that actually paints.
@@ -466,7 +732,6 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           // can never exceed the carrier — a 512px nominal SVG painted on an
           // inline link is still an icon). Only backdrop-scale images earn a
           // definite fail from sampling.
-          const carrierBox = imageSource.element.getBoundingClientRect();
           const iconScale = isGradient
             ? (sizedSmall || carrierBox.height <= 40)
             : (dimensionless || (intrinsic.width <= 32 && intrinsic.height <= 32) || carrierBox.height <= 40);
@@ -547,7 +812,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // background-image path has always applied.
     let pseudoIconScale = false;
     if (pseudoBack?.image?.meta && pseudoBack.image.box) {
-      const pseudoUrl = pseudoBack.image.css.match(/url\(["']?(.*?)["']?\)/)?.[1];
+      const pseudoUrl = firstLayerUrl(pseudoBack.image.css);
       if (pseudoUrl && pseudoBack.image.meta.repeat === 'no-repeat') {
         let pseudoIntrinsic = null;
         try { pseudoIntrinsic = await imageLuminanceRange(new URL(pseudoUrl, doc.baseURI).href); } catch { /* unknowable */ }
@@ -598,7 +863,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       // else, so the host's resolved colour is what shows through any
       // transparent pixels the image has.
       const sampled = await sampledVerdict(pseudoBack.image, foreground, required, doc, [],
-        effectiveBackground(pseudoBack.image.element));
+        effectiveBackground(pseudoBack.image.element), extentOf(pseudoBack.image.box));
       // PAINTS_NOTHING: the pseudo-element's image is fully transparent, so
       // it never displaced the background the walk resolved.
       if (sampled !== PAINTS_NOTHING) {
@@ -615,7 +880,11 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       }
     }
     if (painted?.image && !pseudoBack) {
-      const sampled = await sampledVerdict(painted.image, foreground, required, doc);
+      // painted.overlays: the translucent layers the hit-test walk crossed
+      // between the text and the image (a scrim div over a hero <img>), seen
+      // through exactly as the ancestor walk's overlays are.
+      const sampled = await sampledVerdict(painted.image, foreground, required, doc, painted.overlays ?? [],
+        null, extentOf(painted.image.getBoundingClientRect()));
       if (sampled !== PAINTS_NOTHING) {
         return sampled ?? {
           status: 'incomplete',
@@ -637,7 +906,8 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       // hazards still reach a human instead of a wrong assertion.
       const obscuring = backgroundObscured(element);
       if (obscuring && obscuring !== 'unverifiable') {
-        const sampled = await sampledVerdict(obscuring, foreground, required, doc);
+        const sampled = await sampledVerdict(obscuring, foreground, required, doc, [], null,
+          extentOf(obscuring.getBoundingClientRect()));
         if (sampled !== PAINTS_NOTHING) {
           return sampled ?? {
             status: 'incomplete',
@@ -683,6 +953,16 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       return { status: 'incomplete', message: 'The background could not be determined — check contrast by eye.' };
     }
 
+    // With the background now resolved, the ::first-line / ::first-letter
+    // pick is remade against it: the estimate above only had the walk.
+    if (alternates.length) {
+      const dim = (color) => (opacity < 1 ? { ...color, a: color.a * opacity } : color);
+      const base = { origin: null, color: dim(baseForeground), required: baseRequired };
+      const pick = worstCandidate([base, ...alternates.map((a) => ({ ...a, color: dim(a.color) }))], background);
+      foreground = pick.color;
+      required = pick.required;
+      foregroundOrigin = pick.origin;
+    }
     // Semi-transparent text is really text-colour blended into the background.
     if (foreground.a < 1) foreground = composite(foreground, background);
 
@@ -858,7 +1138,13 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       const parsed = parseColor(css);
       return parsed != null && parsed.a >= 1 && asRgb(parsed) === judged;
     };
-    const authoredFg = style.color !== foregroundRgb ? style.color : null;
+    // A colour painted by ::first-line or ::first-letter is not the
+    // element's own color, so the "your CSS writes" comparison would name
+    // the wrong declaration; the pseudo is named instead.
+    const authoredFg = !foregroundOrigin && style.color !== foregroundRgb ? style.color : null;
+    const pseudoNote = foregroundOrigin
+      ? ` The judged text colour comes from a ${foregroundOrigin} rule on this element, which paints that part of the text in place of its color.`
+      : '';
     const backgroundSource = backgroundColorSource(element);
     const authoredBg = backgroundSource && backgroundSource !== backgroundRgb ? backgroundSource : null;
     const foregroundCss = authoredFg && sameValue(authoredFg, foregroundRgb) ? authoredFg : null;
@@ -878,28 +1164,14 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           : ''))
       : '';
 
-    // When the colour pair already clears the LARGE-scale minimum, the miss
-    // is about scale, not colour: name the boundary (14pt bold / 18pt), or
-    // a bold-but-just-under button reads as the checker ignoring its weight.
-    const largeScaleNote = (() => {
-      if (required !== thresholds.normal || ratio < thresholds.large) return '';
-      const sizePx = parseFloat(style.fontSize) || 0;
-      const weightNum = parseInt(style.fontWeight, 10) || 400;
-      const shown = `${Math.round(sizePx * 10) / 10}px`;
-      if (weightNum >= 700 && sizePx < 56 / 3) {
-        return ` This text is bold at ${shown}; bold text counts as large scale from 18.67px (14pt), where the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
-      }
-      if (weightNum < 700 && sizePx >= 56 / 3 && sizePx < 24) {
-        return ` At ${shown} regular weight this is not large scale; from 24px (18pt), or bold at this size, the ${thresholds.large}:1 minimum would apply and these colours would pass.`;
-      }
-      return '';
-    })();
+    const largeScaleNote = largeScaleNoteFor(style, required, ratio);
     return {
       status: 'fail',
       message: `Contrast is ${showRatio(ratio)}:1 — below the ${required}:1 WCAG minimum for this text size.${largeScaleNote}`,
       fix: `Darken the text or lighten the background until the ratio reaches ${required}:1 (currently ${foregroundRgb} on ${backgroundRgb}).`
         + (authored ? ` Your CSS writes ${authored}, so searching it for the sRGB values above won't find them.` : '')
-        + dimmedNote,
+        + dimmedNote
+        + pseudoNote,
       // The exact pair, for the UIs to link out to an interactive checker.
       data: {
         foreground: foregroundRgb,
@@ -912,6 +1184,24 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     };
   },
   };
+
+  // The perennial objection, answered where it is raised: a contrast failure
+  // inside aria-hidden content is still a failure, because aria-hidden only
+  // removes content from the accessibility tree and 1.4.3 exists for sighted
+  // low-vision readers — the one audience the attribute cannot reach. Every
+  // fail path (solid, image-range, translucent blend, halo) gets the note,
+  // and both criteria built from this factory inherit it. Adjudicated
+  // 2026-08-22 against a challenged mockup finding; axe reaches the same
+  // verdict on the same node.
+  const judge = rule.evaluate.bind(rule);
+  rule.evaluate = async (element, helpers) => {
+    const verdict = await judge(element, helpers);
+    if (verdict.status === 'fail' && element.closest('[aria-hidden="true"]')) {
+      verdict.message += ' aria-hidden hides this from screen readers, not from sighted users; contrast is judged for the people who see it.';
+    }
+    return verdict;
+  };
+  return rule;
 }
 
 export default createContrastRule({

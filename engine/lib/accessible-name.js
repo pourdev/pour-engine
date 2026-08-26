@@ -9,6 +9,11 @@
 const TEXT_INPUT = new Set(['text', 'search', 'url', 'tel', 'email', 'password', 'number', 'date',
   'datetime-local', 'month', 'time', 'week', '']);
 
+/** HTML "labelable elements": the ones whose `.labels` the browser fills
+ *  (form-associated custom elements are labelable too but expose their
+ *  labels through ElementInternals, so they are not reachable here). */
+const LABELABLE = new Set(['input', 'select', 'textarea', 'button', 'meter', 'output', 'progress']);
+
 export function accessibleName(element) {
   return computeName(element, false);
 }
@@ -53,11 +58,17 @@ function computeName(element, inLabelledBy) {
     if (alt) return alt;
   }
 
+  // HTML-AAM puts the associated <label> before the element's own subtree
+  // for EVERY labelable element (button, meter, output, progress as well as
+  // input, select, textarea), and the browser names <label for="b"><button
+  // id="b"> from the label. Widened from the three field tags 2026-08-25
+  // overnight audit: button-name was asserting a label-named button nameless.
+  if (LABELABLE.has(tag) && element.labels?.length) {
+    const text = [...element.labels].map((label) => label.textContent).join(' ').trim();
+    if (text) return text;
+  }
+
   if (tag === 'input' || tag === 'select' || tag === 'textarea') {
-    if (element.labels?.length) {
-      const text = [...element.labels].map((label) => label.textContent).join(' ').trim();
-      if (text) return text;
-    }
     if (element.type === 'submit' || element.type === 'reset' || element.type === 'button') {
       // The value PROPERTY, not the attribute: scripts set `el.value`
       // without reflecting it, and the property is what names the button.

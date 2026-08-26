@@ -35,6 +35,10 @@ export const GLOBAL_ARIA = new Set([
  *  usage is ever worth surfacing, it belongs in best-practice, not in a
  *  critical 4.1.2 failure. */
 export const ROLE_ARIA = {
+  // aria-colindextext / aria-rowindextext are ARIA 1.3 (Chromium maps them)
+  // and belong to cell, gridcell, columnheader, rowheader and row. They were
+  // in KNOWN_ARIA without a role that owned them, so the engine recognised
+  // the attribute and then said no role supports it. 2026-08-25 overnight audit.
   link: ['disabled', 'errormessage', 'expanded', 'haspopup', 'invalid'],
   button: ['disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'pressed'],
   checkbox: ['checked', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required'],
@@ -57,12 +61,12 @@ export const ROLE_ARIA = {
   heading: ['disabled', 'errormessage', 'haspopup', 'invalid', 'level'],
   list: ['disabled', 'errormessage', 'haspopup', 'invalid'],
   listitem: ['disabled', 'errormessage', 'haspopup', 'invalid', 'level', 'posinset', 'setsize'],
-  row: ['activedescendant', 'colindex', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'level', 'posinset', 'rowindex', 'selected', 'setsize'],
+  row: ['activedescendant', 'colindex', 'colindextext', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'level', 'posinset', 'rowindex', 'rowindextext', 'selected', 'setsize'],
   rowgroup: ['disabled', 'errormessage', 'haspopup', 'invalid'],
-  cell: ['colindex', 'colspan', 'disabled', 'errormessage', 'haspopup', 'invalid', 'rowindex', 'rowspan'],
-  gridcell: ['colindex', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowspan', 'selected'],
-  columnheader: ['colindex', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowspan', 'selected', 'sort'],
-  rowheader: ['colindex', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowspan', 'selected', 'sort'],
+  cell: ['colindex', 'colindextext', 'colspan', 'disabled', 'errormessage', 'haspopup', 'invalid', 'rowindex', 'rowindextext', 'rowspan'],
+  gridcell: ['colindex', 'colindextext', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowindextext', 'rowspan', 'selected'],
+  columnheader: ['colindex', 'colindextext', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowindextext', 'rowspan', 'selected', 'sort'],
+  rowheader: ['colindex', 'colindextext', 'colspan', 'disabled', 'errormessage', 'expanded', 'haspopup', 'invalid', 'readonly', 'required', 'rowindex', 'rowindextext', 'rowspan', 'selected', 'sort'],
   table: ['colcount', 'disabled', 'errormessage', 'haspopup', 'invalid', 'rowcount'],
   grid: ['activedescendant', 'colcount', 'disabled', 'errormessage', 'haspopup', 'invalid', 'multiselectable', 'readonly', 'rowcount'],
   treegrid: ['activedescendant', 'colcount', 'disabled', 'errormessage', 'haspopup', 'invalid', 'multiselectable', 'orientation', 'readonly', 'required', 'rowcount'],
@@ -124,6 +128,9 @@ const INPUT_ROLES = {
   button: 'button', submit: 'button', reset: 'button', image: 'button',
 };
 
+/** Input types that become a combobox when a list attribute is present. */
+const DATALIST_TYPES = new Set(['text', 'search', 'tel', 'url', 'email']);
+
 const TAG_ROLES = {
   button: 'button', textarea: 'textbox', img: 'img', article: 'article',
   aside: 'complementary', nav: 'navigation', main: 'main',
@@ -145,7 +152,24 @@ const TAG_ROLES = {
 export function implicitRole(element) {
   const tag = element.tagName.toLowerCase();
   if (tag === 'a' || tag === 'area') return element.hasAttribute('href') ? 'link' : 'generic';
-  if (tag === 'input') return INPUT_ROLES[element.type] ?? null;
+  if (tag === 'input') {
+    // HTML-AAM: a text, search, tel, url or email input WITH a list attribute
+    // maps to combobox (Chromium exposes it so), which is the role that
+    // supports aria-expanded. 2026-08-25 overnight audit.
+    if (DATALIST_TYPES.has(element.type) && element.hasAttribute('list')) return 'combobox';
+    return INPUT_ROLES[element.type] ?? null;
+  }
+  // HTML-AAM: td is cell in a table, gridcell when the ancestor table has
+  // role grid or treegrid; th is columnheader or rowheader by its scope in
+  // either. The unconditional td=cell mapping reviewed every valid
+  // aria-selected on an APG data grid. 2026-08-25 overnight audit.
+  if (tag === 'td' || tag === 'th') {
+    if (tag === 'th' && element.getAttribute('scope')?.toLowerCase() === 'row') return 'rowheader';
+    if (tag === 'th') return 'columnheader';
+    const table = element.closest('table');
+    const tableRole = table && effectiveRole(table);
+    return tableRole === 'grid' || tableRole === 'treegrid' ? 'gridcell' : 'cell';
+  }
   if (tag === 'select') return element.multiple || element.size > 1 ? 'listbox' : 'combobox';
   if (tag === 'img') return element.getAttribute('alt') === '' ? 'presentation' : 'img';
   if (tag === 'header') return element.closest('article, aside, main, nav, section') ? 'generic' : 'banner';

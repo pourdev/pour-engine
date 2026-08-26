@@ -25,7 +25,7 @@ const sc = (num, name, level, automation, since = '2.0') => ({
 export default [
   // 1. Perceivable
   sc('1.1.1', 'Non-text Content', 'A', 'partial'),
-  sc('1.2.1', 'Audio-only and Video-only (Prerecorded)', 'A', 'manual'),
+  sc('1.2.1', 'Audio-only and Video-only (Prerecorded)', 'A', 'partial'), // partial: the audio-only transcript question is askable; silent-video detection is not
   sc('1.2.2', 'Captions (Prerecorded)', 'A', 'partial'),
   sc('1.2.3', 'Audio Description or Media Alternative (Prerecorded)', 'A', 'manual'),
   sc('1.2.4', 'Captions (Live)', 'AA', 'manual'),
@@ -35,7 +35,7 @@ export default [
   sc('1.2.8', 'Media Alternative (Prerecorded)', 'AAA', 'manual'),
   sc('1.2.9', 'Audio-only (Live)', 'AAA', 'manual'),
   sc('1.3.1', 'Info and Relationships', 'A', 'partial'),
-  sc('1.3.2', 'Meaningful Sequence', 'A', 'manual'),
+  sc('1.3.2', 'Meaningful Sequence', 'A', 'partial'), // partial: CSS-reorder divergence is measurable; whether meaning survives is the reader's call
   sc('1.3.3', 'Sensory Characteristics', 'A', 'manual'),
   sc('1.3.4', 'Orientation', 'AA', 'partial', '2.1'), // orientation-lock (2026-08-01) proves CSS root hides/rotations; script locks stay a human check
   sc('1.3.5', 'Identify Input Purpose', 'AA', 'partial', '2.1'), // partial: wrong tokens are provable; MISSING autocomplete on identity fields needs judgment
@@ -86,7 +86,7 @@ export default [
   sc('2.5.4', 'Motion Actuation', 'A', 'manual', '2.1'),
   sc('2.5.5', 'Target Size (Enhanced)', 'AAA', 'partial', '2.1'),
   sc('2.5.6', 'Concurrent Input Mechanisms', 'AAA', 'manual', '2.1'),
-  sc('2.5.7', 'Dragging Movements', 'AA', 'manual', '2.2'),
+  sc('2.5.7', 'Dragging Movements', 'AA', 'partial', '2.2'), // partial: declared draggable UI is visible; pointer-event drag logic is not
   sc('2.5.8', 'Target Size (Minimum)', 'AA', 'partial', '2.2'), // partial: size/spacing are computable; the equivalent-control and essential exceptions need judgment
   // 3. Understandable
   sc('3.1.1', 'Language of Page', 'A', 'partial'), // partial: html-lang proves the tag is present and well-formed; whether it names the language actually written needs a reader
@@ -107,7 +107,7 @@ export default [
   sc('3.3.4', 'Error Prevention (Legal, Financial, Data)', 'AA', 'manual'),
   sc('3.3.5', 'Help', 'AAA', 'manual'),
   sc('3.3.6', 'Error Prevention (All)', 'AAA', 'manual'),
-  sc('3.3.7', 'Redundant Entry', 'A', 'manual', '2.2'),
+  sc('3.3.7', 'Redundant Entry', 'A', 'partial', '2.2'), // partial: duplicate autocomplete purposes in one form are visible; cross-page processes are not
   sc('3.3.8', 'Accessible Authentication (Minimum)', 'AA', 'partial', '2.2'), // partial: auth-field-obstruction catches paste blocking; alternatives need judgment
   sc('3.3.9', 'Accessible Authentication (Enhanced)', 'AAA', 'manual', '2.2'),
   // 4. Robust (4.1.1 Parsing was removed in WCAG 2.2)

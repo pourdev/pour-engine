@@ -2,14 +2,25 @@
 // Child roles that only make sense inside a specific container role.
 // Explicit roles only — native elements (li outside ul) are covered by
 // listitem-parent/dlitem-parent.
+//
+// ARIA 1.2 Required Context Role, verbatim: group is a real context for
+// option, the menuitem family and treeitem (listbox > group > option,
+// menu > group > menuitem, tree > treeitem > group > treeitem is the APG
+// Tree View pattern itself). Treating group as transparent for those roles
+// walked past the group onto the parent treeitem, which is neither a
+// container nor transparent, and asserted every multi-level tree built to
+// the pattern (2026-08-25 overnight audit; Chromium exposes tree > treeitem
+// > group > treeitem exactly as authored). For the roles whose context does
+// not list group (listitem, tab, row, cell), group stays transparent as
+// before.
 const REQUIRED_PARENT = {
   listitem: ['list'],
-  option: ['listbox'],
-  menuitem: ['menu', 'menubar'],
-  menuitemcheckbox: ['menu', 'menubar'],
-  menuitemradio: ['menu', 'menubar'],
+  option: ['listbox', 'group'],
+  menuitem: ['menu', 'menubar', 'group'],
+  menuitemcheckbox: ['menu', 'menubar', 'group'],
+  menuitemradio: ['menu', 'menubar', 'group'],
   tab: ['tablist'],
-  treeitem: ['tree'],
+  treeitem: ['tree', 'group'],
   row: ['table', 'grid', 'treegrid', 'rowgroup'],
   rowgroup: ['table', 'grid', 'treegrid'],
   cell: ['row'],
@@ -29,6 +40,9 @@ export default {
   evaluate(element) {
     const role = element.getAttribute('role').trim().split(/\s+/)[0].toLowerCase();
     const containers = REQUIRED_PARENT[role];
+    // The container named in the message and fix: the structure's root, not
+    // the group that may sit between it and the item.
+    const named = containers.filter((container) => container !== 'group');
     // aria-owns makes the relationship without containment: the owner can sit
     // anywhere in the document and the browser still builds the structure.
     // Judging by DOM ancestry alone failed every remotely-owned child.
@@ -55,18 +69,20 @@ export default {
       const parentRole =
         parent.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase() ??
         IMPLICIT_CONTAINER[parent.tagName.toLowerCase()];
-      if (parentRole === 'group') continue; // group is transparent in these structures
+      // A permitted context (the structure's root, or a group for the roles
+      // whose ARIA context lists it) satisfies the requirement outright.
+      if (containers.includes(parentRole)) return { status: 'pass' };
+      if (parentRole === 'group') continue; // group is transparent in the remaining structures
       // presentation/none removes the wrapper from the tree but leaves its
       // children owned by the next real ancestor — li[role=presentation]
       // between a tablist and its tabs is the canonical pattern.
       if (parentRole === 'presentation' || parentRole === 'none') continue;
-      if (containers.includes(parentRole)) return { status: 'pass' };
       if (parentRole) break; // a different role interrupts the required structure
     }
     return {
       status: 'fail',
-      message: `role="${role}" is not inside a ${containers.join('/')} — assistive technology loses the structure entirely.`,
-      fix: `Wrap it in an element with role="${containers[0]}", or fix the intervening roles.`,
+      message: `role="${role}" is not inside a ${named.join('/')} — assistive technology loses the structure entirely.`,
+      fix: `Wrap it in an element with role="${named[0]}", or fix the intervening roles.`,
     };
   },
 };

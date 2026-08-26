@@ -1,7 +1,15 @@
 // "photo of"/"photograph of" is deliberately NOT flagged: for portraits it
 // conveys the medium (a photo of a person vs. a logo or illustration),
 // which is widely accepted alt style — flagging it is noise.
-const REDUNDANT_PHRASE = /^(image|picture|graphic|icon)\b( of\b)?/i;
+//
+// The tip this rule cites (WAI images tutorial) is about announcing the
+// MEDIUM, so only the prefix shape counts: the word followed by "of", a
+// colon, a hyphen, "showing"/"depicting", or the word alone as the whole
+// alt. "Graphic design services" and "Picture frame, oak" are content, and
+// stripping their first word destroys the meaning; "graphic" and "picture"
+// are common nouns, so they count only with "of" (2026-08-25 overnight audit).
+const REDUNDANT_PHRASE =
+  /^(?:(?:image|icon)s?(?:\s*[:-]\s*|\s+(?:of|showing|depicting)\b\s*|\s*$)|(?:picture|graphic)s?\s+of\b\s*)/i;
 
 export default {
   id: 'redundant-alt-phrase',
