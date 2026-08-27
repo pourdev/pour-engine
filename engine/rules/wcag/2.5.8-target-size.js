@@ -570,6 +570,15 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           // fragment IS its box, so genuine overlays are dismissed exactly
           // as before.
           if (paintedEncloses(other, rects[j], rects[i]) || paintedEncloses(element, rects[i], rects[j])) return false;
+          // Crowding across fixed/sticky contexts is scroll state, not
+          // layout, exactly as the obscured-target test reads overlap: a
+          // consent banner pinned to the bottom of the viewport lays its
+          // "Privacy Policy" link on whichever headline happens to sit
+          // under it right now, and that headline has clear space the
+          // moment the page scrolls. Asserting it as crowded invents a
+          // defect the layout does not have (measured live on two news
+          // homes carrying the same consent banner, 2026-08-27).
+          if (fixedContextOf(other) !== fixedContextOf(element)) return false;
           const within = (box) => {
             if (undersized[j]) {
               const c = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
