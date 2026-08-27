@@ -52,14 +52,25 @@ export default {
     // When the element's role is modelled and does not support the attribute
     // at all, the value is moot and aria-allowed-attr already reviews the
     // attribute; reporting the value too would be the same finding twice.
+    //
+    // An EMPTY value is a third thing. ARIA defines the empty string as the
+    // default for aria-current (absent, empty and undefined all mean false),
+    // so aria-current="" is a correct way to say "not current" and nothing
+    // is lost (a design-system home writes it that way on every non-active
+    // link). For the other enumerated states an empty value is one the
+    // browser drops, which is the unknown-name situation again: nothing
+    // exposed wrongly, possibly a state the author meant. Review, not fail.
     const unknown = [];
     const invalid = [];
+    const empty = [];
     let role;
     for (const { name, value } of element.attributes) {
       if (!name.startsWith('aria-')) continue;
       const attr = name.slice(5);
       if (!KNOWN.has(attr)) {
         unknown.push(name);
+      } else if (ENUMS[name] && value.trim() === '') {
+        if (name !== 'aria-current') empty.push(name);
       } else if (ENUMS[name] && !ENUMS[name].includes(value.trim().toLowerCase())) {
         if (!GLOBAL_ARIA.has(attr)) {
           role ??= effectiveRole(element);
@@ -73,6 +84,13 @@ export default {
         status: 'fail',
         message: `Invalid ARIA: ${invalid.join('; ')}. Assistive technology ignores attributes it doesn't recognise.`,
         fix: 'Correct the attribute name/value against the ARIA specification, or remove it.',
+      };
+    }
+    if (empty.length) {
+      return {
+        status: 'incomplete',
+        message: `${empty.join(', ')} is empty, so the browser ignores it and no state is exposed. Was a value intended here? If a real state was meant (${empty.map((n) => ENUMS[n].slice(0, 3).join(', ')).join('; ')}, ...), it is missing and this is a 4.1.2 failure; if the attribute is a template leftover, no one is affected.`,
+        fix: 'Give the attribute one of its allowed values, or remove it.',
       };
     }
     if (unknown.length) {

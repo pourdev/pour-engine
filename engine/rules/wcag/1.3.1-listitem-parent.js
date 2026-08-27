@@ -1,4 +1,6 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
+import { ROLE_ARIA } from '../../lib/roles.js';
+
 export default {
   id: 'listitem-parent',
   name: 'List item placement',
@@ -28,8 +30,16 @@ export default {
     // cannot own listitems and its <li> children are orphaned exactly as if
     // the <ul> were a <div>. Matching the tag alone waved those through
     // (found on ar.wikipedia.org: portal links in <ul role="navigation">).
+    //
+    // The role that counts is the first token the browser knows. An unknown
+    // token (<ol role="breadcrumbs">, seen on a design-system home) is
+    // dropped by every user agent (ARIA 1.2 §7.1, fallback roles), so the
+    // native list role stands and its <li>s are owned as usual; valid-role
+    // reports the misspelling on its own. Reading the raw attribute made
+    // the rule blame the list's items for a token that changed nothing.
     const listContainer = (el) => {
-      const role = el.getAttribute('role');
+      const tokens = (el.getAttribute('role') ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const role = tokens.find((t) => ROLE_ARIA[t]) ?? null;
       if (el.matches('ul, ol, menu')) return !role || ['list', 'presentation', 'none'].includes(role);
       return role === 'list';
     };

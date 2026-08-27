@@ -1,6 +1,6 @@
 {
   "name": "pour-engine",
-  "version": "1.35.1",
+  "version": "1.35.2",
   "description": "Accessibility (WCAG 2.2) audit engine written from the W3C specifications — runs entirely in the browser, no dependencies.",
   "type": "module",
   "main": "engine/index.js",

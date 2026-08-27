@@ -31,17 +31,29 @@ const roleOf = (element) =>
  * as empty (2026-08-25 overnight audit; same reasoning as
  * aria-required-parent's flat-tree walk). Closed roots stay invisible, as
  * everywhere else in the engine.
+ *
+ * The walk also follows <slot>s downward: a container rendered inside a
+ * shadow root (a design system's <div role="list"> holding only a <slot>)
+ * owns the light-DOM items projected into it, which is what Chromium
+ * exposes as list > listitem. Reading the shadow tree alone reported the
+ * list as empty (spectrum.adobe.com, 2026-08-27 disagreement crawl).
  */
 function composedDescendants(element) {
   const found = [];
   const pending = [element];
+  const seen = new Set();
+  const enter = (el) => {
+    if (seen.has(el)) return;
+    seen.add(el);
+    found.push(el);
+    if (el.shadowRoot) pending.push(el.shadowRoot);
+    if (el.tagName === 'SLOT') for (const assigned of el.assignedElements({ flatten: true })) { enter(assigned); pending.push(assigned); }
+  };
   for (let i = 0; i < pending.length; i++) {
     const scope = pending[i];
     if (scope.shadowRoot) pending.push(scope.shadowRoot);
-    for (const el of scope.querySelectorAll('*')) {
-      found.push(el);
-      if (el.shadowRoot) pending.push(el.shadowRoot);
-    }
+    if (scope.tagName === 'SLOT') for (const assigned of scope.assignedElements({ flatten: true })) { enter(assigned); pending.push(assigned); }
+    for (const el of scope.querySelectorAll('*')) enter(el);
   }
   return found;
 }
