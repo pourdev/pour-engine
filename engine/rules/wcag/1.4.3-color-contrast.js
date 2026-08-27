@@ -1014,6 +1014,47 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
           message: 'This text overlaps a coloured block that isn’t its DOM ancestor, so its real background is ambiguous — check contrast by eye.',
         };
       }
+      // The panel scan keeps to positioned and floated paint because only
+      // those cross sibling boundaries. The TEXT can be the one crossing:
+      // an absolutely positioned floating label sits on the static <input>
+      // beside it, and the walk, which never leaves the label's ancestors,
+      // read the grey section behind the form (worldbank.org sign-up,
+      // 2026-08-27, asserted 4.44:1 against the wrapper while the glyphs
+      // sit on the input's white, 4.67:1; the same label passed once
+      // scrolled into view and hit-tested). When the text or an ancestor
+      // up to its containing block is out of flow, the static opaque
+      // boxes inside that containing block are candidates too. Bounded by
+      // the containing block's subtree; a huge one keeps the walk-only
+      // behaviour rather than paying a full-page style pass per element.
+      if (!blindOnly) {
+        let outOfFlow = false;
+        let block = null;
+        for (let node = element; node && node.nodeType === 1 && node !== doc.body; node = node.parentElement ?? node.getRootNode()?.host) {
+          const position = getComputedStyle(node).position;
+          if (node !== element && position !== 'static') { block = node; break; }
+          if (position === 'absolute' || position === 'fixed') outOfFlow = true;
+        }
+        if (outOfFlow && block) {
+          const inside = block.querySelectorAll('*');
+          if (inside.length <= 2000) {
+            for (const sibling of inside) {
+              if (sibling === element || sibling.contains(element) || element.contains(sibling)) continue;
+              const siblingStyle = getComputedStyle(sibling);
+              if (siblingStyle.position !== 'static' || siblingStyle.visibility === 'hidden') continue;
+              const paint = parseColor(siblingStyle.backgroundColor);
+              if (!paint || paint.a < 1) continue;
+              const siblingRect = sibling.getBoundingClientRect();
+              if (siblingRect.width < 24 || siblingRect.height < 12 || !near(siblingRect) || !textIntersects(element, siblingRect)) continue;
+              if ((contrastRatio(foreground, paint) >= required) !== (direction === 'pass')) {
+                return {
+                  status: 'incomplete',
+                  message: 'This text is positioned over a coloured box that isn’t its DOM ancestor, so its real background is ambiguous — check contrast by eye.',
+                };
+              }
+            }
+          }
+        }
+      }
       return null;
     };
 
