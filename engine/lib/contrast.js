@@ -903,7 +903,36 @@ export function paintedBackdrop(element) {
     overlays.push(own);
   }
   if (start === -1) return 'unresolved';
+  // Ancestors the hit-test cannot see. pointer-events: none is inherited
+  // and takes an element (and, unless they opt back in, its descendants)
+  // out of every hit-test stack, but it paints exactly as before. A white
+  // title inside a fixed black header with pointer-events: none, the title
+  // itself set back to auto, hit-tests as [title, page, body]: the black
+  // layer is skipped and the walk below composites the page colour under
+  // the glyphs (business.hsbc.com, 2026-08-27, asserted 1.10:1 white on
+  // #f3f3f3 under a black bar). So the painting ancestors missing from the
+  // stack are folded back in, each at its place in paint order: an
+  // ancestor paints beneath all of its descendants, so its turn comes when
+  // the next stack layer is no longer inside it. Only ancestors whose box
+  // holds the sample point count; a parent the text has been positioned
+  // out of paints nowhere under it and is rightly absent.
+  const missing = [];
+  const inStack = new Set(stack);
+  for (let a = element.parentElement ?? element.getRootNode()?.host; a && a.nodeType === 1; a = a.parentElement ?? a.getRootNode()?.host) {
+    if (inStack.has(a)) continue;
+    const box = a.getBoundingClientRect();
+    if (point.x < box.left || point.x >= box.right || point.y < box.top || point.y >= box.bottom) continue;
+    const st = getComputedStyle(a);
+    const c = parseColor(st.backgroundColor);
+    if ((c && c.a > 0) || (st.backgroundImage !== 'none' && !paintsNothing(st.backgroundImage))) missing.push(a);
+  }
+  const layers = [];
   for (const layer of stack.slice(start + 1)) {
+    while (missing.length && !missing[0].contains(layer)) layers.push(missing.shift());
+    layers.push(layer);
+  }
+  layers.push(...missing);
+  for (const layer of layers) {
     // Replaced elements paint their content, not a background — a photo or
     // video in the stack is an image backdrop whatever its styles say.
     if (/^(img|video|canvas|svg|picture|object|embed|iframe)$/i.test(layer.tagName)) {
