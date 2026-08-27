@@ -1191,8 +1191,8 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   // low-vision readers — the one audience the attribute cannot reach. Every
   // fail path (solid, image-range, translucent blend, halo) gets the note,
   // and both criteria built from this factory inherit it. Adjudicated
-  // 2026-08-22 against a challenged mockup finding; axe reaches the same
-  // verdict on the same node.
+  // 2026-08-22 against a challenged mockup finding, and upheld: the
+  // criterion is written for the people who see the text.
   const judge = rule.evaluate.bind(rule);
   rule.evaluate = async (element, helpers) => {
     const verdict = await judge(element, helpers);
