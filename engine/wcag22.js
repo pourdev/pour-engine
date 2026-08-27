@@ -66,7 +66,7 @@ export default [
   sc('2.2.6', 'Timeouts', 'AAA', 'manual', '2.1'),
   sc('2.3.1', 'Three Flashes or Below Threshold', 'A', 'manual'),
   sc('2.3.2', 'Three Flashes', 'AAA', 'manual'),
-  sc('2.3.3', 'Animation from Interactions', 'AAA', 'manual', '2.1'),
+  sc('2.3.3', 'Animation from Interactions', 'AAA', 'partial', '2.1'), // partial: reduced-motion reads scroll-driven, smooth-scroll and animated hover/focus motion against the page's prefers-reduced-motion rules; whether the motion is essential stays human
   sc('2.4.1', 'Bypass Blocks', 'A', 'partial'), // partial: "repeated across pages" can't be established from one page
   sc('2.4.2', 'Page Titled', 'A', 'partial'), // partial: document-title proves a title exists and catches known placeholders; whether a real one DESCRIBES the page needs a reader
   sc('2.4.3', 'Focus Order', 'A', 'partial'), // visual-order-divergence flags CSS order/*-reverse against DOM order; whether an order preserves MEANING stays human

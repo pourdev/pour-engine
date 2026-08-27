@@ -22,6 +22,38 @@ const VALID_ROLES = new Set([
   'image', 'comment', 'mark', 'suggestion',
 ]);
 
+/** Edit distance between two short tokens (Levenshtein). */
+function editDistance(a, b) {
+  const rows = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) rows[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+  }
+  return rows[a.length][b.length];
+}
+
+/** The valid role closest to any of the written tokens, when one sits
+ *  within two edits of it; null when nothing is that close. */
+function nearestRole(tokens) {
+  let best = null;
+  let bestDistance = 3;
+  for (const token of tokens) {
+    const t = token.toLowerCase();
+    for (const role of VALID_ROLES) {
+      if (Math.abs(role.length - t.length) > 2) continue;
+      const distance = editDistance(t, role);
+      if (distance > 0 && distance < bestDistance) { best = role; bestDistance = distance; }
+    }
+  }
+  return best;
+}
+
 export default {
   id: 'valid-role',
   name: 'Valid roles',
@@ -46,6 +78,15 @@ export default {
     // canonical harmless case. The failure worth reporting is an invalid
     // role MASKING real semantics or decorating an interactive element.
     const tag = element.tagName.toLowerCase();
+    // A near-miss is almost always a typo: name the role that is one or two
+    // edits away, so "buton" reads as the misspelling it is rather than as
+    // a mystery ("role="buton" isn't really… what?" was the first reaction
+    // to the bare message on a seeded fault, 2026-08-27).
+    const nearest = nearestRole(tokens);
+    const hint = nearest ? ` (did you mean role="${nearest}"?)` : '';
+    const fix = nearest
+      ? `Correct the spelling to role="${nearest}", or remove the attribute to keep the element’s native role.`
+      : 'Use a valid role from the ARIA specification, or remove the attribute to keep the element’s native role.';
     // What the element falls back to when the bogus role is ignored. div/span
     // expose generic; <svg> exposes image (or graphics-document) in every
     // current engine, which is what an author writing role="img"/"image" on it
@@ -69,14 +110,14 @@ export default {
     if (!focusable && !hasAriaProps) {
       return {
         status: 'incomplete',
-        message: `role="${element.getAttribute('role')}" is not a valid ARIA role, so assistive technology ignores it and exposes the element's native <${tag}> semantics. Nothing is announced wrongly, but the author reached for a role that does not exist. Is the native <${tag}> role the right one here? If a different role was intended, that role is missing.`,
-        fix: 'Use a valid role from the ARIA specification, or remove the attribute to keep the element’s native role.',
+        message: `role="${element.getAttribute('role')}" is not a valid ARIA role${hint}, so assistive technology ignores it and exposes the element's native <${tag}> semantics. Nothing is announced wrongly, but the author reached for a role that does not exist. Is the native <${tag}> role the right one here? If a different role was intended, that role is missing.`,
+        fix,
       };
     }
     return {
       status: 'fail',
-      message: `role="${element.getAttribute('role')}" is not a valid ARIA role, so assistive technology ignores it${genericFallback ? '' : ` and falls back to the element’s native <${tag}> semantics`}.`,
-      fix: 'Use a valid role from the ARIA specification, or remove the attribute to keep the element’s native role.',
+      message: `role="${element.getAttribute('role')}" is not a valid ARIA role${hint}, so assistive technology ignores it${genericFallback ? '' : ` and falls back to the element’s native <${tag}> semantics`}.`,
+      fix,
     };
   },
 };

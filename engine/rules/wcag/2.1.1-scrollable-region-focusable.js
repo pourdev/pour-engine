@@ -6,6 +6,8 @@
 // (found on carbondesignsystem.com: a scrollable <nav> the rule never saw).
 // The cost stays flat because the overwhelming majority of elements exit on
 // two integer reads before any style or visibility work happens.
+import { isInert } from '../../lib/dom.js';
+
 const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]';
 
 /** Reachable with the Tab key — what actually lets a keyboard user move
@@ -15,6 +17,8 @@ const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea
  *  nothing reachable (it auto-focuses the scroller, same as when empty). */
 function isTabbable(element) {
   if (element.tabIndex < 0 || element.disabled) return false;
+  // Inert content never takes focus, so it cannot make a region reachable.
+  if (isInert(element)) return false;
   if (typeof element.checkVisibility === 'function') {
     return element.checkVisibility({ visibilityProperty: true });
   }

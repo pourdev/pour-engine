@@ -29,6 +29,8 @@ const TARGETS = 'a[href], button, input, select, [role="button"], [role="link"]'
  * These are keyboard affordances, not pointer targets — and their phantom
  * rects must not count as "crowding" for the real targets around them.
  */
+import { isInert } from '../../lib/dom.js';
+
 function isHiddenFromPointer(element, rect) {
   if (rect.width <= 1 || rect.height <= 1) return true;
   if (rect.right <= 0 || rect.bottom <= 0) return true; // parked above/left of the canvas
@@ -321,8 +323,13 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           && !element.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true });
       } catch { return false; }
     };
+    // Inert targets accept no pointer action at all, so they are neither
+    // judged nor counted as crowders (bbc.com/news keeps 28 controls of a
+    // closed menu in an inert subtree; the browser ignores every click on
+    // them, and so must the size judgment).
     const laidOut = rects.map((r, i) =>
-      r.width > 0 && r.height > 0 && !isHiddenFromPointer(elements[i], r) && !layoutSkipped(elements[i]));
+      r.width > 0 && r.height > 0 && !isInert(elements[i])
+      && !isHiddenFromPointer(elements[i], r) && !layoutSkipped(elements[i]));
     const undersized = rects.map((r, i) => laidOut[i] && (r.width < min || r.height < min));
     // One rect fully inside another is one control drawn twice (stretched-
     // link cards, overlay + inner button) — not two targets crowding.

@@ -58,7 +58,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.2.6 | [Timeouts](https://www.w3.org/WAI/WCAG22/Understanding/timeouts.html) | AAA | Manual review | — |
 | 2.3.1 | [Three Flashes or Below Threshold](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html) | A | Manual review | — |
 | 2.3.2 | [Three Flashes](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes.html) | AAA | Manual review | — |
-| 2.3.3 | [Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html) | AAA | Manual review | — |
+| 2.3.3 | [Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html) | AAA | Partially automated | reduced-motion |
 | 2.4.1 | [Bypass Blocks](https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html) | A | Partially automated | bypass-blocks |
 | 2.4.2 | [Page Titled](https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html) | A | Partially automated | document-title |
 | 2.4.3 | [Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) | A | Partially automated | visual-order-divergence |
@@ -111,7 +111,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 
 | SC | Name | Level | Coverage | Rules |
 |---|---|---|---|---|
-| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role |
+| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role, invoker-target |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 38 partially automated · 48 manual — with 86 rules.
+**Totals:** 39 partially automated · 47 manual — with 88 rules.

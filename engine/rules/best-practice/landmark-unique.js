@@ -38,7 +38,7 @@ export default {
   // Implicit landmarks (header, footer, labelled section/form) join the
   // grouping — a page's <header> and a div[role="banner"] ARE duplicates.
   selector:
-    'nav, aside, header, footer, section[aria-label], section[aria-labelledby], ' +
+    'nav, search, aside, header, footer, section[aria-label], section[aria-labelledby], ' +
     'form[aria-label], form[aria-labelledby], [role="navigation"], [role="complementary"], ' +
     '[role="banner"], [role="contentinfo"], [role="region"], [role="search"], [role="form"], [role="main"], main',
   // Judged as a set: two unlabelled navs are the problem, not either alone.

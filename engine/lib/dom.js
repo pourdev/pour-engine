@@ -124,6 +124,22 @@ export function isEmbeddedDocument(doc) {
 }
 
 /** The element's own (not descendant-element) text, trimmed. */
+/**
+ * Is this element inside an `inert` subtree? The attribute makes a whole
+ * subtree unreachable: nothing in it takes focus, nothing in it accepts a
+ * click, and assistive technology skips it (HTML §6.6.7). A rule that
+ * reasons about focus order, reachability or pointer targets must treat
+ * such elements as absent. Walks up through shadow hosts, because inert on
+ * a host inerts its shadow tree too. `inert` is a boolean attribute:
+ * presence is what counts, whatever the value.
+ */
+export function isInert(element) {
+  for (let node = element; node; node = node.parentElement ?? node.getRootNode?.()?.host ?? null) {
+    if (node.nodeType === 1 && node.hasAttribute('inert')) return true;
+  }
+  return false;
+}
+
 export function ownText(element) {
   return [...element.childNodes]
     .filter((node) => node.nodeType === Node.TEXT_NODE)

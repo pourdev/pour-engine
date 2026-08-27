@@ -133,7 +133,7 @@ const DATALIST_TYPES = new Set(['text', 'search', 'tel', 'url', 'email']);
 
 const TAG_ROLES = {
   button: 'button', textarea: 'textbox', img: 'img', article: 'article',
-  aside: 'complementary', nav: 'navigation', main: 'main',
+  aside: 'complementary', nav: 'navigation', main: 'main', search: 'search',
   h1: 'heading', h2: 'heading', h3: 'heading', h4: 'heading', h5: 'heading', h6: 'heading',
   ul: 'list', ol: 'list', menu: 'list', li: 'listitem',
   table: 'table', thead: 'rowgroup', tbody: 'rowgroup', tfoot: 'rowgroup',

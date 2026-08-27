@@ -10,7 +10,7 @@
 // so a closed dialog cannot make a landmark-less page look landmarked
 // (2026-08-25 overnight audit).
 const LANDMARK =
-  'main, nav, aside, form[aria-label], form[aria-labelledby], ' +
+  'main, nav, aside, search, form[aria-label], form[aria-labelledby], ' +
   'header:not(:is(article, aside, main, nav, section) header), ' +
   'footer:not(:is(article, aside, main, nav, section) footer), ' +
   'section[aria-label], section[aria-labelledby], [role="main"], [role="navigation"], ' +

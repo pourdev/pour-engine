@@ -99,6 +99,12 @@ import audioTranscript from './wcag/1.2.1-audio-transcript.js';
 import readingOrderDivergence from './wcag/1.3.2-reading-order-divergence.js';
 import dragAlternative from './wcag/2.5.7-drag-alternative.js';
 import redundantEntry from './wcag/3.3.7-redundant-entry.js';
+// 2026-08-27 platform batch: the HTML invoker attributes (popovertarget,
+// commandfor) get the dangling-reference assert aria-controls already has,
+// and 2.3.3 gains its review question about interaction-driven motion that
+// no stylesheet lets the reader turn off.
+import invokerTarget from './wcag/4.1.2-invoker-target.js';
+import reducedMotion from './wcag/2.3.3-reduced-motion.js';
 import onInputNavigation from './wcag/3.2.2-on-input-navigation.js';
 import errorMessageLinkage from './wcag/3.3.1-error-message-linkage.js';
 import compositeWidgetName from './wcag/4.1.2-composite-widget-name.js';
@@ -198,6 +204,8 @@ export default [
   readingOrderDivergence,
   dragAlternative,
   redundantEntry,
+  invokerTarget,
+  reducedMotion,
   onInputNavigation,
   errorMessageLinkage,
   compositeWidgetName,

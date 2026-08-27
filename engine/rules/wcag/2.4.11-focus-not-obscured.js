@@ -16,6 +16,8 @@
 //
 // Sites that apply the spec's own sufficient technique — scroll-padding for
 // the overlay's edge — are not flagged at all.
+import { isInert } from '../../lib/dom.js';
+
 const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
 
 /** Does the scroll container reserve room for an overlay on this edge?
@@ -80,6 +82,8 @@ export default {
       // `:disabled` catches controls disabled by an ancestor fieldset, which
       // the `disabled` property does not reflect — those never take focus.
       if (element.matches(':disabled')) return { status: 'pass' };
+      // Inert content cannot be focused, so nothing can obscure its focus.
+      if (isInert(element)) return { status: 'pass' };
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) return { status: 'pass' };
       // Only in-viewport geometry is trustworthy (or cheap).

@@ -25,8 +25,12 @@
 export const FLEXGRID = /^(inline-)?(flex|grid)$/;
 
 /** DOM-order focusable children grouped per flex/grid parent. */
+import { isInert } from '../../lib/dom.js';
+
 export function tabbable(element) {
   if (element.disabled || element.tabIndex < 0) return false;
+  // An inert subtree is skipped by Tab entirely: no sequence to compare.
+  if (isInert(element)) return false;
   return true;
 }
 

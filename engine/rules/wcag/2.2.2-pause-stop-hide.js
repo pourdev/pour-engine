@@ -28,7 +28,7 @@ const MOTION_PROPERTIES = new Set([
 
 /** Does this keyframe set move the element around, rather than merely
  *  restyle it? A hue cycle is not movement; a translate is. */
-function keyframesMove(keyframes) {
+export function keyframesMove(keyframes) {
   return keyframes.some((frame) => Object.keys(frame).some((property) => MOTION_PROPERTIES.has(property)));
 }
 
