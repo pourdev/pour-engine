@@ -96,13 +96,25 @@ export function cssPath(element) {
   return path;
 }
 
+/** An element's attributes read through the prototype, not the instance:
+ *  a form whose control is named "attributes" shadows the property with
+ *  that control (byggmax.se, 2026-08-30), and the same goes for any named
+ *  form control. Anything that is not a NamedNodeMap is looked up on the
+ *  prototype the element was born with. */
+const attributesGetter = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'attributes')?.get : null;
+export function attributesOf(element) {
+  const own = element.attributes;
+  if (own && typeof own.length === 'number' && typeof own.item === 'function') return own;
+  return attributesGetter ? attributesGetter.call(element) : [];
+}
+
 /** Element's opening markup (attributes) plus a snippet of its own text —
  *  enough to recognise it in a table. Built WITHOUT element.outerHTML, which
  *  serializes the whole subtree and turns audits quadratic on huge pages
  *  (container divs would each stringify most of the document). */
 export function htmlSnippet(element, maxLength = 300) {
   let html = `<${element.tagName.toLowerCase()}`;
-  for (const { name, value } of element.attributes) {
+  for (const { name, value } of attributesOf(element)) {
     if (html.length >= maxLength) break;
     html += ` ${name}="${value}"`;
   }

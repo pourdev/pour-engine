@@ -1,4 +1,5 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
+import { attributesOf } from '../../lib/dom.js';
 // Concrete, usable roles — abstract roles are invalid in markup.
 const VALID_ROLES = new Set([
   'alert', 'alertdialog', 'application', 'article', 'banner', 'blockquote', 'button',
@@ -95,7 +96,7 @@ export default {
     const genericFallback = tag === 'div' || tag === 'span' || tag === 'svg';
     const focusable = element.tabIndex >= 0
       || element.matches('a[href], button, input, select, textarea, summary');
-    const hasAriaProps = [...element.attributes].some(
+    const hasAriaProps = [...attributesOf(element)].some(
       (attr) => attr.name.startsWith('aria-') && attr.name !== 'aria-hidden');
     if (genericFallback && !focusable && !hasAriaProps) return { status: 'pass' };
     // The same two triggers decide for EVERY tag (2026-08-25 overnight

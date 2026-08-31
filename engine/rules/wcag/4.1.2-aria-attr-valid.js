@@ -1,6 +1,7 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 // ARIA 1.2 attribute names (shared vocabulary in lib/roles.js), and the
 // allowed values for enumerated ones.
+import { attributesOf } from '../../lib/dom.js';
 import { KNOWN_ARIA as KNOWN, GLOBAL_ARIA, ROLE_ARIA, effectiveRole } from '../../lib/roles.js';
 
 // Note: "undefined" is a legal token for the tristate/undefinable attributes
@@ -64,7 +65,7 @@ export default {
     const invalid = [];
     const empty = [];
     let role;
-    for (const { name, value } of element.attributes) {
+    for (const { name, value } of attributesOf(element)) {
       if (!name.startsWith('aria-')) continue;
       const attr = name.slice(5);
       if (!KNOWN.has(attr)) {

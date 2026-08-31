@@ -31,6 +31,7 @@
 // and was narrowed in 1.2 (narrowed again in the 1.3 draft). Markup written
 // against 1.1 is not conforming under 1.2, and a tool on the older baseline
 // stays silent on it. Neither reading is a bug; they are different editions.
+import { attributesOf } from '../../lib/dom.js';
 import { GLOBAL_ARIA, ROLE_ARIA, KNOWN_ARIA, effectiveRole } from '../../lib/roles.js';
 
 // aria-label/labelledby misuse on generic elements has its own rule
@@ -50,7 +51,7 @@ export default {
     // Plain loop, no intermediate arrays: this runs on every element of the
     // page, and nearly all have no aria-* attributes at all.
     const ariaAttrs = [];
-    for (const { name } of element.attributes) {
+    for (const { name } of attributesOf(element)) {
       if (!name.startsWith('aria-')) continue;
       const attr = name.slice(5);
       // Unknown/misspelled attributes are aria-attr-valid's finding — judging

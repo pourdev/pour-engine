@@ -4,7 +4,14 @@
 // The override is injected and removed inside one synchronous pass — the
 // engine only yields to the renderer between rules, so the page never
 // paints the probed state.
-const OVERRIDE = `* {
+// The probe reflows the whole page for a moment. Two guards keep that
+// invisible to the user: scroll anchoring is disabled while the override
+// is in (or Chrome re-anchors during the inflated layout and leaves the
+// page scrolled somewhere else when the probe lifts — measured at 884px
+// of drift on a long report page), and the window scroll is restored
+// after removal in case the browser clamped it anyway.
+const OVERRIDE = `html { overflow-anchor: none !important; }
+* {
   line-height: 1.5 !important;
   letter-spacing: 0.12em !important;
   word-spacing: 0.16em !important;
@@ -44,6 +51,9 @@ export default {
     if (!candidates.some(Boolean)) return elements.map(() => ({ status: 'pass' }));
 
     const before = candidates.map((element) => element && clipped(element));
+    const win = doc.defaultView;
+    const scrollX = win?.scrollX ?? 0;
+    const scrollY = win?.scrollY ?? 0;
     const probe = doc.createElement('style');
     probe.dataset.pourAudit = 'probe';
     probe.textContent = OVERRIDE;
@@ -55,6 +65,10 @@ export default {
       after = candidates.map((element) => element && clipped(element));
     } finally {
       probe.remove();
+      // The audit must never move the page: put the scroll back exactly
+      // where the user had it, after the removal's own reflow settles.
+      void doc.documentElement.offsetHeight;
+      if (win && (win.scrollX !== scrollX || win.scrollY !== scrollY)) win.scrollTo(scrollX, scrollY);
     }
 
     return elements.map((element, i) => {
