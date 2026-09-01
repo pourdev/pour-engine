@@ -1,10 +1,14 @@
 // WCAG SC 1.1.1 Non-text Content (Level A)
 // alt="" (exactly empty) is the CONFORMING decorative marker (H67) — it
 // hides the image from screen readers on purpose and passes. A
-// whitespace-only alt is neither a text alternative nor that marker:
-// assistive technology handles it inconsistently (some announce the file
-// name, some skip it) — that fails. Filename/generic alts technically
-// satisfy presence but tell the user nothing (F30/F39) — flagged for eyes.
+// whitespace-only alt is neither a text alternative nor that marker by the
+// letter of the spec, but the accessible name computes to empty and current
+// screen readers skip the image as if it were alt="", and a single space
+// was once a documented workaround for old JAWS reading the file name. Its
+// authorship is ambiguous rather than a proven barrier, so since 2026-09-01
+// it is flagged for eyes, not failed at critical alongside a missing alt.
+// Filename/generic alts technically satisfy presence but tell the user
+// nothing (F30/F39) — flagged for eyes.
 const FILENAME_ALT = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)([?#].*)?$/i;
 const GENERIC_ALT = /^(image|img|photo|photograph|picture|graphic|icon|untitled|placeholder|spacer|\d+)$/i;
 
@@ -25,9 +29,8 @@ export default {
       if (alt === '') return { status: 'pass' };
       if (!alt.trim()) {
         return {
-          status: 'fail',
-          message: `alt="${alt}" is only whitespace — neither a text alternative nor the decorative marker (alt="" exactly); screen readers handle it unpredictably, some falling back to the file name.`,
-          fix: 'Use alt="" (nothing between the quotes) for decorative images, or write a real description.',
+          status: 'incomplete',
+          message: `alt="${alt}" is only whitespace — not a description, and not the decorative marker either (that is alt="" with nothing between the quotes). Screen readers skip it today, so check the image is really decorative; if it carries meaning, describe it, and either way use alt="".`,
         };
       }
       const trimmed = alt.trim();
