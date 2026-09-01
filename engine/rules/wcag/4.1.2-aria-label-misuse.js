@@ -40,6 +40,18 @@ const NAME_FROM_CONTENT = 'a[href], button, summary, h1, h2, h3, h4, h5, h6, th,
   + ' [role="checkbox"], [role="radio"], [role="switch"], [role="heading"],'
   + ' [role="cell"], [role="gridcell"], [role="columnheader"], [role="rowheader"], [role="tooltip"]';
 
+// ARIA 1.2's ten roles that prohibit naming, and the HTML elements that
+// carry them implicitly (HTML-AAM); verify:aria-tables diffs the set
+// against the spec. The rule started with div, span and p alone
+// (generic and paragraph); the other eight, explicit or as strong, em,
+// code, del, s, ins, sub and sup, joined 2026-09-01.
+export const NAME_PROHIBITED_ROLES = ['caption', 'code', 'deletion', 'emphasis', 'generic', 'insertion', 'paragraph', 'strong', 'subscript', 'superscript'];
+const IMPLICITLY_PROHIBITED = ['div', 'span', 'p', 'strong', 'em', 'code', 'del', 's', 'ins', 'sub', 'sup'];
+const SELECTOR = ['aria-label', 'aria-labelledby'].flatMap((attr) => [
+  ...IMPLICITLY_PROHIBITED.map((tag) => `${tag}[${attr}]:not([role]):not([tabindex])`),
+  ...NAME_PROHIBITED_ROLES.map((role) => `[role="${role}"][${attr}]:not([tabindex])`),
+]).join(', ');
+
 export default {
   id: 'aria-label-misuse',
   name: 'aria-label placement',
@@ -50,8 +62,7 @@ export default {
   // §5.2.8.6 prohibits BOTH naming attributes on generic — aria-labelledby
   // pointing at perfectly real text is the same authoring error as an inline
   // aria-label, and the more tempting one (a card labelled by its own title).
-  selector: 'div[aria-label]:not([role]):not([tabindex]), span[aria-label]:not([role]):not([tabindex]), p[aria-label]:not([role]):not([tabindex]),'
-    + ' div[aria-labelledby]:not([role]):not([tabindex]), span[aria-labelledby]:not([role]):not([tabindex]), p[aria-labelledby]:not([role]):not([tabindex])',
+  selector: SELECTOR,
   evaluate(element) {
     // Inside a name-from-content ancestor the label is NOT ignored: accname
     // applies the whole algorithm to each descendant while building the
@@ -72,7 +83,7 @@ export default {
         })();
     return {
       status: 'incomplete',
-      message: `${attempt} on a plain <${element.tagName.toLowerCase()}> is prohibited by ARIA: this element's role does not support naming, so although many browser and screen reader pairings announce the label today, that support is not guaranteed anywhere and can differ between assistive technologies. Where it is announced it replaces the element's visible text; where it is not, users get the visible text alone. Check both presentations read correctly, and that nothing here relies on the label being heard. Prohibited markup is not by itself a WCAG failure: the criterion that policed validity, 4.1.1 Parsing, was removed in WCAG 2.2 (w3.org/WAI/WCAG22/Understanding/parsing.html), so what decides this is what users actually hear.`,
+      message: `${attempt} on ${element.hasAttribute('role') ? `role="${element.getAttribute('role').trim()}"` : `a plain <${element.tagName.toLowerCase()}>`} is prohibited by ARIA: this element's role does not support naming, so although many browser and screen reader pairings announce the label today, that support is not guaranteed anywhere and can differ between assistive technologies. Where it is announced it replaces the element's visible text; where it is not, users get the visible text alone. Check both presentations read correctly, and that nothing here relies on the label being heard. Prohibited markup is not by itself a WCAG failure: the criterion that policed validity, 4.1.1 Parsing, was removed in WCAG 2.2 (w3.org/WAI/WCAG22/Understanding/parsing.html), so what decides this is what users actually hear.`,
       fix: 'If this element must reliably announce something of its own, give it the role it is playing (a landmark, group, or widget role) so the name is legal and exposure is guaranteed — or move the spoken text into visible or visually-hidden real text. If the label is stray, remove it. Do not add a role solely to legalise the label.',
     };
   },

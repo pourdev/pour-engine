@@ -15,7 +15,7 @@
 // control yet), and without aria-selected on an option (selection is
 // often conveyed by focus alone); the spec lists both, the DOM cannot
 // show a user is blocked, so the finding asks rather than asserts.
-const REQUIRED = {
+export const REQUIRED = {
   checkbox: ['aria-checked'],
   switch: ['aria-checked'],
   radio: ['aria-checked'],
@@ -29,7 +29,7 @@ const REQUIRED = {
   combobox: ['aria-expanded', 'aria-controls'],
   option: ['aria-selected'],
 };
-const HELD_AT_REVIEW = new Set(['aria-controls', 'aria-selected']);
+export const HELD_AT_REVIEW = new Set(['aria-controls', 'aria-selected']);
 
 // What each missing property costs the user, in the message.
 const COST = {

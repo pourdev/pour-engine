@@ -1,7 +1,7 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 import { attributesOf } from '../../lib/dom.js';
 // Concrete, usable roles — abstract roles are invalid in markup.
-const VALID_ROLES = new Set([
+export const VALID_ROLES = new Set([
   'alert', 'alertdialog', 'application', 'article', 'banner', 'blockquote', 'button',
   'caption', 'cell', 'checkbox', 'code', 'columnheader', 'combobox', 'complementary',
   'contentinfo', 'definition', 'deletion', 'dialog', 'directory', 'document', 'emphasis',

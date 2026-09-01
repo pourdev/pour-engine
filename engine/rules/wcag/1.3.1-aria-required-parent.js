@@ -13,7 +13,13 @@
 // > group > treeitem exactly as authored). For the roles whose context does
 // not list group (listitem, tab, row, cell), group stays transparent as
 // before.
-const REQUIRED_PARENT = {
+// Every row of ARIA 1.2's Required Context Role table; verify:aria-tables
+// diffs this map against the spec (2026-09-01, after caption, columnheader
+// and rowheader were found missing).
+export const REQUIRED_PARENT = {
+  caption: ['figure', 'grid', 'table', 'treegrid'],
+  columnheader: ['row'],
+  rowheader: ['row'],
   listitem: ['list'],
   option: ['listbox', 'group'],
   menuitem: ['menu', 'menubar', 'group'],
@@ -27,7 +33,7 @@ const REQUIRED_PARENT = {
   gridcell: ['row'],
 };
 
-const IMPLICIT_CONTAINER = { ul: 'list', ol: 'list', menu: 'list', table: 'table', tbody: 'rowgroup', thead: 'rowgroup', tfoot: 'rowgroup', tr: 'row' };
+const IMPLICIT_CONTAINER = { ul: 'list', ol: 'list', menu: 'list', table: 'table', tbody: 'rowgroup', thead: 'rowgroup', tfoot: 'rowgroup', tr: 'row', figure: 'figure' };
 
 export default {
   id: 'aria-required-parent',

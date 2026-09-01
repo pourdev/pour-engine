@@ -2,7 +2,12 @@
 // Composite roles are meaningless without their required child roles —
 // role="list" with no listitems announces as an empty list.
 import { implicitRole } from '../../lib/roles.js';
-const REQUIRED_CHILDREN = {
+// Every row of ARIA 1.2's Required Owned Elements table; verify:aria-tables
+// diffs this map against the spec (2026-09-01, after feed and row were
+// found missing).
+export const REQUIRED_CHILDREN = {
+  feed: ['article'],
+  row: ['cell', 'columnheader', 'gridcell', 'rowheader'],
   list: ['listitem'],
   listbox: ['option', 'group'],
   menu: ['menuitem', 'menuitemcheckbox', 'menuitemradio', 'group'],

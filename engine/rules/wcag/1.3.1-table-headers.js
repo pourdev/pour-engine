@@ -84,10 +84,16 @@ export default {
           message: 'This table has no header cells and its cells hold block content (headings, paragraphs, lists or forms), which is a layout-table signature. If it really presents data, mark its header cells with <th>; if it is layout scaffolding, add role="presentation".',
         };
       }
+      // A two-column table is a list of label-and-value pairs; its first
+      // column is the row headers, and that is the whole fix (gov.uk
+      // inheritance tax guidance, 2026-09-01: five such tables, all td).
+      const twoColumns = Math.max(0, ...rows.map((row) => row.cells.length)) === 2;
       return {
         status: 'fail',
         message: 'This looks like a data table but has no header cells — screen reader users get the data with no way to tell what each row/column means.',
-        fix: 'Mark header cells with <th> (add scope="col" or scope="row" when the table has both).',
+        fix: twoColumns
+          ? 'Mark the first cell of each row as <th scope="row">: in a two-column table the first column names what the second holds.'
+          : 'Mark header cells with <th> (add scope="col" or scope="row" when the table has both).',
       };
     }
     return { status: 'pass' };

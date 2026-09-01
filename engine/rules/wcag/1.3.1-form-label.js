@@ -125,6 +125,23 @@ export default {
           : 'Put visible text inside the label.',
       };
     }
+    // A label points at this id, but the id is shared: for binds to the
+    // FIRST element with it, so this later twin has no label and no name
+    // even though a label sits beside it (hsbc.com download basket, two
+    // rows reusing one document id, 2026-09-01). The fix is a unique id,
+    // not another label.
+    if (element.id) {
+      const root = element.getRootNode();
+      const pointed = root.querySelector?.(`label[for="${CSS.escape(element.id)}"]`);
+      const first = root.getElementById?.(element.id);
+      if (pointed && first && first !== element) {
+        return {
+          status: 'fail',
+          message: `A <label for="${element.id}"> exists, but an earlier element on the page has the same id, so the label belongs to that one and this field has no label at all.`,
+          fix: `Give this field a unique id and point its label at that; ids must not repeat on a page.`,
+        };
+      }
+    }
     return {
       status: 'fail',
       message: 'This form field has no label — users cannot tell what to enter.',
