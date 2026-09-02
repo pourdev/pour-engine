@@ -8,11 +8,35 @@
 // finding goes to a human with the evidence attached, never asserted: the
 // same verdict discipline as pause-stop-hide's ticker branch.
 //
+// One shape of that mechanism is stated in the markup and needs no human:
+// a visible button whose aria-controls names the video, or a container
+// holding it. That is what aria-controls is for, the element whose
+// presence or contents the control changes, and a page that wires its
+// pause button that way has answered the question the review would ask
+// (pour.dev's own hero and sense videos, David, 2026-09-02). A button that
+// merely sits near the video, or one that is hidden, settles nothing.
+//
 // A <video controls> ships its own pause button and is out of the selector.
 // Icon-scale playback (tiny inline previews) is left alone for the same
 // reason pause-stop-hide skips spinners: flagging every small moving
 // thumbnail would bury the full-bleed hero that matters. Silence there is
 // abstaining, not clearing.
+/** A visible, enabled button whose aria-controls names the video or an
+ *  ancestor of it, looked up in the video's own document or shadow tree. */
+function pauseControlFor(video, isVisible) {
+  const root = video.getRootNode();
+  if (!root.querySelectorAll) return null;
+  const byId = (id) => (root.getElementById ? root.getElementById(id) : root.querySelector(`#${CSS.escape(id)}`));
+  for (const control of root.querySelectorAll('button[aria-controls], [role="button"][aria-controls], input[type="button"][aria-controls]')) {
+    if (control.disabled || !isVisible(control)) continue;
+    for (const id of control.getAttribute('aria-controls').split(/\s+/)) {
+      const target = id && byId(id);
+      if (target && (target === video || target.contains(video))) return control;
+    }
+  }
+  return null;
+}
+
 export default {
   id: 'video-loop-motion',
   name: 'Looping video control',
@@ -23,7 +47,7 @@ export default {
   selector: 'video[autoplay][loop]:not([controls])',
   // Movement is a visual matter: an aria-hidden hero still moves on screen.
   visibility: 'visual',
-  evaluate(element) {
+  evaluate(element, { isVisible }) {
     // Icon scale means SMALL, not thin: a 1200×60 animated banner strip is
     // a ticker, and only a video small on both axes is spinner-class.
     const rect = element.getBoundingClientRect();
@@ -32,6 +56,7 @@ export default {
     // something on the page already paused it — in both cases nothing is
     // moving, and a paused-by-a-control video is the mechanism working.
     if (element.paused && element.readyState >= 2) return { status: 'pass' };
+    if (pauseControlFor(element, isVisible)) return { status: 'pass' };
     return {
       status: 'incomplete',
       message: 'This video auto-plays on a loop with no built-in controls: it starts by itself and never ends, so it runs well past the five seconds at which WCAG 2.2.2 requires a way to pause, stop or hide it. Check the page offers a pause control that reaches this video, or that the video is the only content presented.',

@@ -1690,10 +1690,16 @@ export function pseudoTextColors(element, style) {
   return found;
 }
 
+/** The font weight from which text counts as bold for the large-scale
+ *  test. WCAG's glossary says "bold" and no number; CSS's bold keyword is
+ *  700, and the semibold 600 that most modern faces ship reads as bold at
+ *  14pt on screen, so it counts here too (David, 2026-09-02; was 700). */
+export const BOLD_WEIGHT = 600;
+
 /** WCAG "large text": ≥24px, or ≥18.66px (14pt) bold. */
 export function isLargeText(style) {
   const size = parseFloat(style.fontSize);
   const weight = parseInt(style.fontWeight, 10) || 400;
   // 18pt and 14pt at CSS's 96dpi: 24px, and 56/3 = 18.666…px exactly.
-  return size >= 24 || (size >= 56 / 3 && weight >= 700);
+  return size >= 24 || (size >= 56 / 3 && weight >= BOLD_WEIGHT);
 }
