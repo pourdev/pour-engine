@@ -132,6 +132,7 @@ let panelRectsCache = null;
 let pseudoCache = new WeakMap();
 let zeroClipCache = new WeakMap();
 let firstLineRulesCache = new WeakMap();
+let inactiveLabelIdsCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -143,6 +144,30 @@ export function resetAuditCaches() {
   pseudoCache = new WeakMap();
   zeroClipCache = new WeakMap();
   firstLineRulesCache = new WeakMap();
+  inactiveLabelIdsCache = new WeakMap();
+}
+
+/**
+ * The ids that inactive widgets name themselves from through
+ * aria-labelledby, per root (document or shadow root), collected once per
+ * audit. The contrast rule asks this for every element with text of its
+ * own, and a selector query over the whole page for each of them would
+ * turn that walk quadratic. `isInactive` is the rule's own reading of
+ * "disabled", so the lib does not carry a second one.
+ */
+export function inactiveLabelIds(root, isInactive) {
+  let ids = inactiveLabelIdsCache.get(root);
+  if (!ids) {
+    ids = new Set();
+    for (const widget of root.querySelectorAll('[aria-labelledby]')) {
+      if (!isInactive(widget)) continue;
+      for (const id of widget.getAttribute('aria-labelledby').split(/\s+/)) {
+        if (id) ids.add(id);
+      }
+    }
+    inactiveLabelIdsCache.set(root, ids);
+  }
+  return ids;
 }
 
 /**

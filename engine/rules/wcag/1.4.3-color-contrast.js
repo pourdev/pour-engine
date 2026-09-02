@@ -7,6 +7,7 @@ import {
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
   showRatio, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors,
+  inactiveLabelIds,
 } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
@@ -79,6 +80,88 @@ function inactiveComponentText(element) {
   }
   const ariaDisabled = element.closest('[aria-disabled="true"]');
   return Boolean(ariaDisabled && ariaDisabled.matches(ARIA_DISABLED_HOSTS));
+}
+
+/** A widget switched off: natively disabled (an ancestor <fieldset
+ *  disabled> included, which is what :disabled sees and .disabled does not),
+ *  or aria-disabled="true" on a role that honours the attribute. */
+function inactiveWidget(widget) {
+  return widget.matches(':disabled')
+    || (widget.getAttribute('aria-disabled') === 'true' && widget.matches(ARIA_DISABLED_HOSTS));
+}
+
+/**
+ * Is this text the label of an inactive control? The browser greys
+ * <label>My name <input disabled></label> as one unit, and the criterion's
+ * "inactive user interface component" is read that way by ACT afw4f7 and
+ * 09o5cg, whose applicability excludes text whose ancestor "is used in the
+ * accessible name of an inheriting semantic widget that is disabled". A
+ * label reaches its widget two ways: the <label> element's own association
+ * (label.control), and aria-labelledby on the widget naming this element
+ * or one of its ancestors. Text inside the widget itself is
+ * inactiveComponentText's, above.
+ */
+function labelsInactiveComponent(element) {
+  const control = element.closest('label')?.control;
+  if (control && inactiveWidget(control)) return true;
+  const ids = inactiveLabelIds(element.getRootNode(), inactiveWidget);
+  if (!ids.size) return false;
+  for (let node = element; node; node = node.parentElement) {
+    if (node.id && ids.has(node.id)) return true;
+  }
+  return false;
+}
+
+/** Any letter or digit, in any script. */
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/** User-perceived characters, so a flag or a skin-toned emoji counts as
+ *  one. Falls back to code points where Intl.Segmenter is missing. */
+function graphemeCount(text) {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    let count = 0;
+    for (const _ of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) count += 1;
+    return count;
+  }
+  return [...text].length;
+}
+
+/** The controls a lone glyph stands in as an icon for. */
+const ICON_HOSTS = 'button, a[href], summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"]';
+
+/**
+ * Why this text is not "text" as 1.4.3 means it, or null. WCAG defines text
+ * as characters "expressing something in human language", and ACT afw4f7
+ * and 09o5cg exempt a text node that "does not express anything in human
+ * language". Two shapes are provable from the markup:
+ *   - not one letter or digit in any script: a rule of dashes, a run of
+ *     symbols, an emoji, an icon-font glyph from the private use area. The
+ *     separator exemption above is the strict subset of this that passes
+ *     outright.
+ *   - a single character inside a control whose author supplied the
+ *     name another way, and that name does not contain the character:
+ *     the X in <button aria-label="Close">X</button> is an icon, and the
+ *     aria-label says so.
+ * The verdict is asked for only once the ratio has missed, and goes to a
+ * human rather than to pass: whether a symbol run is a shape (a divider)
+ * or is read (a star rating, a price in currency signs) is not for a
+ * script to say, and a glyph that works as a graphic still owes 3:1
+ * under 1.4.11, which this engine does not measure for icons.
+ */
+function nonLanguageReason(element, text, accessibleName) {
+  if (!LETTER_OR_DIGIT.test(text)) {
+    // A private-use code point has no glyph outside the icon font that
+    // defines it, so quoting it shows nothing; say what it is instead.
+    if (/^[\p{Co}\s]+$/u.test(text)) return 'this text is an icon-font glyph (a private-use character), not words';
+    const excerpt = text.length > 12 ? `${text.slice(0, 12)}…` : text;
+    return `this text is only symbols and punctuation ("${excerpt}"), not words`;
+  }
+  if (graphemeCount(text) !== 1) return null;
+  const host = element.closest(ICON_HOSTS);
+  if (!host || !(host.hasAttribute('aria-label') || host.hasAttribute('aria-labelledby'))) return null;
+  const name = accessibleName(host);
+  if (!name || name.toLowerCase().includes(text.toLowerCase())) return null;
+  return `the single character "${text}" stands in for an icon — the ${host.tagName.toLowerCase()}'s accessible name is "${name}", which does not contain it`;
 }
 
 /** A control the keyboard cannot reach either: with pointer-events: none
@@ -452,8 +535,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   async evaluate(element, { ownText }) {
     if (!ownText(element)) return { status: 'pass' }; // no text of its own to judge
 
-    // The criterion exempts "inactive user interface components".
-    if (inactiveComponentText(element)) return { status: 'pass' };
+    // The criterion exempts "inactive user interface components" — the
+    // text inside one, and the label that is greyed out with it.
+    if (inactiveComponentText(element) || labelsInactiveComponent(element)) return { status: 'pass' };
 
     // A shadow HOST's own text renders through its shadow tree: when a
     // <slot> projects it, the text inherits styles from the slot's
@@ -1237,7 +1321,21 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   const judge = rule.evaluate.bind(rule);
   rule.evaluate = async (element, helpers) => {
     const verdict = await judge(element, helpers);
-    if (verdict.status === 'fail' && element.closest('[aria-hidden="true"]')) {
+    if (verdict.status !== 'fail') return verdict;
+    // A miss on something that is not text in a human language is a
+    // question, not a finding: see nonLanguageReason. Every fail path
+    // (solid, image-range, translucent blend, halo, group opacity) passes
+    // through here, so the exemption needs stating once.
+    const reason = nonLanguageReason(element, helpers.ownText(element), helpers.accessibleName);
+    if (reason) {
+      const measured = verdict.data?.ratio
+        ? `${verdict.data.ratio}:1, below the ${verdict.data.required}:1 minimum` : 'below the minimum';
+      return {
+        status: 'incomplete',
+        message: `Contrast is ${measured}, but ${reason}. 1.4.3 covers text in a human language; a glyph that works as a graphic is judged under 1.4.11 non-text contrast (3:1) instead. Decide by eye which this is.`,
+      };
+    }
+    if (element.closest('[aria-hidden="true"]')) {
       verdict.message += ' aria-hidden hides this from screen readers, not from sighted users; contrast is judged for the people who see it.';
     }
     return verdict;
