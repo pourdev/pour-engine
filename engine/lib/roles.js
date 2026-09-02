@@ -24,6 +24,12 @@ export const GLOBAL_ARIA = new Set([
   'live', 'owns', 'relevant', 'roledescription', 'braillelabel', 'brailleroledescription',
 ]);
 
+/** The eight landmark roles (ARIA 1.2, Landmark Roles). Shared by the
+ *  landmark rules, the landmark lens and the screen reader's rotor. */
+export const LANDMARK_ROLES = new Set([
+  'banner', 'complementary', 'contentinfo', 'form', 'main', 'navigation', 'region', 'search',
+]);
+
 /** Attributes each role supports IN ADDITION to the globals.
  *
  *  Includes the four attributes ARIA 1.2 removed from the GLOBAL set

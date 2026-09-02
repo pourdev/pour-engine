@@ -1,5 +1,11 @@
 // DOM helpers shared by all rules.
 
+/** Elements that never reach the accessibility tree, so they cannot break
+ *  the structure of a list or a description list. STYLE belongs with them:
+ *  CSS-in-JS libraries inject <style> right beside the markup, and it was
+ *  being counted as a stray child that broke the list. */
+export const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'META']);
+
 /**
  * The audit context plus every OPEN shadow root beneath it, hosts before
  * their shadow trees. Collected once per audit so each rule can query every

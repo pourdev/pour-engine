@@ -112,7 +112,7 @@ Nothing in the spec is silently skipped — that claim is the product.
 
 ## Honest current state
 
-74 rules, hardened on real sites and the `testbeds/` pages. Audits walk into
+88 rules, hardened on real sites and the `testbeds/` pages. Audits walk into
 open shadow roots (targets come back as `host >>> inner` selector chains);
 iframe traversal is the host's job, and the extension does it. Known gaps:
 the full accname spec (ours is a close approximation) and the language

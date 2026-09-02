@@ -111,7 +111,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 
 | SC | Name | Level | Coverage | Rules |
 |---|---|---|---|---|
-| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role, invoker-target |
+| 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, invoker-target, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
 **Totals:** 39 partially automated · 47 manual — with 88 rules.

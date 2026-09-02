@@ -1,9 +1,6 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
-// Nothing here reaches the accessibility tree, so none of it can corrupt a
-// list's structure. STYLE belongs with them: CSS-in-JS libraries inject
-// <style> right where the markup sits, and it was being counted as a stray
-// child that broke the list.
-const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'META']);
+import { NEVER_RENDERED } from '../../lib/dom.js';
+
 const ITEM_ROLES = ['listitem', 'presentation', 'none'];
 
 export default {

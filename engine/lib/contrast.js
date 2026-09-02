@@ -1040,7 +1040,7 @@ export function viewportVeil(doc) {
 /** Parse a computed text-shadow list into layers. Computed style serializes
  *  the colour first ("rgb(0, 0, 0) 1px 0px 2px") with px lengths; author-ish
  *  orderings are tolerated. */
-export function parseTextShadows(cssText) {
+function parseTextShadows(cssText) {
   if (!cssText || cssText === 'none') return [];
   const layers = [];
   for (const part of cssText.split(/,(?![^(]*\))/)) {
@@ -1116,7 +1116,7 @@ export function textShadowNegligible(cssText, fontSize) {
  * uncertain path keeps the FULL box, erring toward review, never past a
  * real overlap. Returns null when the clip leaves nothing paintable.
  */
-export function paintableRect(element, rect) {
+function paintableRect(element, rect) {
   let { left, top, right, bottom } = rect;
   let mode = getComputedStyle(element).position;
   for (let a = element.parentElement; a; a = a.parentElement) {
@@ -1333,7 +1333,7 @@ export function imageLuminanceRange(url, overlays = [], grid = null) {
  * cover/contain hands sizing to an intrinsic this function does not have, or
  * when its position is not a plain length or percentage.
  */
-export function backgroundImagePaintRects(element) {
+function backgroundImagePaintRects(element) {
   const style = getComputedStyle(element);
   const images = splitLayers(style.backgroundImage);
   if (!images.length) return [];
@@ -1489,29 +1489,6 @@ export function rangeWithBackdrop(range, under, overlays = []) {
     max: Math.max(range.max, underLum),
     minColor: underLum < range.min ? shown : range.minColor,
     maxColor: underLum > range.max ? shown : range.maxColor,
-  };
-}
-
-/**
- * Luminance range of a CSS gradient, from its colour stops. Interpolated
- * colours stay close enough to their stops' luminances to bracket.
- */
-export function gradientLuminanceRange(backgroundImageCss, overlays = []) {
-  const stops = (backgroundImageCss.match(/rgba?\([^)]+\)/g) ?? []).map(parseColor).filter(Boolean);
-  if (!stops.length || stops.some((c) => c.a < 1)) return null; // translucent stops reveal what's beneath
-  const composited = stops.map((stop) => (overlays.length ? applyOverlays(stop, overlays) : stop));
-  const lums = composited.map(luminance);
-  const min = Math.min(...lums);
-  const max = Math.max(...lums);
-  // The COLOURS at the extremes, not just their luminances: translucent text
-  // takes its presented colour from the pixels beneath, so bracketing that
-  // blend needs the actual rgb to composite against, and luminance alone
-  // cannot be un-gamma'd back into one.
-  return {
-    min,
-    max,
-    minColor: composited[lums.indexOf(min)],
-    maxColor: composited[lums.indexOf(max)],
   };
 }
 

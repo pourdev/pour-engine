@@ -1,18 +1,15 @@
 // ARIA APG landmark pattern: same-type landmarks need distinguishing
 // labels, and banner / contentinfo / main must be unique per page outright
 // (two "banners" are ambiguous however well they're labelled).
-import { implicitRole } from '../../lib/roles.js';
+import { implicitRole, LANDMARK_ROLES } from '../../lib/roles.js';
 import { labelledByName } from '../../lib/accessible-name.js';
 
 const SINGLETON = new Set(['banner', 'contentinfo', 'main']);
 
-// ARIA 1.2, Landmark Roles: the eight roles that are landmarks. An explicit
+// Only the eight ARIA landmark roles (lib/roles.js) count. An explicit
 // non-landmark role on a landmark element (<nav role="menubar">) makes it a
 // widget, not a landmark, so it has nothing to be distinguished from
 // (2026-08-25 overnight audit).
-const LANDMARK_ROLES = new Set([
-  'banner', 'complementary', 'contentinfo', 'form', 'main', 'navigation', 'region', 'search',
-]);
 
 /** Landmark role of the element in the accessibility tree — explicit role
  *  first, else the implicit role (which handles header/footer demotion

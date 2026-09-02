@@ -3,11 +3,7 @@
 // page outline. Complementary joins via the aside demotion semantics in
 // lib/roles.js: only an aside that actually reaches the accessibility tree
 // as complementary owes top-levelness.
-import { implicitRole } from '../../lib/roles.js';
-
-const LANDMARK_ROLES = new Set([
-  'main', 'navigation', 'banner', 'contentinfo', 'complementary', 'region', 'search', 'form',
-]);
+import { implicitRole, LANDMARK_ROLES } from '../../lib/roles.js';
 
 /** HTML-AAM (form, section): "If a form has no accessible name, do not
  *  expose the element as a landmark", and a section is a region only with

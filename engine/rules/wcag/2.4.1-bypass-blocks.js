@@ -1,6 +1,6 @@
 // WCAG SC 2.4.1 Bypass Blocks (Level A)
 import { collectRoots, isEmbeddedDocument } from '../../lib/dom.js';
-import { effectiveRole } from '../../lib/roles.js';
+import { effectiveRole, LANDMARK_ROLES } from '../../lib/roles.js';
 
 // ARIA11 lists the landmark roles: banner, complementary, contentinfo,
 // form, main, navigation, region, search. Judged by EFFECTIVE role, not tag
@@ -10,7 +10,6 @@ import { effectiveRole } from '../../lib/roles.js';
 // and missed the second. region and form are landmarks only when named
 // (ARIA 1.2 requires an accessible name for region; HTML-AAM maps form to
 // the form landmark only with one), so the name is checked here.
-const LANDMARK_ROLES = new Set(['banner', 'complementary', 'contentinfo', 'form', 'main', 'navigation', 'region', 'search']);
 const NAMED_ONLY = new Set(['form', 'region']);
 const LANDMARK_CANDIDATES = 'main, header, footer, nav, aside, section, form, [role]';
 const hasName = (el) => Boolean(

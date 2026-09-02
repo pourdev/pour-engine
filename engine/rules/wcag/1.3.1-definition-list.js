@@ -1,13 +1,12 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
+import { NEVER_RENDERED } from '../../lib/dom.js';
+
 const ALLOWED = new Set(['DT', 'DD', 'DIV']);
-// Nothing here reaches the accessibility tree, so none of it can corrupt
-// the term/description pairing: the same set list-structure keeps, for the
-// same reason (CSS-in-JS injects <style> right beside the markup). HTML's
-// content model does exclude style from dl, but validity is not the
-// criterion; 1.3.1 is about relationships assistive technology can
-// determine, and every dt/dd pair stays intact around an element that has
-// no tree presence (2026-08-25 overnight audit).
-const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'META']);
+// NEVER_RENDERED cannot corrupt the term/description pairing: HTML's content
+// model does exclude style from dl, but validity is not the criterion;
+// 1.3.1 is about relationships assistive technology can determine, and
+// every dt/dd pair stays intact around an element that has no tree
+// presence (2026-08-25 overnight audit).
 
 export default {
   id: 'definition-list',
