@@ -204,8 +204,17 @@ export function implicitRole(element) {
  * trigger it, even though a strict reading of the spec suggests it should.
  */
 function presentationDiscarded(element) {
-  if (element.tabIndex >= 0) return true;
-  if (element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]')) return true;
+  // Both focus triggers rest on the element actually being focusable. A
+  // disabled form control is not: HTML drops a disabled control from the
+  // sequential focus order and it cannot be focused at all, whatever its
+  // tabindex says (tabIndex still reports 0 for a disabled <button>). So
+  // <button role="none" disabled> keeps its written role — Chromium exposes
+  // it as nothing, and ACT 97a4e1 lists it as inapplicable to button-name.
+  // The global-property trigger is unaffected: aria-label on a disabled
+  // control still discards the presentational role.
+  const focusable = !element.matches(':disabled');
+  if (focusable && element.tabIndex >= 0) return true;
+  if (focusable && element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]')) return true;
   return [...GLOBAL_ARIA].some((name) => element.hasAttribute(`aria-${name}`));
 }
 
