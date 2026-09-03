@@ -34,10 +34,18 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',
   // Implicit landmarks (header, footer, labelled section/form) join the
   // grouping — a page's <header> and a div[role="banner"] ARE duplicates.
+  // region and form need a name to BE landmarks (ARIA 1.2 gives both "Name
+  // From: author", and Chromium exposes an unnamed one as generic), which is
+  // why the native <section> and <form> above are already spelled with the
+  // name requirement. Without it, two unnamed div[role="region"] were
+  // reported as indistinguishable landmarks when neither is a landmark at
+  // all, sending the author to label something no screen reader announces.
   selector:
     'nav, search, aside, header, footer, section[aria-label], section[aria-labelledby], ' +
     'form[aria-label], form[aria-labelledby], [role="navigation"], [role="complementary"], ' +
-    '[role="banner"], [role="contentinfo"], [role="region"], [role="search"], [role="form"], [role="main"], main',
+    '[role="banner"], [role="contentinfo"], [role="region"][aria-label], ' +
+    '[role="region"][aria-labelledby], [role="form"][aria-label], [role="form"][aria-labelledby], ' +
+    '[role="search"], [role="main"], main',
   // Judged as a set: two unlabelled navs are the problem, not either alone.
   evaluateAll(elements) {
     const roles = elements.map(landmarkRole);

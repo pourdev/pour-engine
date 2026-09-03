@@ -3,6 +3,7 @@
 // 3.3.2 mapping: a field with no label at all, or only a vanishing
 // placeholder, is failure F82 — the classic 3.3.2 pattern.
 import { labelledByName } from '../../lib/accessible-name.js';
+import { effectiveRole } from '../../lib/roles.js';
 
 export default {
   id: 'form-label',
@@ -14,6 +15,12 @@ export default {
   selector:
     'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), select, textarea',
   evaluate(element) {
+    // A field whose presentational role survives the conflict resolution is
+    // not in the accessibility tree at all: <select role="none" disabled> is
+    // exposed as role none, so there is no field to name under 4.1.2 and
+    // nothing to fill in under 3.3.2. The role library owns that judgment.
+    const role = effectiveRole(element);
+    if (role === 'presentation' || role === 'none') return { status: 'pass' };
     // Only perceivable labels count: a display:none / aria-hidden label
     // technically feeds the accessible name, but nobody can see it and
     // that defeats the point of a label.

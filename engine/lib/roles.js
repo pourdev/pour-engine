@@ -208,11 +208,23 @@ export function implicitRole(element) {
  * but adding tabindex or aria-describedby exposes `heading`. Note a non-global
  * property applicable to the implicit role (aria-level on a heading) does NOT
  * trigger it, even though a strict reading of the spec suggests it should.
+ *
+ * "Focusable" means focusable in fact, not focusable by tag. A disabled
+ * control and anything inside an inert subtree are not focusable areas, so
+ * their presentational role STANDS and the browser keeps them out of the
+ * accessibility tree: Chromium exposes `<button role="none" disabled>` as
+ * role none, with no name to owe. Reading focusability from the tag alone
+ * (or from tabIndex, which Chromium still reports as 0 on a disabled
+ * button) resurrected those elements and asserted a missing name on a
+ * control the user is never offered.
  */
 function presentationDiscarded(element) {
+  // A global property is exposed whatever the element's state, so it
+  // discards the role on its own, disabled or not.
+  if ([...GLOBAL_ARIA].some((name) => element.hasAttribute(`aria-${name}`))) return true;
+  if (element.matches(':disabled') || element.closest('[inert]')) return false;
   if (element.tabIndex >= 0) return true;
-  if (element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]')) return true;
-  return [...GLOBAL_ARIA].some((name) => element.hasAttribute(`aria-${name}`));
+  return element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]');
 }
 
 export function effectiveRole(element) {

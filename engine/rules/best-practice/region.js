@@ -14,8 +14,16 @@ const LANDMARK =
   'header:not(:is(article, aside, main, nav, section) header), ' +
   'footer:not(:is(article, aside, main, nav, section) footer), ' +
   'section[aria-label], section[aria-labelledby], [role="main"], [role="navigation"], ' +
-  '[role="banner"], [role="contentinfo"], [role="complementary"], [role="region"], ' +
-  '[role="search"], [role="form"], [role="dialog"], [role="alertdialog"], dialog[open]';
+  '[role="banner"], [role="contentinfo"], [role="complementary"], ' +
+  // region and form are exposed as landmarks only once they are named (ARIA
+  // 1.2 gives both "Name From: author"), which is why the native <section>
+  // and <form> above already carry that requirement. Accepting the ARIA
+  // spelling bare let a nameless div[role="region"] stand in for a landmark
+  // and hid every stray element inside it; Chromium exposes that div as
+  // generic, so screen-reader users reach none of it by region navigation.
+  '[role="region"][aria-label], [role="region"][aria-labelledby], ' +
+  '[role="form"][aria-label], [role="form"][aria-labelledby], ' +
+  '[role="search"], [role="dialog"], [role="alertdialog"], dialog[open]';
 
 export default {
   id: 'region',

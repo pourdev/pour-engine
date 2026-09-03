@@ -23,6 +23,33 @@ function refreshDestination(content) {
   return rest.trim();
 }
 
+/**
+ * The delay the browser would actually use, and null when the HTML "shared
+ * declarative refresh steps" bail out and schedule nothing at all. Those
+ * steps collect ASCII digits and stop: a leading "+" ends the parse before a
+ * single digit is read (content="+5; url=…" refreshes nothing), and anything
+ * other than ";", "," or whitespace directly after the digits does the same
+ * (content="1x; url=…"). parseInt accepts both and returned 5 and 1, so the
+ * rule asserted a time limit on pages the browser never moves. Verified in
+ * Chromium: both of those pages stay put while content="1; url=…" navigates.
+ */
+function refreshDelay(content) {
+  const isAsciiSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\f' || c === '\r';
+  const isDigit = (c) => c >= '0' && c <= '9';
+  let i = 0;
+  while (i < content.length && isAsciiSpace(content[i])) i++;
+  let digits = '';
+  while (i < content.length && isDigit(content[i])) digits += content[i++];
+  // No digits is only allowed when a decimal point follows, which the steps
+  // read as a fractional delay of zero seconds.
+  if (!digits && content[i] !== '.') return null;
+  const delay = digits ? Number(digits) : 0;
+  // Trailing digits and full stops are collected and thrown away.
+  while (i < content.length && (isDigit(content[i]) || content[i] === '.')) i++;
+  if (i < content.length && content[i] !== ';' && content[i] !== ',' && !isAsciiSpace(content[i])) return null;
+  return delay;
+}
+
 export default {
   id: 'meta-refresh',
   name: 'Timed page refresh',
@@ -34,7 +61,10 @@ export default {
   visibleOnly: false,
   evaluate(element) {
     const content = element.getAttribute('content') ?? '';
-    const delay = parseInt(content, 10);
+    const delay = refreshDelay(content);
+    // The browser discards this directive, so no time limit is set by the
+    // content and 2.2.1 has nothing to judge.
+    if (delay === null) return { status: 'pass' };
     // A refresh with no destination reloads THIS page. At zero seconds that
     // is not the allowed instant redirect — it is a loop that throws the
     // user back to the top of the page over and over (failure F41).

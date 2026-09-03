@@ -115,10 +115,21 @@ function visibleContentText(element, includeHidden) {
 
 /** CSS generated content contributes to name-from-contents per the accname
  *  spec — icon-font prefixes and content:"…" labels are real names. Only
- *  plain strings count: counters, url(), attr() are not resolvable here. */
+ *  plain strings count: counters, url(), attr() are not resolvable here.
+ *
+ *  The exception is the CSS alternative text syntax, content: <image or
+ *  string> / "alt", which exists precisely to give assistive technology the
+ *  text for generated content and which browsers expose: an icon-only button
+ *  drawn with content: url(menu.svg) / "Menu" IS named "Menu" (Chromium's
+ *  accessibility tree agrees), and calling it nameless asserted a critical
+ *  4.1.2 failure against the recommended pattern. An EMPTY alternative marks
+ *  the generated content decorative and contributes nothing, which is how
+ *  the same syntax silences icon glyphs. */
 function generatedContent(element, pseudo) {
   const content = getComputedStyle(element, pseudo).content;
   if (!content || content === 'none' || content === 'normal') return '';
+  const alt = content.match(/\/\s*"((?:[^"\\]|\\.)*)"\s*$/);
+  if (alt) return alt[1].replace(/\\(.)/g, '$1');
   const match = content.match(/^"((?:[^"\\]|\\.)*)"$/);
   return match ? match[1].replace(/\\(.)/g, '$1') : '';
 }
