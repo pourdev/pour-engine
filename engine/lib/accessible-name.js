@@ -153,6 +153,17 @@ function textFromNodes(nodes, includeHidden) {
       text += textFromNodes(assigned.length ? assigned : node.childNodes, includeHidden);
       continue;
     }
+    // accname step 2B applies to EVERY node the name-from-content walk
+    // visits, not only the root: a descendant's aria-labelledby names it,
+    // and that name is what the ancestor collects. <a href><img
+    // aria-labelledby="id1"></a> is named by #id1 (ACT c487ae Passed
+    // Example 8; Chromium exposes exactly this). Skipped inside a
+    // labelledby traversal, as 2B requires — the same flag that stops a
+    // self-referencing aria-labelledby from recursing in computeName.
+    if (!includeHidden) {
+      const fromLabelledBy = labelledByName(node);
+      if (fromLabelledBy) { text += ` ${fromLabelledBy} `; continue; }
+    }
     if (tag === 'img' || tag === 'area') {
       // HTML-AAM order for an image's own name: aria-label → alt → title.
       // A PRESENT-but-empty alt marks the image decorative and contributes
