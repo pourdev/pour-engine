@@ -31,6 +31,31 @@ const TARGETS = 'a[href], button, input, select, [role="button"], [role="link"]'
  */
 import { isInert } from '../../lib/dom.js';
 
+// A web component's internal link and its enclosing light-DOM link are
+// not independent pointer targets. DOM contains() stops at shadow roots.
+function containsComposed(ancestor, element) {
+  if (ancestor.contains(element)) return true;
+  if (ancestor.getRootNode() === element.getRootNode() && !element.assignedSlot) return false;
+  for (let node = element; node; node = node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host) {
+    if (node === ancestor) return true;
+  }
+  return false;
+}
+
+function outsideHiddenOverflow(element, rect) {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    if (style.display === 'contents') continue; // no principal box to clip its children
+    const x = /^(hidden|clip)$/.test(style.overflowX);
+    const y = /^(hidden|clip)$/.test(style.overflowY);
+    if (!x && !y) continue;
+    const clip = parent.getBoundingClientRect();
+    if ((x && (clip.width === 0 || rect.right <= clip.left || rect.left >= clip.right))
+      || (y && (clip.height === 0 || rect.bottom <= clip.top || rect.top >= clip.bottom))) return true;
+  }
+  return false;
+}
+
 function isHiddenFromPointer(element, rect) {
   if (rect.width <= 1 || rect.height <= 1) return true;
   if (rect.right <= 0 || rect.bottom <= 0) return true; // parked above/left of the canvas
@@ -567,7 +592,7 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         // target's circle.
         const crowds = (other, j) => {
           if (j === i || !laidOut[j]) return false;
-          if (other.contains(element) || element.contains(other)) return false; // same control, nested markup
+          if (containsComposed(other, element) || containsComposed(element, other)) return false; // same control, including shadow content
           // "One control drawn twice" (stretched-link overlays) is a claim
           // about PAINT, so it must be proved on a painted fragment, not on
           // the bounding box: a two-line wrapped link's box swallows a small
@@ -576,7 +601,20 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           // the honest fragment test below. A single-fragment element's one
           // fragment IS its box, so genuine overlays are dismissed exactly
           // as before.
-          if (paintedEncloses(other, rects[j], rects[i]) || paintedEncloses(element, rects[i], rects[j])) return false;
+          // Containment of one painted box inside another does not prove
+          // that they perform the same action. A small preview button over
+          // an image link is explicitly a spacing failure in SC 2.5.8.
+          // Only two links with the same real destination can use the
+          // equivalent-control exemption here.
+          // https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+          if (paintedEncloses(other, rects[j], rects[i]) || paintedEncloses(element, rects[i], rects[j])) {
+            const destination = destinationOf(element);
+            if (destination && destination === destinationOf(other)) return false;
+            // Collapsed disclosures can leave their descendants' boxes
+            // overlapping nearby controls even though the overflow clips
+            // them completely. Such boxes accept no pointer input.
+            if (outsideHiddenOverflow(element, rects[i]) || outsideHiddenOverflow(other, rects[j])) return false;
+          }
           // Crowding across fixed/sticky contexts is scroll state, not
           // layout, exactly as the obscured-target test reads overlap: a
           // consent banner pinned to the bottom of the viewport lays its

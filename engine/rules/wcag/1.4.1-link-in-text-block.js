@@ -121,16 +121,23 @@ export default {
   // embedded in prose exactly as 1.4.1 means it. Pure link lists (navs,
   // blogrolls) are still excluded, but by the ownText guard below rather than
   // by tag: in <li><a>Home</a></li> the item has no text of its own.
-  // <div> was measured too and added nothing on any test site, so it stays
-  // out rather than widening the blast radius for no gain.
-  selector: 'p a[href], dd a[href], blockquote a[href], td a[href], li a[href]',
+  // Prose in a generic container has the same requirement. F73 does not
+  // limit colour-only links to paragraph markup. The text and shared-line
+  // checks below keep navigation and separate blocks out of this lane.
+  // https://www.w3.org/WAI/WCAG22/Techniques/failures/F73
+  selector: 'p a[href], dd a[href], blockquote a[href], td a[href], li a[href], div a[href]',
   visibility: 'visual', // colour distinction is a purely visual concern
   evaluate(element, { ownText }) {
-    const parent = element.closest('p, dd, blockquote, td, li');
+    const parent = element.closest('p, dd, blockquote, td, li, div');
     if (!element.textContent.trim() || !parent) return { status: 'pass' };
     // Needs real surrounding text to blend into (1.4.1 is about links
     // embedded in prose, not a link that IS the content).
-    if (ownText(parent).replace(/\s+/g, '').length < 10) return { status: 'pass' };
+    const surroundingText = ownText(parent).trim();
+    if (!/[\p{L}\p{N}]/u.test(surroundingText)) return { status: 'pass' };
+    // A short fragment may be prose ("See ..."), an equation or a label.
+    // F73 has no minimum character count. Keep evaluating the visual cues
+    // and ask about ambiguous context instead of silently passing it.
+    const shortContext = surroundingText.replace(/\s+/g, '').length < 10;
 
     const style = getComputedStyle(element);
     const parentStyle = getComputedStyle(parent);
@@ -327,6 +334,13 @@ export default {
       return {
         status: 'incomplete',
         message: `This link has no underline and only ${shown}:1 colour difference from the surrounding text, but its font size differs from the prose by ${sizeStep.toFixed(1).replace(/\.0$/, '')}px, one of the cues G182 names. Judge by eye whether the size alone identifies it as a link; if it does not, this fails SC 1.4.1.`,
+        fix: reviewFix,
+      };
+    }
+    if (shortContext) {
+      return {
+        status: 'incomplete',
+        message: `This link has no detected non-colour cue and only ${shown}:1 colour difference from nearby text. The surrounding text is a short fragment. Check whether it forms a sentence or other prose with the link; if it does, colour alone does not distinguish the link sufficiently.`,
         fix: reviewFix,
       };
     }
