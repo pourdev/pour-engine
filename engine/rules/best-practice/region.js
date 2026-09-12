@@ -9,7 +9,7 @@
 // showing one (the open attribute is set by show() and showModal()) counts,
 // so a closed dialog cannot make a landmark-less page look landmarked
 // (2026-08-25 overnight audit).
-const LANDMARK =
+export const LANDMARK =
   'main, nav, aside, search, form[aria-label], form[aria-labelledby], ' +
   'header:not(:is(article, aside, main, nav, section) header), ' +
   'footer:not(:is(article, aside, main, nav, section) footer), ' +

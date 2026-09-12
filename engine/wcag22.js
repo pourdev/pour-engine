@@ -27,9 +27,9 @@ export default [
   sc('1.1.1', 'Non-text Content', 'A', 'partial'),
   sc('1.2.1', 'Audio-only and Video-only (Prerecorded)', 'A', 'partial'), // partial: the audio-only transcript question is askable; silent-video detection is not
   sc('1.2.2', 'Captions (Prerecorded)', 'A', 'partial'),
-  sc('1.2.3', 'Audio Description or Media Alternative (Prerecorded)', 'A', 'manual'),
+  sc('1.2.3', 'Audio Description or Media Alternative (Prerecorded)', 'A', 'partial'), // partial: video-audio-description asks per sound-capable video without a descriptions track; whether description or a text alternative exists, or is needed at all, is the reviewer's
   sc('1.2.4', 'Captions (Live)', 'AA', 'manual'),
-  sc('1.2.5', 'Audio Description (Prerecorded)', 'AA', 'manual'),
+  sc('1.2.5', 'Audio Description (Prerecorded)', 'AA', 'partial'), // partial: same question as 1.2.3 (video-audio-description); H96 descriptions track is the one DOM-visible pass
   sc('1.2.6', 'Sign Language (Prerecorded)', 'AAA', 'manual'),
   sc('1.2.7', 'Extended Audio Description (Prerecorded)', 'AAA', 'manual'),
   sc('1.2.8', 'Media Alternative (Prerecorded)', 'AAA', 'manual'),
@@ -39,7 +39,7 @@ export default [
   sc('1.3.3', 'Sensory Characteristics', 'A', 'manual'),
   sc('1.3.4', 'Orientation', 'AA', 'partial', '2.1'), // orientation-lock asserts CSS root hides/rotations as ACT b33eff does, essential exception assumed absent; script locks stay a human check
   sc('1.3.5', 'Identify Input Purpose', 'AA', 'partial', '2.1'), // partial: wrong tokens are asserted as ACT 73f2c2 does (search boxes asked); MISSING autocomplete on identity fields needs judgment
-  sc('1.3.6', 'Identify Purpose', 'AAA', 'manual', '2.1'),
+  sc('1.3.6', 'Identify Purpose', 'AAA', 'partial', '2.1'), // partial: region-purpose asks once per page with no landmark at all (ARIA11 is the regions technique); component and icon purpose stays human
   sc('1.4.1', 'Use of Color', 'A', 'partial'), // link-in-text-block automates the link case
   sc('1.4.2', 'Audio Control', 'A', 'partial'), // declarative autoplay identifies candidates; audibility and alternative controls need review
   sc('1.4.3', 'Contrast (Minimum)', 'AA', 'partial'),
@@ -47,7 +47,7 @@ export default [
   sc('1.4.5', 'Images of Text', 'AA', 'manual'),
   sc('1.4.6', 'Contrast (Enhanced)', 'AAA', 'partial'),
   sc('1.4.7', 'Low or No Background Audio', 'AAA', 'manual'),
-  sc('1.4.8', 'Visual Presentation', 'AAA', 'manual'),
+  sc('1.4.8', 'Visual Presentation', 'AAA', 'partial'), // partial: text-justified asks about justified running text (F88); the other four requirements are met by browser mechanisms and not judged
   sc('1.4.9', 'Images of Text (No Exception)', 'AAA', 'manual'),
   sc('1.4.10', 'Reflow', 'AA', 'partial', '2.1'), // partial: reflow (current-viewport overflow heuristic); full test is at 320px
   sc('1.4.11', 'Non-text Contrast', 'AA', 'partial', '2.1'), // partial: non-text-contrast covers field boundaries; icons/focus indicators need eyes
@@ -61,7 +61,7 @@ export default [
   sc('2.2.1', 'Timing Adjustable', 'A', 'partial'), // meta-refresh automates the redirect/refresh case
   sc('2.2.2', 'Pause, Stop, Hide', 'A', 'partial'),
   sc('2.2.3', 'No Timing', 'AAA', 'manual'),
-  sc('2.2.4', 'Interruptions', 'AAA', 'manual'),
+  sc('2.2.4', 'Interruptions', 'AAA', 'partial'), // partial: meta-refresh-no-exceptions asserts any timed refresh or redirect (F40, F41); scripted interruptions are invisible
   sc('2.2.5', 'Re-authenticating', 'AAA', 'manual'),
   sc('2.2.6', 'Timeouts', 'AAA', 'manual', '2.1'),
   sc('2.3.1', 'Three Flashes or Below Threshold', 'A', 'manual'),
@@ -72,15 +72,15 @@ export default [
   sc('2.4.3', 'Focus Order', 'A', 'partial'), // visual-order-divergence flags CSS order/*-reverse against DOM order; whether an order preserves MEANING stays human
   sc('2.4.4', 'Link Purpose (In Context)', 'A', 'partial'),
   sc('2.4.5', 'Multiple Ways', 'AA', 'manual'),
-  sc('2.4.6', 'Headings and Labels', 'AA', 'manual'),
+  sc('2.4.6', 'Headings and Labels', 'AA', 'partial'), // partial: heading-label-placeholder asserts template text left in a heading or label and asks about single generic words; whether real words describe the topic needs a reader
   sc('2.4.7', 'Focus Visible', 'AA', 'partial'), // partial: focus-visible flags outline suppression; the indicator itself needs eyes
   sc('2.4.8', 'Location', 'AAA', 'manual'),
   sc('2.4.9', 'Link Purpose (Link Only)', 'AAA', 'partial'), // generic wording nominates candidates; whether wording explains the destination needs a reader
-  sc('2.4.10', 'Section Headings', 'AAA', 'manual'),
+  sc('2.4.10', 'Section Headings', 'AAA', 'partial'), // partial: section-heading asks about a declared <section> of running text with no heading of its own; where sections begin in undeclared writing stays human
   sc('2.4.11', 'Focus Not Obscured (Minimum)', 'AA', 'partial', '2.2'), // covered resting targets are candidates; actual focus/scroll behavior needs review
-  sc('2.4.12', 'Focus Not Obscured (Enhanced)', 'AAA', 'manual', '2.2'),
+  sc('2.4.12', 'Focus Not Obscured (Enhanced)', 'AAA', 'partial', '2.2'), // partial: focus-not-obscured-enhanced reviews any overlap by an opaque fixed panel, 2.4.11's geometry without the containment requirement
   sc('2.4.13', 'Focus Appearance', 'AAA', 'manual', '2.2'),
-  sc('2.5.1', 'Pointer Gestures', 'A', 'manual', '2.1'),
+  sc('2.5.1', 'Pointer Gestures', 'A', 'partial', '2.1'), // partial: pointer-gesture-alternative asks about surfaces whose touch-action hands swipes or every touch to script (carousels, maps, canvases); pointer-event gesture logic with no declaration is invisible
   sc('2.5.2', 'Pointer Cancellation', 'A', 'manual', '2.1'),
   sc('2.5.3', 'Label in Name', 'A', 'manual', '2.1'), // manual WHILE label-in-name is parked (re-parked 2026-08-01, see rules/index.js) — 'auto' with no active rule would make this SC vanish from results AND the manual checklist
   sc('2.5.4', 'Motion Actuation', 'A', 'manual', '2.1'),
@@ -99,17 +99,17 @@ export default [
   sc('3.2.2', 'On Input', 'A', 'partial'), // on-input-navigation flags the inline jump-menu signature; "advised beforehand" stays a human call
   sc('3.2.3', 'Consistent Navigation', 'AA', 'manual'),
   sc('3.2.4', 'Consistent Identification', 'AA', 'manual'),
-  sc('3.2.5', 'Change on Request', 'AAA', 'manual'),
+  sc('3.2.5', 'Change on Request', 'AAA', 'partial'), // partial: meta-refresh-no-exceptions (F40, F41); scripted context changes and pop-ups on load are invisible
   sc('3.2.6', 'Consistent Help', 'A', 'manual', '2.2'),
   sc('3.3.1', 'Error Identification', 'A', 'partial'), // error-message-linkage proves broken aria-errormessage targets; only in force when the page is captured mid-error
   sc('3.3.2', 'Labels or Instructions', 'A', 'partial'),
   sc('3.3.3', 'Error Suggestion', 'AA', 'manual'),
-  sc('3.3.4', 'Error Prevention (Legal, Financial, Data)', 'AA', 'manual'),
+  sc('3.3.4', 'Error Prevention (Legal, Financial, Data)', 'AA', 'partial'), // partial: financial-form-confirmation asks once per form that takes card details; legal commitments and data deletion have no markup signature
   sc('3.3.5', 'Help', 'AAA', 'manual'),
   sc('3.3.6', 'Error Prevention (All)', 'AAA', 'manual'),
   sc('3.3.7', 'Redundant Entry', 'A', 'partial', '2.2'), // partial: duplicate autocomplete purposes in one form are visible; cross-page processes are not
   sc('3.3.8', 'Accessible Authentication (Minimum)', 'AA', 'partial', '2.2'), // partial: auth-field-obstruction catches paste blocking; alternatives need judgment
-  sc('3.3.9', 'Accessible Authentication (Enhanced)', 'AAA', 'manual', '2.2'),
+  sc('3.3.9', 'Accessible Authentication (Enhanced)', 'AAA', 'partial', '2.2'), // partial: auth-field-obstruction's F109 findings apply unchanged (twin tag) and captcha-alternative asks about a CAPTCHA beside a credential, the object-recognition exception 3.3.9 removes
   // 4. Robust (4.1.1 Parsing was removed in WCAG 2.2)
   sc('4.1.2', 'Name, Role, Value', 'A', 'partial'),
   sc('4.1.3', 'Status Messages', 'AA', 'manual', '2.1'),

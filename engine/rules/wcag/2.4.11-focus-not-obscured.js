@@ -2,7 +2,8 @@
 // An opaque fixed/sticky overlay covering a focusable element is the
 // criterion's core case (bottom cookie bars over footer links). Partial
 // overlap passes by definition ("not entirely hidden"), so only full
-// containment counts.
+// containment counts. The AAA sibling built from the same factory (2.4.12,
+// "no part of the component is hidden") counts any overlap at all.
 //
 // This REVIEWS rather than fails, deliberately. What a snapshot can see is
 // "element X is under the panel right now", and that is a fact about the
@@ -31,85 +32,140 @@ function edgeReserved(doc, edge, needed) {
   return px >= needed - 1;
 }
 
-export default {
+/**
+ * Build the minimum (full containment) or enhanced (any overlap) rule.
+ * `partial: false` is 2.4.11 exactly as it has always run: one hit-test at
+ * the element's centre, and a blocker only counts when its box contains the
+ * whole element. `partial: true` is 2.4.12: the centre plus the four corners
+ * and four edge midpoints are hit-tested, and a blocker counts when it paints
+ * above the element at any of them and overlaps its box at all.
+ */
+export function createFocusObscuredRule({ id, name, tags, help, helpUrl, partial }) {
+  return {
+    id,
+    name,
+    impact: 'serious',
+    tags,
+    help,
+    helpUrl,
+    selector: FOCUSABLE,
+    visibility: 'visual',
+    evaluateAll(elements) {
+      const doc = elements[0]?.ownerDocument ?? document;
+      const win = doc.defaultView;
+      // While a modal (cookie-consent dialog etc.) is open, the page behind
+      // it is INTENTIONALLY covered and focus is supposed to be trapped in
+      // the modal — a snapshot in that state proves nothing about the
+      // criterion. The backdrop is often a separate sibling of the dialog,
+      // so the modal state is checked document-wide, not per overlay.
+      const modal = [...doc.querySelectorAll('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]')]
+        .some((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+        });
+      if (modal) return elements.map(() => ({ status: 'pass' }));
+
+      // Hit-test per IN-VIEWPORT focusable instead of style-scanning the
+      // whole document for overlays: elementsFromPoint at the target's
+      // centre surfaces whatever paints above it, and only the handful of
+      // on-screen targets pay any cost — a 200k-node spec page costs the
+      // same as a landing page. Per-overlay verdicts are memoized.
+      const overlayVerdict = new Map();
+      const isObscuringOverlay = (layer) => {
+        if (overlayVerdict.has(layer)) return overlayVerdict.get(layer);
+        let verdict = false;
+        const style = getComputedStyle(layer);
+        if (style.position === 'fixed' || style.position === 'sticky') {
+          const bg = style.backgroundColor.match(/rgba?\(([^)]+)\)/)?.[1]?.split(',');
+          const alpha = bg?.[3] === undefined ? 1 : parseFloat(bg[3]);
+          const rect = layer.getBoundingClientRect();
+          verdict = alpha >= 0.9 && rect.width >= 40 && rect.height >= 24;
+        }
+        overlayVerdict.set(layer, verdict);
+        return verdict;
+      };
+      const contained = (rect, overlay) =>
+        rect.left >= overlay.left && rect.right <= overlay.right
+        && rect.top >= overlay.top && rect.bottom <= overlay.bottom;
+      const overlaps = (rect, overlay) =>
+        Math.min(rect.right, overlay.right) - Math.max(rect.left, overlay.left) > 0
+        && Math.min(rect.bottom, overlay.bottom) - Math.max(rect.top, overlay.top) > 0;
+      const clampX = (x) => Math.min(Math.max(x, 0), win.innerWidth - 1);
+      const clampY = (y) => Math.min(Math.max(y, 0), win.innerHeight - 1);
+      // The layer painting above the element at one point, if it is an
+      // obscuring overlay whose box relates to the element's as the mode
+      // demands. elementsFromPoint lists the whole stack, covered elements
+      // included, so an element ABSENT from it does not paint at that point
+      // at all (a rounded corner, a clip-path): nothing is hidden there.
+      // Measured on the corpus: consent-dialog buttons with rounded corners
+      // over their own opaque backdrop were flagged from exactly that.
+      const blockerAt = (element, rect, x, y) => {
+        const stack = doc.elementsFromPoint(clampX(x), clampY(y));
+        const index = stack.indexOf(element);
+        if (index <= 0) return null;
+        const above = stack.slice(0, index);
+        return above.find((layer) =>
+          !layer.contains(element) && !element.contains(layer)
+          && isObscuringOverlay(layer)
+          && (partial ? overlaps : contained)(rect, layer.getBoundingClientRect())) ?? null;
+      };
+
+      return elements.map((element) => {
+        // `:disabled` catches controls disabled by an ancestor fieldset, which
+        // the `disabled` property does not reflect — those never take focus.
+        if (element.matches(':disabled')) return { status: 'pass' };
+        // Inert content cannot be focused, so nothing can obscure its focus.
+        if (isInert(element)) return { status: 'pass' };
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return { status: 'pass' };
+        // Only in-viewport geometry is trustworthy (or cheap).
+        if (rect.bottom < 0 || rect.right < 0 || rect.top > win.innerHeight || rect.left > win.innerWidth) {
+          return { status: 'pass' };
+        }
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        let blocker = blockerAt(element, rect, cx, cy);
+        if (!blocker && partial) {
+          // A strip of cookie bar over the bottom of a link leaves its
+          // centre clear; the corners and edge midpoints see it.
+          const inset = 1;
+          const xs = [rect.left + inset, cx, rect.right - inset];
+          const ys = [rect.top + inset, cy, rect.bottom - inset];
+          for (const x of xs) {
+            for (const y of ys) {
+              if (x === cx && y === cy) continue;
+              blocker = blockerAt(element, rect, x, y);
+              if (blocker) break;
+            }
+            if (blocker) break;
+          }
+        }
+        if (!blocker) return { status: 'pass' };
+        // Which viewport edge is the panel pinned to? That is the edge the
+        // browser's scroll-into-view has to clear.
+        const panel = blocker.getBoundingClientRect();
+        const edge = panel.top <= 1 && panel.bottom < win.innerHeight ? 'top'
+          : panel.bottom >= win.innerHeight - 1 ? 'bottom' : null;
+        if (edge && edgeReserved(doc, edge, panel.height)) return { status: 'pass' };
+        return partial ? {
+          status: 'incomplete',
+          message: 'Part of this element is currently underneath an opaque fixed panel. 2.4.12 (AAA) allows no part of a focused component to be hidden by author content, and whether that happens depends on where the page sits when focus reaches it — the browser does not scroll an element that is already in the viewport, merely overlapped, so focus can land half-hidden. Tab through the page and check the whole element, indicator included, stays clear of the panel.',
+          fix: `Reserve room for the panel with scroll-padding-${edge ?? 'bottom'} on the scrolling container, or move focus clear of it when the panel is up.`,
+        } : {
+          status: 'incomplete',
+          message: 'This element is currently underneath an opaque fixed panel. Whether that breaks 2.4.11 depends on where the page sits when focus reaches it — the browser does not scroll an element that is already in the viewport, merely covered, so focus can land invisibly. Tab through the page and check the focus indicator is never entirely hidden.',
+          fix: `Reserve room for the panel with scroll-padding-${edge ?? 'bottom'} on the scrolling container, or move focus clear of it when the panel is up.`,
+        };
+      });
+    },
+  };
+}
+
+export default createFocusObscuredRule({
   id: 'focus-not-obscured',
   name: 'Unobscured focus',
-  impact: 'serious',
   tags: ['wcag22aa', 'wcag2411'],
   help: 'Focused elements must not be fully hidden behind overlays',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html',
-  selector: FOCUSABLE,
-  visibility: 'visual',
-  evaluateAll(elements) {
-    const doc = elements[0]?.ownerDocument ?? document;
-    const win = doc.defaultView;
-    // While a modal (cookie-consent dialog etc.) is open, the page behind
-    // it is INTENTIONALLY covered and focus is supposed to be trapped in
-    // the modal — a snapshot in that state proves nothing about 2.4.11.
-    // The backdrop is often a separate sibling of the dialog, so the modal
-    // state is checked document-wide, not per overlay.
-    const modal = [...doc.querySelectorAll('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]')]
-      .some((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-      });
-    if (modal) return elements.map(() => ({ status: 'pass' }));
-
-    // Hit-test per IN-VIEWPORT focusable instead of style-scanning the
-    // whole document for overlays: elementsFromPoint at the target's
-    // centre surfaces whatever paints above it, and only the handful of
-    // on-screen targets pay any cost — a 200k-node spec page costs the
-    // same as a landing page. Per-overlay verdicts are memoized.
-    const overlayVerdict = new Map();
-    const isObscuringOverlay = (layer) => {
-      if (overlayVerdict.has(layer)) return overlayVerdict.get(layer);
-      let verdict = false;
-      const style = getComputedStyle(layer);
-      if (style.position === 'fixed' || style.position === 'sticky') {
-        const bg = style.backgroundColor.match(/rgba?\(([^)]+)\)/)?.[1]?.split(',');
-        const alpha = bg?.[3] === undefined ? 1 : parseFloat(bg[3]);
-        const rect = layer.getBoundingClientRect();
-        verdict = alpha >= 0.9 && rect.width >= 40 && rect.height >= 24;
-      }
-      overlayVerdict.set(layer, verdict);
-      return verdict;
-    };
-    const covered = (rect, overlay) =>
-      rect.left >= overlay.left && rect.right <= overlay.right
-      && rect.top >= overlay.top && rect.bottom <= overlay.bottom;
-
-    return elements.map((element) => {
-      // `:disabled` catches controls disabled by an ancestor fieldset, which
-      // the `disabled` property does not reflect — those never take focus.
-      if (element.matches(':disabled')) return { status: 'pass' };
-      // Inert content cannot be focused, so nothing can obscure its focus.
-      if (isInert(element)) return { status: 'pass' };
-      const rect = element.getBoundingClientRect();
-      if (!rect.width || !rect.height) return { status: 'pass' };
-      // Only in-viewport geometry is trustworthy (or cheap).
-      if (rect.bottom < 0 || rect.right < 0 || rect.top > win.innerHeight || rect.left > win.innerWidth) {
-        return { status: 'pass' };
-      }
-      const x = Math.min(Math.max(rect.left + rect.width / 2, 0), win.innerWidth - 1);
-      const y = Math.min(Math.max(rect.top + rect.height / 2, 0), win.innerHeight - 1);
-      const stack = doc.elementsFromPoint(x, y);
-      const index = stack.indexOf(element);
-      if (index <= 0) return { status: 'pass' }; // topmost, or not hit-testable
-      const blocker = stack.slice(0, index).find((layer) =>
-        !layer.contains(element) && !element.contains(layer)
-        && isObscuringOverlay(layer) && covered(rect, layer.getBoundingClientRect()));
-      if (!blocker) return { status: 'pass' };
-      // Which viewport edge is the panel pinned to? That is the edge the
-      // browser's scroll-into-view has to clear.
-      const panel = blocker.getBoundingClientRect();
-      const edge = panel.top <= 1 && panel.bottom < win.innerHeight ? 'top'
-        : panel.bottom >= win.innerHeight - 1 ? 'bottom' : null;
-      if (edge && edgeReserved(doc, edge, panel.height)) return { status: 'pass' };
-      return {
-        status: 'incomplete',
-        message: 'This element is currently underneath an opaque fixed panel. Whether that breaks 2.4.11 depends on where the page sits when focus reaches it — the browser does not scroll an element that is already in the viewport, merely covered, so focus can land invisibly. Tab through the page and check the focus indicator is never entirely hidden.',
-        fix: `Reserve room for the panel with scroll-padding-${edge ?? 'bottom'} on the scrolling container, or move focus clear of it when the panel is up.`,
-      };
-    });
-  },
-};
+  partial: false,
+});

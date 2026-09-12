@@ -17,9 +17,9 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 1.1.1 | [Non-text Content](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html) | A | Partially automated | area-alt, canvas-alt, embed-alt, image-alt, input-image-alt, object-alt, svg-img-alt |
 | 1.2.1 | [Audio-only and Video-only (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-only-and-video-only-prerecorded.html) | A | Partially automated | audio-transcript |
 | 1.2.2 | [Captions (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html) | A | Partially automated | media-captions |
-| 1.2.3 | [Audio Description or Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-or-media-alternative-prerecorded.html) | A | Manual review | — |
+| 1.2.3 | [Audio Description or Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-or-media-alternative-prerecorded.html) | A | Partially automated | video-audio-description |
 | 1.2.4 | [Captions (Live)](https://www.w3.org/WAI/WCAG22/Understanding/captions-live.html) | AA | Manual review | — |
-| 1.2.5 | [Audio Description (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-prerecorded.html) | AA | Manual review | — |
+| 1.2.5 | [Audio Description (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/audio-description-prerecorded.html) | AA | Partially automated | video-audio-description |
 | 1.2.6 | [Sign Language (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/sign-language-prerecorded.html) | AAA | Manual review | — |
 | 1.2.7 | [Extended Audio Description (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/extended-audio-description-prerecorded.html) | AAA | Manual review | — |
 | 1.2.8 | [Media Alternative (Prerecorded)](https://www.w3.org/WAI/WCAG22/Understanding/media-alternative-prerecorded.html) | AAA | Manual review | — |
@@ -29,7 +29,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 1.3.3 | [Sensory Characteristics](https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html) | A | Manual review | — |
 | 1.3.4 | [Orientation](https://www.w3.org/WAI/WCAG22/Understanding/orientation.html) | AA | Partially automated | orientation-lock |
 | 1.3.5 | [Identify Input Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html) | AA | Partially automated | autocomplete-valid |
-| 1.3.6 | [Identify Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-purpose.html) | AAA | Manual review | — |
+| 1.3.6 | [Identify Purpose](https://www.w3.org/WAI/WCAG22/Understanding/identify-purpose.html) | AAA | Partially automated | region-purpose |
 | 1.4.1 | [Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) | A | Partially automated | link-in-text-block |
 | 1.4.2 | [Audio Control](https://www.w3.org/WAI/WCAG22/Understanding/audio-control.html) | A | Partially automated | audio-control |
 | 1.4.3 | [Contrast (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) | AA | Partially automated | color-contrast, control-contrast |
@@ -37,7 +37,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 1.4.5 | [Images of Text](https://www.w3.org/WAI/WCAG22/Understanding/images-of-text.html) | AA | Manual review | — |
 | 1.4.6 | [Contrast (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html) | AAA | Partially automated | color-contrast-enhanced |
 | 1.4.7 | [Low or No Background Audio](https://www.w3.org/WAI/WCAG22/Understanding/low-or-no-background-audio.html) | AAA | Manual review | — |
-| 1.4.8 | [Visual Presentation](https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html) | AAA | Manual review | — |
+| 1.4.8 | [Visual Presentation](https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html) | AAA | Partially automated | text-justified |
 | 1.4.9 | [Images of Text (No Exception)](https://www.w3.org/WAI/WCAG22/Understanding/images-of-text-no-exception.html) | AAA | Manual review | — |
 | 1.4.10 | [Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html) | AA | Partially automated | reflow |
 | 1.4.11 | [Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html) | AA | Partially automated | non-text-contrast |
@@ -55,7 +55,7 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.2.1 | [Timing Adjustable](https://www.w3.org/WAI/WCAG22/Understanding/timing-adjustable.html) | A | Partially automated | meta-refresh |
 | 2.2.2 | [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) | A | Partially automated | pause-stop-hide, video-loop-motion |
 | 2.2.3 | [No Timing](https://www.w3.org/WAI/WCAG22/Understanding/no-timing.html) | AAA | Manual review | — |
-| 2.2.4 | [Interruptions](https://www.w3.org/WAI/WCAG22/Understanding/interruptions.html) | AAA | Manual review | — |
+| 2.2.4 | [Interruptions](https://www.w3.org/WAI/WCAG22/Understanding/interruptions.html) | AAA | Partially automated | meta-refresh-no-exceptions |
 | 2.2.5 | [Re-authenticating](https://www.w3.org/WAI/WCAG22/Understanding/re-authenticating.html) | AAA | Manual review | — |
 | 2.2.6 | [Timeouts](https://www.w3.org/WAI/WCAG22/Understanding/timeouts.html) | AAA | Manual review | — |
 | 2.3.1 | [Three Flashes or Below Threshold](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html) | A | Manual review | — |
@@ -66,15 +66,15 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 2.4.3 | [Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) | A | Partially automated | visual-order-divergence |
 | 2.4.4 | [Link Purpose (In Context)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html) | A | Partially automated | area-alt, link-name, link-text-generic |
 | 2.4.5 | [Multiple Ways](https://www.w3.org/WAI/WCAG22/Understanding/multiple-ways.html) | AA | Manual review | — |
-| 2.4.6 | [Headings and Labels](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html) | AA | Manual review | — |
+| 2.4.6 | [Headings and Labels](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html) | AA | Partially automated | heading-label-placeholder |
 | 2.4.7 | [Focus Visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html) | AA | Partially automated | focus-visible |
 | 2.4.8 | [Location](https://www.w3.org/WAI/WCAG22/Understanding/location.html) | AAA | Manual review | — |
 | 2.4.9 | [Link Purpose (Link Only)](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-link-only.html) | AAA | Partially automated | link-text-generic-only |
-| 2.4.10 | [Section Headings](https://www.w3.org/WAI/WCAG22/Understanding/section-headings.html) | AAA | Manual review | — |
+| 2.4.10 | [Section Headings](https://www.w3.org/WAI/WCAG22/Understanding/section-headings.html) | AAA | Partially automated | section-heading |
 | 2.4.11 | [Focus Not Obscured (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) | AA | Partially automated | focus-not-obscured |
-| 2.4.12 | [Focus Not Obscured (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-enhanced.html) | AAA | Manual review | — |
+| 2.4.12 | [Focus Not Obscured (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-enhanced.html) | AAA | Partially automated | focus-not-obscured-enhanced |
 | 2.4.13 | [Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html) | AAA | Manual review | — |
-| 2.5.1 | [Pointer Gestures](https://www.w3.org/WAI/WCAG22/Understanding/pointer-gestures.html) | A | Manual review | — |
+| 2.5.1 | [Pointer Gestures](https://www.w3.org/WAI/WCAG22/Understanding/pointer-gestures.html) | A | Partially automated | pointer-gesture-alternative |
 | 2.5.2 | [Pointer Cancellation](https://www.w3.org/WAI/WCAG22/Understanding/pointer-cancellation.html) | A | Manual review | — |
 | 2.5.3 | [Label in Name](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html) | A | Manual review | — |
 | 2.5.4 | [Motion Actuation](https://www.w3.org/WAI/WCAG22/Understanding/motion-actuation.html) | A | Manual review | — |
@@ -97,17 +97,17 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 3.2.2 | [On Input](https://www.w3.org/WAI/WCAG22/Understanding/on-input.html) | A | Partially automated | on-input-navigation |
 | 3.2.3 | [Consistent Navigation](https://www.w3.org/WAI/WCAG22/Understanding/consistent-navigation.html) | AA | Manual review | — |
 | 3.2.4 | [Consistent Identification](https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html) | AA | Manual review | — |
-| 3.2.5 | [Change on Request](https://www.w3.org/WAI/WCAG22/Understanding/change-on-request.html) | AAA | Manual review | — |
+| 3.2.5 | [Change on Request](https://www.w3.org/WAI/WCAG22/Understanding/change-on-request.html) | AAA | Partially automated | meta-refresh-no-exceptions |
 | 3.2.6 | [Consistent Help](https://www.w3.org/WAI/WCAG22/Understanding/consistent-help.html) | A | Manual review | — |
 | 3.3.1 | [Error Identification](https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html) | A | Partially automated | error-message-linkage |
 | 3.3.2 | [Labels or Instructions](https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html) | A | Partially automated | form-label |
 | 3.3.3 | [Error Suggestion](https://www.w3.org/WAI/WCAG22/Understanding/error-suggestion.html) | AA | Manual review | — |
-| 3.3.4 | [Error Prevention (Legal, Financial, Data)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html) | AA | Manual review | — |
+| 3.3.4 | [Error Prevention (Legal, Financial, Data)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html) | AA | Partially automated | financial-form-confirmation |
 | 3.3.5 | [Help](https://www.w3.org/WAI/WCAG22/Understanding/help.html) | AAA | Manual review | — |
 | 3.3.6 | [Error Prevention (All)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-all.html) | AAA | Manual review | — |
 | 3.3.7 | [Redundant Entry](https://www.w3.org/WAI/WCAG22/Understanding/redundant-entry.html) | A | Partially automated | redundant-entry |
 | 3.3.8 | [Accessible Authentication (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) | AA | Partially automated | auth-field-obstruction |
-| 3.3.9 | [Accessible Authentication (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-enhanced.html) | AAA | Manual review | — |
+| 3.3.9 | [Accessible Authentication (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-enhanced.html) | AAA | Partially automated | auth-field-obstruction, captcha-alternative |
 
 ## Robust
 
@@ -116,4 +116,4 @@ meaning that only a person can settle, even where a rule decides most real pages
 | 4.1.2 | [Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html) | A | Partially automated | input-image-alt, form-label, link-name, aria-allowed-attr, aria-attr-valid, aria-field-name, aria-hidden-focus, aria-label-misuse, aria-valid-refs, button-name, composite-widget-name, dialog-name, frame-title, invoker-target, label-for-valid, nested-interactive, role-required-aria, summary-name, valid-role |
 | 4.1.3 | [Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) | AA | Manual review | — |
 
-**Totals:** 39 partially automated · 47 manual — with 88 rules.
+**Totals:** 51 partially automated · 35 manual — with 98 rules.

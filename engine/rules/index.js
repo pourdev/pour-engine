@@ -109,6 +109,25 @@ import onInputNavigation from './wcag/3.2.2-on-input-navigation.js';
 import errorMessageLinkage from './wcag/3.3.1-error-message-linkage.js';
 import compositeWidgetName from './wcag/4.1.2-composite-widget-name.js';
 import summaryName from './wcag/4.1.2-summary-name.js';
+// 2026-09-12 manual-to-partial batch (reports/coverage-gaps/2026-09-12): the
+// slices of twelve criteria that had no rule where the DOM shows a real
+// candidate. Two AAA siblings built from existing factories (a timed refresh
+// with no 20-hour allowance, any overlap of a focused element); eight
+// review questions on declared facts (a video without a descriptions
+// track, a declared <section> with no heading, a touch-action surface, a
+// payment form, a CAPTCHA beside a credential, a page with no landmarks,
+// justified running text) and one assert on template text left in a
+// heading or label. Two assert, the rest ask.
+import metaRefreshNoExceptions from './wcag/2.2.4-meta-refresh-no-exceptions.js';
+import focusNotObscuredEnhanced from './wcag/2.4.12-focus-not-obscured-enhanced.js';
+import videoAudioDescription from './wcag/1.2.3-video-audio-description.js';
+import headingLabelPlaceholder from './wcag/2.4.6-heading-label-placeholder.js';
+import textJustified from './wcag/1.4.8-text-justified.js';
+import sectionHeading from './wcag/2.4.10-section-heading.js';
+import captchaAlternative from './wcag/3.3.9-captcha-alternative.js';
+import regionPurpose from './wcag/1.3.6-region-purpose.js';
+import financialFormConfirmation from './wcag/3.3.4-financial-form-confirmation.js';
+import pointerGestureAlternative from './wcag/2.5.1-pointer-gesture-alternative.js';
 
 // --- Best practice ---
 import headingOrder from './best-practice/heading-order.js';
@@ -210,6 +229,16 @@ export default [
   errorMessageLinkage,
   compositeWidgetName,
   summaryName,
+  metaRefreshNoExceptions,
+  focusNotObscuredEnhanced,
+  videoAudioDescription,
+  headingLabelPlaceholder,
+  textJustified,
+  sectionHeading,
+  captchaAlternative,
+  regionPurpose,
+  financialFormConfirmation,
+  pointerGestureAlternative,
   contrastEnhanced,
   targetSizeEnhanced,
   headingOrder,

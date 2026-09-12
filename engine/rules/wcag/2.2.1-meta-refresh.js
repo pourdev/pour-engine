@@ -10,7 +10,7 @@
  * the old test demanded the literal "url=", so content="0;https://…" was
  * asserted as a reload loop while the browser redirected from it.)
  */
-function refreshDestination(content) {
+export function refreshDestination(content) {
   let rest = content.replace(/^\s*[\d.]*\s*(?:[;,]\s*)?/, '');
   // "url" is consumed letter by letter, then optional whitespace and "=".
   rest = rest.replace(/^url\s*(?:=\s*)?/i, '');
@@ -33,7 +33,7 @@ function refreshDestination(content) {
  * rule asserted a time limit on pages the browser never moves. Verified in
  * Chromium: both of those pages stay put while content="1; url=…" navigates.
  */
-function refreshDelay(content) {
+export function refreshDelay(content) {
   const isAsciiSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\f' || c === '\r';
   const isDigit = (c) => c >= '0' && c <= '9';
   let i = 0;

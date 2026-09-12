@@ -32,7 +32,10 @@ export default {
   id: 'auth-field-obstruction',
   name: 'Accessible login fields',
   impact: 'serious',
-  tags: ['wcag22aa', 'wcag338'],
+  // 3.3.9 (AAA) drops 3.3.8's object-recognition and personal-content
+  // exceptions and keeps everything this rule looks at: F109 is listed as a
+  // failure of both. Twin-tagged on the 2.1.1/2.1.3 precedent.
+  tags: ['wcag22aa', 'wcag338', 'wcag339'],
   help: 'Login fields must not block paste or password managers',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html',
   selector: 'input[type="password"]:not([autocomplete~="new-password"]), input[autocomplete~="current-password"], input[autocomplete~="one-time-code"]',
