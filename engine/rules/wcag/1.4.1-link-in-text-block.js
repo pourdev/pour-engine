@@ -176,7 +176,14 @@ export default {
       if (sidePaints(s, 'Bottom')) return { status: 'pass' };
       if (boxShadowPaints(s.boxShadow)) return { status: 'pass' };
       const ownBackground = parseColor(s.backgroundColor);
-      if (ownBackground && ownBackground.a > 0) return { status: 'pass' };
+      if (ownBackground && ownBackground.a > 0) {
+        const surroundings = effectiveBackground(parent);
+        if (!surroundings) unclear = true;
+        else {
+          const shown = composite(ownBackground, surroundings);
+          if (['r', 'g', 'b'].some((channel) => Math.round(shown[channel]) !== Math.round(surroundings[channel]))) return { status: 'pass' };
+        }
+      }
       const painted = backgroundImagePaints(s, el.getBoundingClientRect()); // gradient/image underline technique
       if (painted === 'yes') return { status: 'pass' };
       if (painted === 'unclear') unclear = true;
@@ -205,8 +212,17 @@ export default {
     const sizeStep = Math.max(...textBearers.map((s) => Math.abs((parseFloat(s.fontSize) || parentSize) - parentSize)));
     const sizeCue = sizeStep >= 2 && sizeStep / parentSize >= 0.1;
 
-    let linkColor = parseColor(style.color);
-    let textColor = parseColor(parentStyle.color);
+    // A wrapper's colour need not paint any glyphs: inline spans commonly
+    // override it. Compare actual own-text bearers, and review multicolour
+    // text rather than attributing an unpainted wrapper colour to it.
+    const glyphColours = cueBearers.filter(({ el }) => ownText(el))
+      .map(({ s }) => s.webkitTextFillColor || s.color);
+    const distinctColours = [...new Set(glyphColours)];
+    if (distinctColours.length > 1) {
+      return { status: 'incomplete', message: 'This link presents text in several colours without a detected non-colour cue. Check that each part is distinguishable from the surrounding text.' };
+    }
+    let linkColor = parseColor(distinctColours[0] || style.webkitTextFillColor || style.color);
+    let textColor = parseColor(parentStyle.webkitTextFillColor || parentStyle.color);
     if (!linkColor || !textColor) return { status: 'pass' };
     // 2026-08-25 overnight audit: a translucent colour is presented
     // composited over its backdrop (rgba(0,0,0,.3) in black prose on white

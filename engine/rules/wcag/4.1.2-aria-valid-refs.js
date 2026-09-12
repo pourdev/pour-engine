@@ -76,6 +76,10 @@ function inspect(element) {
   const missing = [];
   const ambiguous = [];
   for (const attr of REF_ATTRIBUTES) {
+    // ARIA requires the error relation to remain unexposed while valid.
+    // A lazy error node not yet inserted cannot lose an active message.
+    if (attr === 'aria-errormessage' && (!element.hasAttribute('aria-invalid')
+      || ['false', ''].includes(element.getAttribute('aria-invalid').trim().toLowerCase()))) continue;
     for (const id of (element.getAttribute(attr) ?? '').split(/\s+/).filter(Boolean)) {
       if (!root.getElementById?.(id)) {
         if (attr === 'aria-controls' && collapsed) continue;
@@ -110,8 +114,8 @@ function outcome({ missing, ambiguous }, element, accessibleName) {
     //     not name, role or a user-set value, and tooltip libraries create
     //     the target on hover or focus, so the DOM proves an authoring
     //     error at most. Asked, never asserted;
-    //   - aria-controls, aria-owns, aria-details, aria-errormessage: the
-    //     standing policy (asserted; the comparator asserts these too).
+    //   - other relationships: review unless a missing name or active
+    //     item above independently demonstrates the component's failure.
     const component = isUserInterfaceComponent(element);
     // The resting name for a component is the full computation (a button
     // names itself from its contents). A landmark, list or group is not
@@ -126,7 +130,8 @@ function outcome({ missing, ambiguous }, element, accessibleName) {
     const line = ({ attr, id }) => attr === 'aria-labelledby'
       ? `aria-labelledby="${id}" points to nothing and leaves this element without an accessible name`
       : `${attr}="${id}" points to nothing — assistive technology silently ignores it`;
-    const asserted = relevant.filter(({ attr }) => attr !== 'aria-describedby' && (attr !== 'aria-labelledby' || component));
+    const asserted = relevant.filter(({ attr }) => component
+      && (attr === 'aria-labelledby' || attr === 'aria-activedescendant'));
     if (asserted.length) {
       return {
         status: 'fail',

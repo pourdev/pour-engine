@@ -132,6 +132,9 @@ let panelRectsCache = null;
 let pseudoCache = new WeakMap();
 let zeroClipCache = new WeakMap();
 let firstLineRulesCache = new WeakMap();
+let chainEffectCache = new WeakMap();
+let uncoveredEffectCache = new WeakMap();
+let blendBackdropCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -143,6 +146,100 @@ export function resetAuditCaches() {
   pseudoCache = new WeakMap();
   zeroClipCache = new WeakMap();
   firstLineRulesCache = new WeakMap();
+  chainEffectCache = new WeakMap();
+  uncoveredEffectCache = new WeakMap();
+  blendBackdropCache = new WeakMap();
+}
+
+const flatParentOf = (node) => node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host ?? null;
+
+/** Every filter function except drop-shadow recolours the pixels it applies
+ *  to (blur, grayscale, invert, url() and the rest). A drop shadow paints a
+ *  copy of the element's silhouette BEHIND it and leaves its own pixels
+ *  alone. Parsed at nesting depth zero so the rgba() inside a shadow is not
+ *  read as a second function. */
+function colourChangingFilter(filter) {
+  if (!filter || filter === 'none') return false;
+  let depth = 0;
+  let name = '';
+  for (const ch of filter) {
+    if (ch === '(') {
+      if (depth === 0 && name && name !== 'drop-shadow') return true;
+      depth += 1;
+      name = '';
+    } else if (ch === ')') {
+      depth -= 1;
+    } else if (depth === 0) {
+      name = /[a-z-]/i.test(ch) ? name + ch.toLowerCase() : '';
+    }
+  }
+  return false;
+}
+
+/** A colour-changing filter or a blend mode on the element or any flat-tree
+ *  ancestor recolours the text no matter what is painted in between: a
+ *  greyscale group is grey throughout, and a group blend blends the whole
+ *  group, opaque cards included, against what lies behind it. */
+function chainEffect(node) {
+  if (!node || node.nodeType !== 1) return false;
+  if (chainEffectCache.has(node)) return chainEffectCache.get(node);
+  const style = getComputedStyle(node);
+  const own = colourChangingFilter(style.filter) || (style.mixBlendMode && style.mixBlendMode !== 'normal');
+  const result = Boolean(own || chainEffect(flatParentOf(node)));
+  chainEffectCache.set(node, result);
+  return result;
+}
+
+/** A backdrop filter and a drop shadow only reach the text through paint
+ *  that is not opaque: the frosted-glass header (backdrop-filter: blur on a
+ *  translucent bar) shows the blurred page through everything up to the
+ *  first opaque background, and a drop shadow on a transparent wrapper is a
+ *  shadow of the glyphs themselves. Opaque paint at or below the effect
+ *  covers it, so the text's backdrop is that paint and the effect is not an
+ *  uncertainty. Measured 2026-09-12: 72 of 184 such reviews on nine sites
+ *  had opaque paint between the text and the effect. */
+function uncoveredEffect(node) {
+  if (!node || node.nodeType !== 1) return false;
+  if (uncoveredEffectCache.has(node)) return uncoveredEffectCache.get(node);
+  const style = getComputedStyle(node);
+  let result;
+  if ((parseColor(style.backgroundColor)?.a ?? 0) >= 1) result = false; // everything above is covered
+  else if ((style.backdropFilter && style.backdropFilter !== 'none') || (style.filter && style.filter !== 'none')) result = true;
+  else result = uncoveredEffect(flatParentOf(node));
+  uncoveredEffectCache.set(node, result);
+  return result;
+}
+
+/** Filters and blend modes change the presented glyph/background pair.
+ * WCAG judges that presented pair, not the unfiltered CSS declarations.
+ * Cached per node along the flat tree so ordinary text pays once per
+ * ancestor. */
+export function hasPaintEffects(element) {
+  if (!element || element.nodeType !== 1) return false;
+  return chainEffect(element) || uncoveredEffect(element);
+}
+
+/** A blend cannot reach paint outside its containing isolated group.
+ * Stop at opaque paint inside that group; otherwise an intervening stacking
+ * context means the ordinary ancestor background is not a proven backdrop. */
+export function isolatedBlendBackdrop(element) {
+  if (!element || element.nodeType !== 1) return false;
+  if (blendBackdropCache.has(element)) return blendBackdropCache.get(element);
+  const style = getComputedStyle(element);
+  const background = parseColor(style.backgroundColor);
+  let result = false;
+  if (!background || background.a < 1) {
+    const isolated = style.isolation === 'isolate'
+      || ['fixed', 'sticky'].includes(style.position) || style.zIndex !== 'auto'
+      || ['transform', 'perspective', 'filter', 'backdropFilter', 'clipPath', 'maskImage', 'webkitMaskImage']
+        .some((key) => style[key] && style[key] !== 'none')
+      || /(?:paint|layout|strict|content)/.test(style.contain)
+      || (style.willChange && style.willChange !== 'auto')
+      || parseFloat(style.opacity) < 1;
+    result = isolated || isolatedBlendBackdrop(element.assignedSlot ?? element.parentElement ?? element.getRootNode()?.host);
+  }
+  blendBackdropCache.set(element, result);
+  return result;
 }
 
 /**
@@ -1233,11 +1330,12 @@ export function sampleGridFor(extent) {
   return { width, height, reduced: extent.width / width > 4.5 || extent.height / height > 4.5 };
 }
 
-export function imageLuminanceRange(url, overlays = [], grid = null) {
+export function imageLuminanceRange(url, overlays = [], grid = null, under = null) {
   const width = grid?.width ?? 32;
   const height = grid?.height ?? 32;
   const sizeKey = width === 32 && height === 32 ? '' : `|${width}x${height}`;
-  const cacheKey = `${url}${overlays.length ? `|${overlayKey(overlays)}` : ''}${sizeKey}`;
+  const backdrop = under?.a >= 1 ? under : null;
+  const cacheKey = `${url}${overlays.length ? `|${overlayKey(overlays)}` : ''}${sizeKey}${backdrop ? `|under:${overlayKey([backdrop])}` : ''}`;
   if (imageRangeCache.has(cacheKey)) return imageRangeCache.get(cacheKey);
   const promise = new Promise((resolve) => {
     const img = new Image();
@@ -1252,8 +1350,8 @@ export function imageLuminanceRange(url, overlays = [], grid = null) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0, width, height);
         const data = ctx.getImageData(0, 0, width, height).data;
-        let min = 1;
-        let max = 0;
+        let min = Infinity;
+        let max = -Infinity;
         // The colours at those extremes, kept for the same reason the
         // gradient range keeps them: translucent text blends with the actual
         // pixels, and a luminance cannot be un-gamma'd back into an rgb.
@@ -1266,19 +1364,22 @@ export function imageLuminanceRange(url, overlays = [], grid = null) {
           // painted beneath it — the sampled range alone then describes only
           // the ink, not the backdrop the eye meets. Callers widen the range
           // with the underlying paint (rangeWithBackdrop) or abstain.
-          if (data[i + 3] < 255) alphaSeen = true;
-          if (data[i + 3] < 128) continue; // mostly-transparent pixels reveal what's beneath — unknowable
-          opaquePixels += 1;
+          if (data[i + 3] < 255 && !backdrop) alphaSeen = true;
+          if (data[i + 3] > 0) opaquePixels += 1;
+          if (data[i + 3] === 0 && !backdrop) continue;
           // Composite each pixel through anything painted between the image
           // and the text before measuring: a photo under a 75% black scrim is
           // seen as the blend, never as the photo.
-          const pixel = { r: data[i], g: data[i + 1], b: data[i + 2], a: 1 };
-          const shown = overlays.length ? applyOverlays(pixel, overlays) : pixel;
+          const pixel = { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] / 255 };
+          // A nonzero alpha is real paint. Composite over a known backdrop
+          // before sampling; without one, keep the conservative raw range.
+          const painted = backdrop ? composite(pixel, backdrop) : { ...pixel, a: 1 };
+          const shown = overlays.length ? applyOverlays(painted, overlays) : painted;
           const l = luminance(shown);
           if (l < min) { min = l; minColor = shown; }
           if (l > max) { max = l; maxColor = shown; }
         }
-        // Not one opaque pixel: a spacer, a cleared sprite, or a decorative
+        // Not one nontransparent pixel: a spacer, a cleared sprite, or a decorative
         // layer left in place with nothing in it. It covers the background
         // without changing a single one of its pixels.
         if (!opaquePixels) {

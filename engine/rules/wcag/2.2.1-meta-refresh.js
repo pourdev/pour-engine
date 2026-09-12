@@ -80,10 +80,16 @@ export default {
     // 2.2.1 exempts a time limit "longer than 20 hours" — 20 hours exactly
     // is still inside the criterion.
     if (delay > 72000) return { status: 'pass' };
+    // Asserted the way ACT rule bc659a asserts it: a meta refresh gives the
+    // user no way to turn the limit off, adjust it or extend it, so the only
+    // escapes are the real-time and essential exceptions, which the tag
+    // cannot show either way. The message names that assumption so a
+    // reviewer who knows the page offers a control can dismiss the finding.
+    // https://www.w3.org/WAI/standards-guidelines/act/rules/bc659a/
     return {
       status: 'fail',
-      message: `The page refreshes/redirects after ${delay}s — slow readers lose their place (or the whole page) with no control.`,
-      fix: 'Remove the timed refresh; let users act in their own time.',
+      message: `The page refreshes or redirects itself after ${delay}s. Slow readers lose their place, or the whole page, and a meta refresh offers no way to turn that off, adjust it or extend it. 2.2.1 excuses a time limit only where it is part of a real-time event or essential; this finding assumes neither applies, since the tag cannot show it.`,
+      fix: 'Remove the timed refresh; let users act in their own time. If the page offers a control that turns the refresh off, or the refresh is essential, record that and dismiss this finding.',
     };
   },
 };

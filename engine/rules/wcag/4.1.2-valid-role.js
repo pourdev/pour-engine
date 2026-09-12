@@ -1,5 +1,6 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 import { attributesOf } from '../../lib/dom.js';
+import { implicitRole } from '../../lib/roles.js';
 // Concrete, usable roles — abstract roles are invalid in markup.
 export const VALID_ROLES = new Set([
   'alert', 'alertdialog', 'application', 'article', 'banner', 'blockquote', 'button',
@@ -108,7 +109,11 @@ export default {
     // this is a question, not an assertion. Focusable or state-bearing
     // elements keep failing: a focusable element left generic, or a state
     // riding on a role the browser threw away, is the real 4.1.2 harm.
-    if (!focusable && !hasAriaProps) {
+    // An invalid role does not erase a native control's semantics. A
+    // misspelling on a button is a review question; its actual missing
+    // name or state, if any, belongs to the corresponding semantic rule.
+    const nativeRole = implicitRole(element);
+    if ((!focusable && !hasAriaProps) || (nativeRole && nativeRole !== 'generic')) {
       return {
         status: 'incomplete',
         message: `role="${element.getAttribute('role')}" is not a valid ARIA role${hint}, so assistive technology ignores it and exposes the element's native <${tag}> semantics. Nothing is announced wrongly, but the author reached for a role that does not exist. Is the native <${tag}> role the right one here? If a different role was intended, that role is missing.`,

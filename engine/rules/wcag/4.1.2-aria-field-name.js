@@ -6,6 +6,7 @@
 // text inside a listbox/textbox does not name it, only author-provided
 // naming counts. Toggle roles (checkbox/radio/switch) DO name from content.
 import { labelledByName } from '../../lib/accessible-name.js';
+import { effectiveRole } from '../../lib/roles.js';
 
 // progressbar and meter belong here too: ARIA 1.2 marks both roles
 // "Accessible Name Required: True", they never name from content, and a
@@ -28,12 +29,12 @@ export default {
   tags: ['wcag2a', 'wcag412'],
   help: 'ARIA fields and value widgets must have an accessible name',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
-  selector: [...AUTHOR_ONLY, ...FROM_CONTENT]
-    .map((role) => `[role="${role}"]:not(input):not(select):not(textarea)`)
-    .join(', '),
+  selector: '[role]:not(input):not(select):not(textarea)',
   evaluate(element, { accessibleName }) {
-    const role = element.getAttribute('role');
-    const name = FROM_CONTENT.includes(role) ? accessibleName(element) : authorName(element);
+    const role = effectiveRole(element);
+    if (![...AUTHOR_ONLY, ...FROM_CONTENT].includes(role)) return { status: 'pass' };
+    const name = FROM_CONTENT.includes(role) || element.labels?.length
+      ? accessibleName(element) : authorName(element);
     if (name) return { status: 'pass' };
     // ARIA 1.1 combobox pattern: a non-focusable wrapper div carries the
     // role while the real, focusable input inside carries the label. The

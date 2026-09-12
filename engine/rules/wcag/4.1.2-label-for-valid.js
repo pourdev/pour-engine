@@ -29,7 +29,7 @@ export default {
   help: 'label[for] must reference a form control that exists',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: 'label[for]',
-  evaluate(element) {
+  evaluate(element, { accessibleName }) {
     const id = element.getAttribute('for');
     // `control` is the browser's own for-resolution: null when the id is
     // missing or names something that is not labelable. It resolves within
@@ -41,7 +41,7 @@ export default {
     // a label that points at one (standing policy: this shape passes).
     if (target && target.tagName === 'INPUT' && target.type === 'hidden') return { status: 'pass' };
     const wrapped = element.querySelector(WRAPPABLE);
-    if (wrapped) {
+    if (wrapped && !accessibleName(wrapped)) {
       return {
         status: 'fail',
         message: `This label wraps a <${wrapped.tagName.toLowerCase()}> but its for="${id}" ${target ? `points at a <${target.tagName.toLowerCase()}>, which is not labelable` : 'points at nothing'}. The for attribute overrides the wrapping, so the wrapped control is not labelled by this text.`,

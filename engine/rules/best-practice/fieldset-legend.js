@@ -12,13 +12,19 @@ export default {
   // Judged as a set: only same-name groups of 2+ need grouping, and one
   // finding per group is enough.
   evaluateAll(elements) {
-    const groups = {};
+    const groups = new Map();
     elements.forEach((element, index) => {
-      const key = `${element.type}::${element.form?.id ?? ''}::${element.name}`;
-      (groups[key] ??= []).push(index);
+      // Form identity matters: two idless forms can use the same field name
+      // without making one group. Group controls within their own tree too.
+      const owner = element.form ?? element.getRootNode();
+      if (!groups.has(owner)) groups.set(owner, new Map());
+      const byName = groups.get(owner);
+      const key = `${element.type}::${element.name}`;
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key).push(index);
     });
     const outcomes = elements.map(() => ({ status: 'pass' }));
-    for (const indexes of Object.values(groups)) {
+    for (const indexes of [...groups.values()].flatMap((byName) => [...byName.values()])) {
       if (indexes.length < 2) continue;
       const first = elements[indexes[0]];
       // A <fieldset> IS a group; it does not need role="group" written on it
@@ -35,7 +41,7 @@ export default {
       // it empty (2026-08-25 overnight audit).
       const group = first.closest('fieldset, [role="group"], [role="radiogroup"]');
       const legend = group?.querySelector(':scope > legend');
-      const grouped = group && (
+      const grouped = group && indexes.every((index) => group.contains(elements[index])) && (
         (legend && accessibleName(legend))
         || labelledByName(group)
         || group.getAttribute('aria-label')?.trim()

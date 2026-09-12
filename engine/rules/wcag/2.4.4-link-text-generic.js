@@ -13,11 +13,9 @@
 //               it sits in. A "Read more" under a headline naming the
 //               article is a judgment call about whether that context really
 //               reaches the user, so this REVIEWS. It never asserts.
-//   2.4.9 (AAA) purpose must come from the link text ALONE, with the only
-//               exception being links whose purpose "would be ambiguous to
-//               users in general". A link named nothing but "Read more" is
-//               ambiguous to everyone, which is the exception failing to
-//               apply rather than saving it, so this FAILS.
+//   2.4.9 (AAA) requires a mechanism for purpose to be available from link
+//               text alone. A page may let users expand its link names,
+//               so a generic name in this snapshot still needs review.
 //
 // Judged on the ACCESSIBLE NAME, not the text content: a link written as
 // <a href="…" aria-label="Read more about the budget">Read more</a> is
@@ -30,6 +28,8 @@
 // here rather than bad ones. Entries are stored in NORMALIZED form (see
 // normalizeName below): apostrophes become spaces, so "plus d informations"
 // is how "plus d'informations" — straight or typographic — must be listed.
+
+import { effectiveRole, implicitRole } from '../../lib/roles.js';
 
 const GENERIC = new Set([
   // English
@@ -83,6 +83,7 @@ export function createLinkPurposeRule({ id, impact, tags, help, helpUrl, verdict
     // link-name's finding, not this one.
     selector: 'a[href], [role="link"]',
     evaluate(element, { accessibleName }) {
+      if ((effectiveRole(element) ?? implicitRole(element)) !== 'link') return { status: 'pass' };
       const name = accessibleName(element);
       if (!name) return { status: 'pass' }; // nameless: link-name reports it
       const normalized = normalizeName(name);

@@ -4,8 +4,8 @@
 //
 // `automation` is an honest assessment:
 //   'auto'    — rules can meaningfully test this
-//   'partial' — rules catch some failures; humans must still review
-//   'manual'  — requires human judgment (most of the spec!)
+//   'partial' — rules check aspects or nominate review candidates; humans still review
+//   'manual'  — no active rule; assessed through the human checklist
 // The coverage report (scripts/wcag-coverage.js → src/engine/COVERAGE.md) joins
 // this catalog with the rule registry to show real coverage.
 
@@ -37,11 +37,11 @@ export default [
   sc('1.3.1', 'Info and Relationships', 'A', 'partial'),
   sc('1.3.2', 'Meaningful Sequence', 'A', 'partial'), // partial: CSS-reorder divergence is measurable; whether meaning survives is the reader's call
   sc('1.3.3', 'Sensory Characteristics', 'A', 'manual'),
-  sc('1.3.4', 'Orientation', 'AA', 'partial', '2.1'), // orientation-lock (2026-08-01) proves CSS root hides/rotations; script locks stay a human check
-  sc('1.3.5', 'Identify Input Purpose', 'AA', 'partial', '2.1'), // partial: wrong tokens are provable; MISSING autocomplete on identity fields needs judgment
+  sc('1.3.4', 'Orientation', 'AA', 'partial', '2.1'), // orientation-lock asserts CSS root hides/rotations as ACT b33eff does, essential exception assumed absent; script locks stay a human check
+  sc('1.3.5', 'Identify Input Purpose', 'AA', 'partial', '2.1'), // partial: wrong tokens are asserted as ACT 73f2c2 does (search boxes asked); MISSING autocomplete on identity fields needs judgment
   sc('1.3.6', 'Identify Purpose', 'AAA', 'manual', '2.1'),
   sc('1.4.1', 'Use of Color', 'A', 'partial'), // link-in-text-block automates the link case
-  sc('1.4.2', 'Audio Control', 'A', 'partial'), // partial: declarative autoplay is provable; JS-initiated audio is not
+  sc('1.4.2', 'Audio Control', 'A', 'partial'), // declarative autoplay identifies candidates; audibility and alternative controls need review
   sc('1.4.3', 'Contrast (Minimum)', 'AA', 'partial'),
   sc('1.4.4', 'Resize Text', 'AA', 'partial'),
   sc('1.4.5', 'Images of Text', 'AA', 'manual'),
@@ -75,9 +75,9 @@ export default [
   sc('2.4.6', 'Headings and Labels', 'AA', 'manual'),
   sc('2.4.7', 'Focus Visible', 'AA', 'partial'), // partial: focus-visible flags outline suppression; the indicator itself needs eyes
   sc('2.4.8', 'Location', 'AAA', 'manual'),
-  sc('2.4.9', 'Link Purpose (Link Only)', 'AAA', 'partial'), // partial: contentless link names are provable; whether a real name describes its destination needs a reader
+  sc('2.4.9', 'Link Purpose (Link Only)', 'AAA', 'partial'), // generic wording nominates candidates; whether wording explains the destination needs a reader
   sc('2.4.10', 'Section Headings', 'AAA', 'manual'),
-  sc('2.4.11', 'Focus Not Obscured (Minimum)', 'AA', 'partial', '2.2'), // partial: focus-not-obscured catches fully-covered targets at rest
+  sc('2.4.11', 'Focus Not Obscured (Minimum)', 'AA', 'partial', '2.2'), // covered resting targets are candidates; actual focus/scroll behavior needs review
   sc('2.4.12', 'Focus Not Obscured (Enhanced)', 'AAA', 'manual', '2.2'),
   sc('2.4.13', 'Focus Appearance', 'AAA', 'manual', '2.2'),
   sc('2.5.1', 'Pointer Gestures', 'A', 'manual', '2.1'),

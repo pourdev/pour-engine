@@ -80,8 +80,8 @@ export default {
     const linkCount = roots.reduce((n, root) => n + (root.querySelectorAll?.('a[href], button').length ?? 0), 0);
     if (linkCount < 4) return { status: 'pass' };
     return {
-      status: 'fail',
-      message: `This page has ${linkCount} links and buttons but no landmark, heading, skip link, or titled frame — keyboard and screen-reader users must go through the whole header and nav to reach anything.`,
+      status: 'incomplete',
+      message: `This page has ${linkCount} links and buttons but no detected landmark, heading, skip link or titled frame. Check whether it contains blocks repeated on other pages and, if so, whether a mechanism lets users bypass them. A single page cannot establish repetition.`,
       fix: 'Add a skip link like <a href="#content">Skip to content</a>, wrap primary content in <main>, or structure the page with headings.',
     };
   },

@@ -44,7 +44,11 @@ export default {
     // ruinous on 200k-node single-page specs, whose plain flowing text is
     // also the least likely content on the web to clip. Past a scale where
     // the probe's cost dwarfs its yield, abstain wholesale.
-    if (elements.length > 20_000) return elements.map(() => ({ status: 'pass' }));
+    if (elements.length > 20_000) {
+      return elements.map((_, index) => index === 0
+        ? { status: 'incomplete', message: `The text-spacing probe was not run because this page has ${elements.length} candidate elements, exceeding its 20,000-element budget. Check the page with the WCAG spacing overrides applied.` }
+        : { status: 'skipped' });
+    }
     // Only containers that hide overflow and hold text can lose content.
     // Collapsed containers (accordion panels at height 0) show nothing —
     // there is no visible text for the override to clip.
@@ -64,13 +68,22 @@ export default {
     probe.dataset.pourAudit = 'probe';
     probe.textContent = override(doc.documentElement.scrollHeight);
     doc.documentElement.append(probe);
+    // Document selectors cannot cross a shadow boundary. Each candidate
+    // root receives the same override so the measured text is really probed.
+    const probes = [probe];
+    for (const root of new Set(candidates.filter(Boolean).map((element) => element.getRootNode()))) {
+      if (root === doc || !root.host) continue;
+      const scoped = probe.cloneNode(true);
+      root.append(scoped);
+      probes.push(scoped);
+    }
     let after;
     try {
       // Force the reflow the measurements depend on.
       void doc.documentElement.offsetHeight;
       after = candidates.map((element) => element && clipped(element));
     } finally {
-      probe.remove();
+      for (const applied of probes) applied.remove();
       // The audit must never move the page: put the scroll back exactly
       // where the user had it, after the removal's own reflow settles.
       void doc.documentElement.offsetHeight;

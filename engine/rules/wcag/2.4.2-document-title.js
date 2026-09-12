@@ -3,18 +3,17 @@
 // merely PRESENT satisfies the markup, not the criterion, so the two
 // well-known undescriptive shapes are checked as well.
 //
-// Tier one, failed: strings that are a stand-in under every reading.
-// "Untitled Document" is what an editor writes when the author wrote
-// nothing, and no page is ever about that.
+// Familiar template strings are review candidates, not proof of a missing
+// topic: a document can genuinely describe the HTML document title or an
+// artwork named Untitled 1.
 // Tier two, sent to a human: single generic words and framework scaffold
 // defaults. Almost always a leftover, but a gallery page really can be about
 // an artwork called "Untitled", and "Example Domain" really is the subject
 // of example.com. Those are somebody's call to make, not the engine's.
 // "New document", "New page" and "New tab" sit in tier two as well: a
 // document editor's creation screen, a wiki's new-page form or a
-// browser-style app's new-tab page is about exactly that, so only the
-// numbered editor default ("New Page 1", F25's example) is a certain
-// placeholder (2026-08-25 overnight audit).
+// browser-style app's new-tab page is about exactly that. Even numbered
+// editor-style titles remain a question about the actual subject.
 //
 // Deliberately NOT judged: whether a real-looking title matches the page it
 // sits on. That needs someone who can read the page, and guessing at it
@@ -63,8 +62,8 @@ export default {
     const normalized = title.replace(/\s+/g, ' ').toLowerCase();
     if (PLACEHOLDER.has(normalized) || /^(?:untitled|new (?:document|page|tab))[\s-]*\d+$/.test(normalized)) {
       return {
-        status: 'fail',
-        message: `“${title}” is a placeholder left by an editor or template. It gives no topic and no purpose, so a screen reader announces nothing useful when the page loads, and a row of open tabs, bookmarks or history entries becomes impossible to tell apart.`,
+        status: 'incomplete',
+        message: `“${title}” resembles a template title. Check whether it describes this page's actual topic or purpose; the same words can also be a legitimate subject or name.`,
         fix: 'Put this page\'s own subject in the title first, then the site name.',
       };
     }

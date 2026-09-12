@@ -30,6 +30,7 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
   selector: '[popovertarget], [commandfor]',
   evaluate(element) {
+    if (element.matches(':disabled') || !element.matches('button, input[type="button"]')) return { status: 'pass' };
     // Ids resolve within the button's own tree scope (a shadow root's ids
     // are its own), exactly as the browser resolves them.
     const root = element.getRootNode();
@@ -46,7 +47,7 @@ export default {
       }
     }
 
-    if (element.hasAttribute('commandfor')) {
+    if (element.tagName === 'BUTTON' && element.hasAttribute('commandfor')) {
       const id = element.getAttribute('commandfor').trim();
       const command = (element.getAttribute('command') ?? '').trim().toLowerCase();
       const target = lookup(id);

@@ -5,6 +5,7 @@
 import {
   parseColor, contrastRatio, composite, effectiveBackground, isLargeText,
   backgroundImageSource, cumulativeOpacity, opacityAnimating, restingOpacity, showRatio,
+  hasPaintEffects, opacityGroupPaint, splitBackgroundLayers, sampledGradientRange,
 } from '../../lib/contrast.js';
 
 export default {
@@ -56,10 +57,26 @@ export default {
     // far less contrast than its declared colours suggest.
     const opacity = opacityAnimating(element) ? restingOpacity(element) : cumulativeOpacity(element);
     if (opacity < 0.05) return { status: 'pass' };
+    if (hasPaintEffects(element)) {
+      return { status: 'incomplete', message: 'A filter or blend mode changes the colours presented inside this field. Check the resulting text contrast by eye.' };
+    }
     // The control's own background wins; else whatever shows through it.
     const own = parseColor(style.backgroundColor);
     let background;
-    if (own && own.a >= 1) {
+    if (style.backgroundImage !== 'none') {
+      const layers = splitBackgroundLayers(style.backgroundImage);
+      const range = layers.length === 1 && layers[0].includes('gradient(')
+        ? sampledGradientRange(layers[0]) : null;
+      // A constant opaque gradient has exactly one painted background.
+      // Other image paint needs spatial sampling, not its fallback colour.
+      const fullBox = /^(auto|auto auto)$/.test(style.backgroundSize)
+        && style.backgroundPosition === '0% 0%'
+        && ['repeat', 'no-repeat'].includes(style.backgroundRepeat);
+      if (!range || range.min !== range.max || opacity < 1 || !fullBox) {
+        return { status: 'incomplete', message: 'An image or gradient paints this field background. Check its text against the pixels behind it.' };
+      }
+      background = range.minColor;
+    } else if (own && own.a >= 1) {
       background = own;
     } else {
       // An image or gradient painted under a see-through control is a
@@ -73,18 +90,27 @@ export default {
         };
       }
       const behind = effectiveBackground(element);
-      background = behind && own && own.a > 0 ? composite(own, behind) : behind;
+      background = behind; // effectiveBackground already composites the field fill
     }
     if (!background) {
       return { status: 'incomplete', message: 'The control’s background could not be determined — check its text contrast by eye.' };
     }
     const required = isLargeText(style) ? 3 : 4.5;
 
+    let unresolvedGroup = false;
     const judge = (color, what, ownOpacity = 1) => {
       const parsed = parseColor(color);
       if (!parsed || parsed.a === 0) return null;
       // Same treatment the main rule gives faded text: what reaches the eye
       // is the declared colour thinned by the opacity it is painted at.
+      if (opacity < 1) {
+        const group = opacityGroupPaint(element, { ...parsed, a: parsed.a * ownOpacity });
+        if (group?.unresolved) { unresolvedGroup = true; return null; }
+        if (group) {
+          const ratio = contrastRatio(group.foreground, group.background);
+          return ratio >= required ? null : { what, ratio };
+        }
+      }
       const painted = opacity * ownOpacity;
       const faded = painted < 1 ? { ...parsed, a: parsed.a * painted } : parsed;
       const fg = faded.a < 1 ? composite(faded, background) : faded;
@@ -94,16 +120,18 @@ export default {
     };
 
     const failures = [];
-    const valueVerdict = judge(style.color, 'value text');
+    const valueVerdict = judge(style.webkitTextFillColor || style.color, 'value text');
     if (valueVerdict) failures.push(valueVerdict);
     // Placeholder text is real text users must read; browsers expose its
-    // computed colour via the ::placeholder pseudo-element.
-    if (element.getAttribute('placeholder')?.trim()) {
+    // computed colour via the ::placeholder pseudo-element. Selectors 4
+    // defines :placeholder-shown for controls actually showing that text;
+    // a populated field's unpainted hint must not create a violation.
+    if (element.getAttribute('placeholder')?.trim() && element.matches(':placeholder-shown')) {
       let placeholderColor = null;
       let placeholderOpacity = 1;
       try {
         const placeholderStyle = getComputedStyle(element, '::placeholder');
-        placeholderColor = placeholderStyle.color;
+        placeholderColor = placeholderStyle.webkitTextFillColor || placeholderStyle.color;
         // ::placeholder { opacity: .3 } is a widespread idiom (framework
         // resets, Firefox's own UA default of 0.54), and the criterion is on
         // the visual presentation of the text, which is the faded colour.
@@ -117,6 +145,7 @@ export default {
         if (verdict) failures.push(verdict);
       }
     }
+    if (unresolvedGroup) return { status: 'incomplete', message: 'The field and its text fade together over an unresolved background. Check the presented text contrast by eye.' };
     if (!failures.length) return { status: 'pass' };
     const worst = failures.sort((a, b) => a.ratio - b.ratio)[0];
     return {

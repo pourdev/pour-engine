@@ -65,7 +65,7 @@ export default {
       const headers = cell.getAttribute('headers');
       return headers && headers.trim().split(/\s+/).filter(Boolean).some((id) => {
         const target = element.getRootNode().getElementById?.(id);
-        return !target || !cells.includes(target) || !(/^T[HD]$/.test(target.tagName) || isHeaderCell(target));
+        return !target || !cells.includes(target) || !isHeaderCell(target);
       });
     });
     if (badRefs.length) {
@@ -84,13 +84,34 @@ export default {
           message: 'This table has no header cells and its cells hold block content (headings, paragraphs, lists or forms), which is a layout-table signature. If it really presents data, mark its header cells with <th>; if it is layout scaffolding, add role="presentation".',
         };
       }
+      // A grid whose every filled cell is nothing but a link or a button is a
+      // navigation block laid out as a table, not data with labels: asked,
+      // not asserted (2026-09-12).
+      const filled = cells.filter((cell) => cell.textContent.trim());
+      const navigational = filled.every((cell) => {
+        const controls = [...cell.querySelectorAll('a, button')];
+        return controls.length
+          && controls.map((control) => control.textContent.trim()).join(' ').replace(/\s+/g, ' ')
+            === cell.textContent.trim().replace(/\s+/g, ' ');
+      });
+      if (navigational) {
+        return {
+          status: 'incomplete',
+          message: 'This table has no header cells and every cell holds only a link or a button, which is the shape of a navigation block laid out as a table. If it presents data, mark its header cells with <th>; if it is layout, add role="presentation".',
+        };
+      }
+      // Everything that remains is a grid of at least four short text cells
+      // with no nested table, no block content and no layout role: a data
+      // table by every signal the markup gives, which is the determination
+      // F91 asks for before it applies. Asserted, as the shipped engine
+      // asserted it; the message says what to do if it is layout after all.
       // A two-column table is a list of label-and-value pairs; its first
       // column is the row headers, and that is the whole fix (gov.uk
       // inheritance tax guidance, 2026-09-01: five such tables, all td).
       const twoColumns = Math.max(0, ...rows.map((row) => row.cells.length)) === 2;
       return {
         status: 'fail',
-        message: 'This looks like a data table but has no header cells — screen reader users get the data with no way to tell what each row/column means.',
+        message: 'This looks like a data table but has no header cells, so screen reader users get the data with no way to tell what each row or column means. If it only arranges content, mark it role="presentation" and dismiss this finding.',
         fix: twoColumns
           ? 'Mark the first cell of each row as <th scope="row">: in a two-column table the first column names what the second holds.'
           : 'Mark header cells with <th> (add scope="col" or scope="row" when the table has both).',

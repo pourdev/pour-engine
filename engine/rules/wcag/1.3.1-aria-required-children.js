@@ -1,7 +1,7 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
 // Composite roles are meaningless without their required child roles —
 // role="list" with no listitems announces as an empty list.
-import { implicitRole } from '../../lib/roles.js';
+import { effectiveRole } from '../../lib/roles.js';
 // Every row of ARIA 1.2's Required Owned Elements table; verify:aria-tables
 // diffs this map against the spec (2026-09-01, after feed and row were
 // found missing).
@@ -21,9 +21,7 @@ export const REQUIRED_CHILDREN = {
   rowgroup: ['row'],
 };
 
-const roleOf = (element) =>
-  element.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase() ??
-  implicitRole(element);
+const roleOf = effectiveRole;
 
 /**
  * Every element in the COMPOSED subtree of `element`: its light-DOM
@@ -88,6 +86,19 @@ function candidateDescendants(element) {
   return found;
 }
 
+function exposedChild(element, isVisible) {
+  if (isVisible(element)) return true;
+  // A collapsed native select still exposes its options through the
+  // platform accessibility API, although those options have no CSS boxes.
+  // Chromium also retains individually hidden options in that native popup
+  // tree. Only the select's exposure gates this narrow native exception;
+  // applying CSS-box visibility to its options would assert an empty widget
+  // even while the browser exposes its choices.
+  if (element.tagName !== 'OPTION') return false;
+  const select = element.closest('select');
+  return !!select && isVisible(select);
+}
+
 export default {
   id: 'aria-required-children',
   name: 'Required ARIA children',
@@ -95,17 +106,18 @@ export default {
   tags: ['wcag2a', 'wcag131'],
   help: 'Composite ARIA roles must contain their required children',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html',
-  selector: Object.keys(REQUIRED_CHILDREN).map((role) => `[role="${role}"]`).join(', '),
-  evaluate(element) {
+  selector: '[role]',
+  evaluate(element, { isVisible }) {
     if (element.getAttribute('aria-busy') === 'true') return { status: 'pass' }; // still loading
-    const role = element.getAttribute('role').trim().split(/\s+/)[0].toLowerCase();
+    const role = effectiveRole(element);
     const required = REQUIRED_CHILDREN[role];
+    if (!required) return { status: 'pass' };
     const children = [...element.children, ...(element.shadowRoot?.children ?? [])]
       .filter((c) => !c.matches('script, style, template'));
     // A completely empty container is a lazy-load placeholder more often
     // than a defect — it announces as an empty list, which is accurate.
     if (!children.length && !element.hasAttribute('aria-owns')) return { status: 'pass' };
-    if (candidateDescendants(element).some((child) => required.includes(roleOf(child)))) {
+    if (candidateDescendants(element).some((child) => required.includes(roleOf(child)) && exposedChild(child, isVisible))) {
       return { status: 'pass' };
     }
     return {

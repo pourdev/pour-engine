@@ -114,7 +114,15 @@ export default {
       const wrapperHasBorder = ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
         parseFloat(wrapperStyle[`border${side}Width`]) > 0 && wrapperStyle[`border${side}Style`] !== 'none'
         && (parseColor(wrapperStyle[`border${side}Color`])?.a ?? 0) > 0);
-      if (wrapperHasBorder) return { status: 'pass' };
+      if (wrapperHasBorder) {
+        const around = effectiveBackground(wrapper.parentElement ?? wrapper);
+        const contrastingBorder = around && ['Top', 'Right', 'Bottom', 'Left'].some((side) => {
+          if (!(parseFloat(wrapperStyle[`border${side}Width`]) > 0) || wrapperStyle[`border${side}Style`] === 'none') return false;
+          const colour = parseColor(wrapperStyle[`border${side}Color`]);
+          return colour && contrastRatio(composite(colour, around), around) >= 3;
+        });
+        if (contrastingBorder) return { status: 'pass' };
+      }
       const wrapperFill = parseColor(wrapperStyle.backgroundColor);
       if (wrapperFill && wrapperFill.a >= 1) {
         const around = effectiveBackground(wrapper.parentElement ?? wrapper);

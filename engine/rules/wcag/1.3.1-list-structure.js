@@ -1,5 +1,6 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
 import { NEVER_RENDERED } from '../../lib/dom.js';
+import { effectiveRole } from '../../lib/roles.js';
 
 const ITEM_ROLES = ['listitem', 'presentation', 'none'];
 
@@ -14,7 +15,7 @@ export default {
   evaluate(element, { isRendered }) {
     // A role attribute replaces the HTML list semantics — a <ul role="tablist">
     // is judged by ARIA structure rules, not HTML list rules.
-    if (element.hasAttribute('role') && element.getAttribute('role') !== 'list') return { status: 'pass' };
+    if (effectiveRole(element) !== 'list') return { status: 'pass' };
     // Flat-tree children: a <slot> renders as its assigned elements (or its
     // fallback content), so a shadow <ul><slot></slot></ul> receiving <li>s
     // is a perfectly valid list.
@@ -39,7 +40,7 @@ export default {
       // listitems, so the list announces broken/empty. Only a role-less
       // <li> (or an explicit listitem/presentation/none anywhere) keeps
       // the structure intact.
-      const role = child.getAttribute('role') ?? '';
+      const role = effectiveRole(child);
       if (child.tagName === 'LI') return !role || ITEM_ROLES.includes(role);
       if (ITEM_ROLES.includes(role)) return true;
       const genericWrapper = !child.hasAttribute('role')
@@ -62,7 +63,7 @@ export default {
       const renderedItems = effectiveChildren(element).filter((child) =>
         child.tagName === 'LI' && (!isRendered || isRendered(child)));
       const neutralised = renderedItems.filter((child) =>
-        ['presentation', 'none'].includes(child.getAttribute('role') ?? ''));
+        ['presentation', 'none'].includes(effectiveRole(child)));
       if (renderedItems.length && neutralised.length === renderedItems.length) {
         return {
           status: 'fail',

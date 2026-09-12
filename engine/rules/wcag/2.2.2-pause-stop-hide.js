@@ -6,8 +6,8 @@
 //
 // Two shapes are checkable, and they need different verdicts.
 //
-// <marquee> and <blink> exist only to move, ship no control of their own,
-// and are obsolete: a definite failure.
+// Legacy markup is not proof of motion: blink has no native animation in
+// modern browsers, and a marquee may be stopped or controlled by script.
 //
 // A CSS animation set to repeat for ever is the modern ticker. Clauses 1
 // and 2 are settled by the CSS itself — it starts with the page and never
@@ -117,15 +117,15 @@ export default {
     if (!elements.length) return [];
     const moving = endlesslyMoving(elements[0].ownerDocument);
     return elements.map((element) => {
-      if (element.tagName === 'MARQUEE' || element.tagName === 'BLINK') {
+      if (element.tagName === 'MARQUEE') {
         // scrollamount="0" is the documented way to ship a <marquee> that
         // doesn't actually move.
         if (element.tagName === 'MARQUEE' && element.getAttribute('scrollamount') === '0') {
           return { status: 'pass' };
         }
         return {
-          status: 'fail',
-          message: `<${element.tagName.toLowerCase()}> scrolls or blinks with no way to pause it, which is unusable for people with attention or vestibular conditions.`,
+          status: 'incomplete',
+          message: 'This marquee can scroll content. Check whether it actually starts automatically, continues for more than five seconds alongside other content, and has a working pause, stop or hide mechanism. The element alone does not establish those conditions.',
           fix: 'Replace it with static content, or a CSS animation with a pause control that honours prefers-reduced-motion.',
         };
       }

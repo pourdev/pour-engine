@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT } from '../../lib/contrast.js';
+  showRatio, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -297,7 +297,7 @@ async function sampledVerdict(source, foreground, required, doc, overlays = [], 
   let what = 'image';
   const grid = sampleGridFor(extent);
   if (source.tagName === 'IMG') {
-    range = await imageLuminanceRange(source.currentSrc || source.src, overlays, grid);
+    range = await imageLuminanceRange(source.currentSrc || source.src, overlays, grid, under);
   } else {
     const css = source.css ?? getComputedStyle(source).backgroundImage;
     if (!css || css === 'none') return null;
@@ -314,7 +314,7 @@ async function sampledVerdict(source, foreground, required, doc, overlays = [], 
     if (url) {
       let absolute;
       try { absolute = new URL(url, doc.baseURI).href; } catch { return null; }
-      range = await imageLuminanceRange(absolute, overlays, grid);
+      range = await imageLuminanceRange(absolute, overlays, grid, under);
     } else if (layer.includes('gradient(')) {
       what = 'gradient';
       const stops = gradientStops(layer);
@@ -539,6 +539,10 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     const fill = parseColor(style.webkitTextFillColor);
     const clipsText = /\btext\b/.test(style.webkitBackgroundClip ?? '') || /\btext\b/.test(style.backgroundClip ?? '');
     if (clipsText) {
+    if (hasPaintEffects(styleSource)) {
+      return { status: 'incomplete', message: 'A filter or blend mode changes the colours presented by this text and its background. Check the resulting contrast by eye.' };
+    }
+
       const behind = effectiveBackground(element.parentElement ?? element);
       const fgRange = style.backgroundImage !== 'none'
         ? sampledGradientRange(splitBackgroundLayers(style.backgroundImage)[0] ?? '') : null;
@@ -559,6 +563,38 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // Visually hidden text (sr-only, image replacement) has no visual
     // presentation for contrast to apply to — screen readers still read it.
     if (textVisuallyHidden(element, style, foreground)) return { status: 'pass' };
+    // A leaf's own multiply blend over flat paint is exact per Compositing
+    // Level 1: B(Cb, Cs) = Cb * Cs. Keep groups, filters and generated paint
+    // outside this narrow path; its backdrop is resolved below as usual.
+    const ownMultiply = style.mixBlendMode === 'multiply'
+      && styleSource === element && !element.children.length && !element.shadowRoot
+      && parseColor(style.backgroundColor)?.a === 0 && style.backgroundImage === 'none'
+      && style.filter === 'none' && (!style.backdropFilter || style.backdropFilter === 'none')
+      && (!style.textShadow || style.textShadow === 'none')
+      && !hasPaintEffects(element.assignedSlot ?? element.parentElement ?? element.getRootNode()?.host)
+      && !isolatedBlendBackdrop(element.assignedSlot ?? element.parentElement ?? element.getRootNode()?.host)
+      && !['::before', '::after'].some((pseudo) => {
+        const pseudoStyle = getComputedStyle(element, pseudo);
+        const content = pseudoStyle.content;
+        // U+2060 only controls line breaking and has no glyph. A plain
+        // inline joiner with no independent box paint does not add a
+        // painted source to this leaf's multiply group.
+        const bareJoiner = (content === '"\u2060"' || content === "'\u2060'")
+          && pseudoStyle.display === 'inline' && pseudoStyle.position === 'static'
+          && pseudoStyle.cssFloat === 'none'
+          && parseColor(pseudoStyle.backgroundColor)?.a === 0
+          && ['backgroundImage', 'boxShadow', 'textShadow', 'transform', 'filter', 'backdropFilter', 'maskImage', 'webkitMaskImage']
+            .every((key) => !pseudoStyle[key] || pseudoStyle[key] === 'none')
+          && ['Top', 'Right', 'Bottom', 'Left'].every((side) =>
+            parseFloat(pseudoStyle[`padding${side}`]) === 0 && parseFloat(pseudoStyle[`border${side}Width`]) === 0)
+          && pseudoStyle.outlineStyle === 'none'
+          && (!pseudoStyle.mixBlendMode || pseudoStyle.mixBlendMode === 'normal');
+        if (bareJoiner) return false;
+        return content && content !== 'none' && content !== 'normal' && content !== '""';
+      });
+    if (hasPaintEffects(styleSource) && !ownMultiply) {
+      return { status: 'incomplete', message: 'A filter or blend mode changes the colours presented by this text and its background. Check the resulting contrast by eye.' };
+    }
     if (!foreground) {
       return { status: 'incomplete', message: 'The text colour could not be parsed — check contrast by eye.' };
     }
@@ -582,6 +618,26 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       .map(({ pseudo, color, style: pseudoStyle }) => ({
         origin: pseudo, color, required: isLargeText(pseudoStyle) ? thresholds.large : thresholds.normal,
       }));
+    // A first-line override can paint every glyph. With no element
+    // descendants and one actual line, the base colour paints nothing and
+    // must not manufacture a failure. Wrapped text retains its base colour.
+    let basePaints = true;
+    if (!element.childElementCount && alternates.some((a) => a.origin === '::first-line')) {
+      const range = doc.createRange();
+      range.selectNodeContents(element);
+      const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+      if (lines.length && lines.every((r) => Math.abs(r.top - lines[0].top) < 1)) {
+        const generated = ['::before', '::after'].some((pseudo) => {
+          const generatedStyle = getComputedStyle(element, pseudo);
+          return generatedStyle.display !== 'none'
+            && !['none', 'normal'].includes(generatedStyle.content);
+        });
+        // Range does not include generated content. A generated block can
+        // occupy the first formatted line while the own text sits below it.
+        if (generated) return { status: 'incomplete', message: 'Generated content may occupy this element’s first line, so the colours that actually paint its text cannot be identified from text ranges alone. Check contrast by eye.' };
+        basePaints = false;
+      }
+    }
     const worstCandidate = (candidates, backdrop) => candidates.reduce((worst, candidate) => {
       const shown = candidate.color.a < 1 ? composite(candidate.color, backdrop) : candidate.color;
       const margin = contrastRatio(shown, backdrop) / candidate.required;
@@ -589,7 +645,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     }, null);
     if (alternates.length) {
       const estimate = effectiveBackground(styleSource) ?? { r: 255, g: 255, b: 255, a: 1 };
-      const pick = worstCandidate([{ origin: null, color: foreground, required }, ...alternates], estimate);
+      const pick = worstCandidate([...(basePaints ? [{ origin: null, color: foreground, required }] : []), ...alternates], estimate);
       foreground = pick.color;
       required = pick.required;
       foregroundOrigin = pick.origin;
@@ -604,6 +660,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // Near-zero resting opacity means the text isn't visually presented.
     const opacity = opacityAnimating(element) ? restingOpacity(element) : cumulativeOpacity(element);
     if (opacity < 0.05) return { status: 'pass' };
+    if (ownMultiply && (opacity < 1 || alternates.length)) {
+      return { status: 'incomplete', message: 'This text blends as a group or uses additional text paint. Check its presented contrast by eye.' };
+    }
     if (opacity < 1) {
       // Group opacity with a background INSIDE the group: the browser blends
       // text and background together over what lies behind the carrier, so
@@ -696,6 +755,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // images (external-link arrows etc.) don't affect the text's contrast.
     const imageSource = backgroundImageSource(element);
     if (imageSource) {
+      if (ownMultiply) return { status: 'incomplete', message: 'This text multiplies against an image or gradient. Its contrast depends on the pixels behind each glyph; check it by eye.' };
       const { relation, intrinsic, dimensionless, isGradient, sizedSmall, paint } = await imageVsText(imageSource, element, doc);
       if (relation !== 'clear') {
         // imageSource.overlays are the translucent layers painted between the
@@ -761,6 +821,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // hero panels, overlay scrims) that the ancestor walk cannot — instead
     // of merely flagging them for a human.
     const painted = paintedBackdrop(element);
+    if (ownMultiply && painted?.image) {
+      return { status: 'incomplete', message: 'This text multiplies against image paint. Check its presented contrast by eye.' };
+    }
     // A translucent viewport-scale veil is painted ON TOP of this text
     // (modal scrim, loading overlay, consent dimmer): the user sees the text
     // through it, so the resting colours are not the presented ones — and if
@@ -801,6 +864,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // otherwise sent every element on the page to the review lane, and a
     // genuine 4.1:1 failure drowned among 163 siblings that were fine.
     const pseudoResolved = pseudoBackdropForText(element);
+    if (ownMultiply && pseudoResolved) {
+      return { status: 'incomplete', message: 'Pseudo-element paint affects the backdrop of this blended text. Check its presented contrast by eye.' };
+    }
     const film = pseudoResolved?.film ?? 0;
     let pseudoBack = pseudoResolved?.color || pseudoResolved?.image ? pseudoResolved : null;
     // The pseudo's BOX covering the text says nothing about its IMAGE doing
@@ -959,12 +1025,18 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     if (alternates.length) {
       const dim = (color) => (opacity < 1 ? { ...color, a: color.a * opacity } : color);
       const base = { origin: null, color: dim(baseForeground), required: baseRequired };
-      const pick = worstCandidate([base, ...alternates.map((a) => ({ ...a, color: dim(a.color) }))], background);
+      const pick = worstCandidate([...(basePaints ? [base] : []), ...alternates.map((a) => ({ ...a, color: dim(a.color) }))], background);
       foreground = pick.color;
       required = pick.required;
       foregroundOrigin = pick.origin;
     }
     // Semi-transparent text is really text-colour blended into the background.
+    if (ownMultiply) {
+      foreground = { ...foreground,
+        r: foreground.r * background.r / 255,
+        g: foreground.g * background.g / 255,
+        b: foreground.b * background.b / 255 };
+    }
     if (foreground.a < 1) foreground = composite(foreground, background);
 
     // The scroll-independent hazard bracket for UNVERIFIED backgrounds:
@@ -1008,7 +1080,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
         (!blindOnly || hitTestBlind) && near(rect)
         && !panel.contains(element) && !element.contains(panel)
         && textIntersects(element, rect)
-        && (contrastRatio(foreground, color) >= required) !== (direction === 'pass'));
+        && (ownMultiply || (contrastRatio(foreground, color) >= required) !== (direction === 'pass')));
       if (flipping) {
         return {
           status: 'incomplete',
@@ -1046,7 +1118,7 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
               if (!paint || paint.a < 1) continue;
               const siblingRect = sibling.getBoundingClientRect();
               if (siblingRect.width < 24 || siblingRect.height < 12 || !near(siblingRect) || !textIntersects(element, siblingRect)) continue;
-              if ((contrastRatio(foreground, paint) >= required) !== (direction === 'pass')) {
+              if (ownMultiply || (contrastRatio(foreground, paint) >= required) !== (direction === 'pass')) {
                 return {
                   status: 'incomplete',
                   message: 'This text is positioned over a coloured box that isn’t its DOM ancestor, so its real background is ambiguous — check contrast by eye.',

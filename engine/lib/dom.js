@@ -13,7 +13,9 @@ export const NEVER_RENDERED = new Set(['SCRIPT', 'TEMPLATE', 'STYLE', 'LINK', 'M
  * design — like every DOM tool, we can only see what the page exposes.
  */
 export function collectRoots(context) {
-  const roots = [context];
+  // querySelectorAll excludes the context itself, including its own open
+  // shadow root when a host element is the requested audit scope.
+  const roots = context.shadowRoot ? [context, context.shadowRoot] : [context];
   for (let i = 0; i < roots.length; i++) {
     if (!roots[i].querySelectorAll) continue;
     for (const el of roots[i].querySelectorAll('*')) {
@@ -25,8 +27,8 @@ export function collectRoots(context) {
 
 /** Nearest ancestor in the FLAT tree: parent element, or the shadow host
  *  when the walk reaches the top of a shadow tree. */
-function flatTreeParent(node) {
-  return node.parentElement ?? node.getRootNode()?.host ?? null;
+export function flatTreeParent(node) {
+  return node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host ?? null;
 }
 
 /**
@@ -46,9 +48,75 @@ export function isRendered(element) {
  *  hides its shadow content too. */
 export function isVisible(element) {
   for (let node = element; node; node = flatTreeParent(node)) {
-    if (node.getAttribute?.('aria-hidden') === 'true') return false;
+    if (node.getAttribute?.('aria-hidden') === 'true' || node.hasAttribute?.('inert')) return false;
   }
-  return isRendered(element);
+  if (isRendered(element)) return true;
+  // Boxless semantic containers can still be exposed to AT. Keep the
+  // visual helper box-based, but do not skip their names/relationships.
+  const style = getComputedStyle(element);
+  if (style.display !== 'contents' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+  for (let node = flatTreeParent(element); node; node = flatTreeParent(node)) {
+    if (getComputedStyle(node).display === 'none') return false;
+  }
+  return true;
+}
+
+let pathRoots = new WeakMap();
+const pathObservers = new Set();
+
+/** Release observers after an audit, including an aborted audit. */
+export function releaseDOMCaches() {
+  for (const observer of pathObservers) observer.disconnect();
+  pathObservers.clear();
+  pathRoots = new WeakMap();
+}
+
+export const resetDOMCaches = releaseDOMCaches;
+
+function pathIndex(root) {
+  let index = pathRoots.get(root);
+  if (!index) {
+    const observer = typeof MutationObserver === 'function' ? new MutationObserver(() => {
+      index.ids = null;
+      index.parents = new WeakMap();
+    }) : null;
+    index = { ids: null, parents: new WeakMap(), observer };
+    if (observer) {
+      observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['id'] });
+      pathObservers.add(observer);
+    }
+    pathRoots.set(root, index);
+  }
+  // Synchronous mutations may precede the observer callback. A selector
+  // must describe the current tree even in the same JavaScript task.
+  if (index.observer?.takeRecords().length) {
+    index.ids = null;
+    index.parents = new WeakMap();
+  }
+  if (!index.ids) {
+    index.ids = new Map();
+    for (const el of root.querySelectorAll('[id]')) {
+      index.ids.set(el.id, (index.ids.get(el.id) ?? 0) + 1);
+    }
+  }
+  return index;
+}
+
+function siblingPosition(element, index) {
+  const parent = element.parentElement;
+  let positions = index.parents.get(parent);
+  if (!positions) {
+    const counts = new Map();
+    positions = new WeakMap();
+    for (const child of parent.children) {
+      const position = (counts.get(child.tagName) ?? 0) + 1;
+      counts.set(child.tagName, position);
+      positions.set(child, { position, repeated: false });
+    }
+    for (const child of parent.children) positions.get(child).repeated = counts.get(child.tagName) > 1;
+    index.parents.set(parent, positions);
+  }
+  return positions.get(element);
 }
 
 /** Selector for an element within its own root (document or shadow root). */
@@ -58,24 +126,16 @@ function cssPathInRoot(element) {
   // bare #id selector would round-trip every one of them to the first,
   // collapsing distinct findings onto a single element.
   const root = element.getRootNode();
-  const uniqueId = (el) => el.id && root.querySelectorAll(`#${CSS.escape(el.id)}`).length === 1;
+  const index = pathIndex(root);
+  const uniqueId = (el) => el.id && index.ids.get(el.id) === 1;
   if (uniqueId(element)) return `#${CSS.escape(element.id)}`;
   const parts = [];
   let current = element;
   while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
     let part = current.tagName.toLowerCase();
     if (current.parentElement) {
-      // Sibling walk without materializing children arrays — this runs for
-      // every reported element at every ancestor level.
-      let index = 1;
-      for (let sib = current.previousElementSibling; sib; sib = sib.previousElementSibling) {
-        if (sib.tagName === current.tagName) index += 1;
-      }
-      let repeated = index > 1;
-      for (let sib = current.nextElementSibling; !repeated && sib; sib = sib.nextElementSibling) {
-        if (sib.tagName === current.tagName) repeated = true;
-      }
-      if (repeated) part += `:nth-of-type(${index})`;
+      const { position, repeated } = siblingPosition(current, index);
+      if (repeated) part += `:nth-of-type(${position})`;
     }
     parts.unshift(part);
     if (current.parentElement && uniqueId(current.parentElement)) {
@@ -152,7 +212,7 @@ export function isEmbeddedDocument(doc) {
  * presence is what counts, whatever the value.
  */
 export function isInert(element) {
-  for (let node = element; node; node = node.parentElement ?? node.getRootNode?.()?.host ?? null) {
+  for (let node = element; node; node = flatTreeParent(node)) {
     if (node.nodeType === 1 && node.hasAttribute('inert')) return true;
   }
   return false;

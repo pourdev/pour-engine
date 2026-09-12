@@ -11,6 +11,7 @@
 // nothing (F30/F39) — flagged for eyes.
 const FILENAME_ALT = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)([?#].*)?$/i;
 const GENERIC_ALT = /^(image|img|photo|photograph|picture|graphic|icon|untitled|placeholder|spacer|\d+)$/i;
+import { effectiveRole } from '../../lib/roles.js';
 
 export default {
   id: 'image-alt',
@@ -21,7 +22,7 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html',
   selector: 'img',
   evaluate(element, { accessibleName }) {
-    const role = element.getAttribute('role');
+    const role = effectiveRole(element);
     if (role === 'presentation' || role === 'none') return { status: 'pass' };
     if (element.hasAttribute('alt')) {
       const alt = element.getAttribute('alt');

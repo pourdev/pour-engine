@@ -2,7 +2,7 @@
 // Instructions (Level A) · SC 4.1.2 Name, Role, Value (Level A)
 // 3.3.2 mapping: a field with no label at all, or only a vanishing
 // placeholder, is failure F82 — the classic 3.3.2 pattern.
-import { labelledByName } from '../../lib/accessible-name.js';
+import { labelledByName, nativeLabelName } from '../../lib/accessible-name.js';
 import { effectiveRole } from '../../lib/roles.js';
 
 export default {
@@ -29,34 +29,10 @@ export default {
       const style = getComputedStyle(label);
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
-    // A label's contribution is its ACCESSIBLE text, not its raw textContent:
-    // aria-hidden subtrees inside the label are excluded from the name
-    // computation (a custom radio whose only visible text sits in an
-    // aria-hidden styled twin names NOTHING — the browser's tree computes an
-    // empty name), while aria-label on the label itself or on things inside
-    // it (icon-only labels) and image alts DO feed the name per accname.
-    //
-    // An UNRENDERED descendant is excluded the same way: accname step 2A
-    // returns the empty string for a hidden node that is not the root of
-    // the label traversal, and hidden covers display:none and
-    // visibility:hidden (the hidden attribute is display:none). A label
-    // whose only text sits in a display:none span names nothing (Chromium
-    // computes ""), the mirror of the aria-hidden twin above (2026-08-25
-    // overnight audit). Computed style rather than checkVisibility: an SVG
-    // <title> has no box yet still names its graphic.
-    const accessibleText = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
-      if (node.nodeType !== Node.ELEMENT_NODE) return '';
-      if (node.getAttribute('aria-hidden') === 'true') return '';
-      const nodeStyle = getComputedStyle(node);
-      if (nodeStyle.display === 'none' || nodeStyle.visibility === 'hidden') return '';
-      const aria = node.getAttribute('aria-label');
-      if (aria?.trim()) return aria;
-      const alt = (node.tagName === 'IMG' || node.tagName === 'AREA') ? node.getAttribute('alt') : null;
-      if (alt?.trim()) return alt;
-      return [...node.childNodes].map(accessibleText).join(' ');
-    };
-    const labelsText = visibleLabels.map(accessibleText).join(' ').trim();
+    // Share the recursive native-label computation with other name rules,
+    // including generated text and image alternatives. Exclude this field
+    // from its wrapping label's traversal to avoid self-naming cycles.
+    const labelsText = visibleLabels.map((label) => nativeLabelName(element, label)).join(' ').trim();
     const ariaLabel = element.getAttribute('aria-label')?.trim();
     const labelledby = labelledByName(element);
     if (labelsText || ariaLabel || labelledby) return { status: 'pass' };

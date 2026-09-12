@@ -8,7 +8,7 @@ export default {
   tags: ['wcag2a', 'wcag412'],
   help: 'Buttons must have an accessible name',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
-  selector: 'button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]',
+  selector: 'button, [role], input[type="button"], input[type="submit"], input[type="reset"]',
   evaluate(element, { accessibleName }) {
     // Route by EFFECTIVE role (2026-08-25 overnight audit): a <button
     // role="tab"> or <button role="link"> is exposed under that role, so its

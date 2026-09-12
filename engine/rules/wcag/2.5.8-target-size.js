@@ -213,14 +213,13 @@ function isInTextLine(element) {
 // do not apply now are skipped, since they size nothing now.
 const NATIVE_CONTROL = /^(button|input|select|textarea)$/i;
 const SIZING = /^(width|height|(min|max)-(width|height|inline-size|block-size)|inline-size|block-size|padding(-.+)?|border(-.+)?|font(-.+)?|line-height|box-sizing|transform|scale|zoom|appearance|all)$/;
-const sizingRulesByRoot = new WeakMap();
 
 function declaresSizing(style) {
   for (let k = 0; k < style.length; k++) if (SIZING.test(style[k])) return true;
   return false;
 }
 
-function authorSizingRules(root) {
+function authorSizingRules(root, sizingRulesByRoot) {
   const sheets = [...(root.styleSheets ?? []), ...(root.adoptedStyleSheets ?? [])];
   const key = sheets.map((s) => { try { return s.cssRules.length; } catch { return 'x'; } }).join(',');
   const cached = sizingRulesByRoot.get(root);
@@ -254,10 +253,10 @@ function authorSizingRules(root) {
 /** 'yes' when the browser provably sized this native control, 'no' when the
  *  author touched its box (or it is not a native control), 'open' when a
  *  sheet or selector could not be read. */
-function uaSized(element) {
+function uaSized(element, sizingRulesByRoot) {
   if (!NATIVE_CONTROL.test(element.tagName) || element.type === 'image') return 'no';
   if (declaresSizing(element.style)) return 'no';
-  const entry = authorSizingRules(element.getRootNode());
+  const entry = authorSizingRules(element.getRootNode(), sizingRulesByRoot);
   if (entry.combined && element.matches(entry.combined)) return 'no';
   return entry.open ? 'open' : 'yes';
 }
@@ -301,7 +300,11 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
   selector: 'button, a[href], input:not([type="hidden"]), select, [role="button"], [role="link"]',
   visibility: 'visual', // pointer targets are visual regardless of aria-hidden
   // Judged as a set: the spacing exception needs the other targets' positions.
-  evaluateAll(elements) {
+  async evaluateAll(elements, helpers = {}) {
+    // Styles can change between audits without changing a sheet's rule
+    // count. This cache belongs to this evaluation, not the page lifetime.
+    const sizingRulesByRoot = new WeakMap();
+    const yieldToMain = helpers.yieldToMain ?? (() => Promise.resolve());
     // A control's <label> is part of its activation area — clicking the
     // label activates the control, so the TARGET is the union of both
     // boxes. Without this, every label-wrapped checkbox list fails on the
@@ -323,7 +326,11 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     const uaControlled = (element) => element.tagName === 'INPUT'
       && (element.type === 'checkbox' || element.type === 'radio')
       && getComputedStyle(element).appearance !== 'none';
-    const rects = elements.map(targetRect);
+    const rects = [];
+    for (let i = 0; i < elements.length; i++) {
+      if (i % 64 === 0) await yieldToMain();
+      rects.push(targetRect(elements[i]));
+    }
     const centers = rects.map((r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }));
     // Zero-area rects are degenerate: either not laid out, or an empty
     // control no pointer can hit at all — its real defect (an empty name,
@@ -352,9 +359,13 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     // judged nor counted as crowders (bbc.com/news keeps 28 controls of a
     // closed menu in an inert subtree; the browser ignores every click on
     // them, and so must the size judgment).
-    const laidOut = rects.map((r, i) =>
-      r.width > 0 && r.height > 0 && !isInert(elements[i])
-      && !isHiddenFromPointer(elements[i], r) && !layoutSkipped(elements[i]));
+    const laidOut = [];
+    for (let i = 0; i < elements.length; i++) {
+      if (i % 64 === 0) await yieldToMain();
+      const r = rects[i], element = elements[i];
+      laidOut.push(r.width > 0 && r.height > 0 && !element.matches(':disabled') && !isInert(element)
+        && !isHiddenFromPointer(element, r) && !layoutSkipped(element));
+    }
     const undersized = rects.map((r, i) => laidOut[i] && (r.width < min || r.height < min));
     // One rect fully inside another is one control drawn twice (stretched-
     // link cards, overlay + inner button) — not two targets crowding.
@@ -434,9 +445,10 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       }
       return false; // neither reachable there — a third element's problem, not j's
     };
-    /** Largest uncovered sub-rectangle after removing the overlap: the best
-     *  of the four slabs beside/above/below it (exact for one obscurer,
-     *  a safe under-approximation applied sequentially for several). */
+    /** All remaining rectangular areas. The largest area is not necessarily
+     *  the one that contains the required square: 100x23 is larger than
+     *  24x50 but only the latter satisfies the AA size requirement.
+     *  Keep the alternatives until every obscurer has been subtracted. */
     const uncovered = (rect, overlap) => {
       const slabs = [
         { left: rect.left, top: rect.top, right: overlap.left, bottom: rect.bottom },
@@ -445,20 +457,20 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         { left: rect.left, top: overlap.bottom, right: rect.right, bottom: rect.bottom },
       ].map((s) => ({ ...s, width: s.right - s.left, height: s.bottom - s.top }))
         .filter((s) => s.width >= 1 && s.height >= 1);
-      // Note: rect may be a DOMRect, whose properties do not survive object
-      // spread — the zero-rect is built from explicit reads.
-      if (!slabs.length) {
-        return { left: rect.left, top: rect.top, right: rect.left, bottom: rect.top, width: 0, height: 0 };
-      }
-      return slabs.reduce((best, s) => (s.width * s.height > best.width * best.height ? s : best));
+      return slabs;
     };
     // Spatial hash so finding overlap candidates stays near-linear on pages
     // with tens of thousands of targets: only targets sharing a cell can
     // intersect, so each target is tested against its cell-mates only.
     const CELL = 256;
-    let cellIndex = null;
+    const cellIndex = new Map();
+    const wideTargets = [];
     const cellsOf = (r) => {
       const keys = [];
+      // Huge transformed boxes must not allocate millions of cells. They
+      // remain in a separate candidate list, so the bound drops no target.
+      if ((Math.floor(r.right / CELL) - Math.floor(r.left / CELL) + 1)
+        * (Math.floor(r.bottom / CELL) - Math.floor(r.top / CELL) + 1) > 2048) return null;
       for (let cx = Math.floor(r.left / CELL); cx <= Math.floor(r.right / CELL); cx++) {
         for (let cy = Math.floor(r.top / CELL); cy <= Math.floor(r.bottom / CELL); cy++) {
           keys.push(`${cx}:${cy}`);
@@ -466,19 +478,21 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       }
       return keys;
     };
-    const overlapCandidates = (i) => {
-      if (!cellIndex) {
-        cellIndex = new Map();
-        rects.forEach((r, j) => {
-          if (!laidOut[j]) return;
-          for (const key of cellsOf(r)) {
-            if (!cellIndex.has(key)) cellIndex.set(key, []);
-            cellIndex.get(key).push(j);
-          }
-        });
+    for (let j = 0; j < rects.length; j++) {
+      if (j % 64 === 0) await yieldToMain();
+      if (!laidOut[j]) continue;
+      const keys = cellsOf(rects[j]);
+      if (!keys) { wideTargets.push(j); continue; }
+      for (const key of keys) {
+        if (!cellIndex.has(key)) cellIndex.set(key, []);
+        cellIndex.get(key).push(j);
       }
-      const seen = new Set();
-      for (const key of cellsOf(rects[i])) {
+    }
+    const nearbyCandidates = (i, box = rects[i]) => {
+      const keys = cellsOf(box);
+      if (!keys) return elements.map((_, j) => j).filter((j) => j !== i && laidOut[j]);
+      const seen = new Set(wideTargets.filter((j) => j !== i));
+      for (const key of keys) {
         for (const j of cellIndex.get(key) ?? []) if (j !== i) seen.add(j);
       }
       return seen;
@@ -486,9 +500,10 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     /** The pointer-accepting rect of a box-sized-fine target, reduced by
      *  every overlapping target painted above it — or null when nothing
      *  qualifying overlaps. */
-    const obscuredRect = (i) => {
-      let effective = null;
-      for (const j of overlapCandidates(i)) {
+    const obscuredRects = new Map();
+    const calculateObscuredRect = (i) => {
+      let areas = null;
+      for (const j of nearbyCandidates(i)) {
         if (elements[j].contains(elements[i]) || elements[i].contains(elements[j])) continue; // same control, nested markup
         if (encloses(rects[j], rects[i]) || encloses(rects[i], rects[j])) continue; // one control drawn twice
         // Two links to the same place are one control in two boxes (a
@@ -496,13 +511,28 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         // land on the same destination, which is the criterion's
         // "equivalent" case, provable here because the hrefs match.
         if (typeof elements[i].href === 'string' && elements[i].href === elements[j].href) continue;
-        const overlap = overlapOf(effective ?? rects[i], rects[j]);
+        const overlap = overlapOf(rects[i], rects[j]);
         if (!overlap) continue;
         if (fixedContextOf(elements[j]) !== fixedContextOf(elements[i])) continue; // scroll-state, not layout
         if (!paintsOver(j, i, overlap)) continue;
-        effective = uncovered(effective ?? rects[i], overlap);
+        const next = (areas ?? [rects[i]]).flatMap((area) => {
+          const cut = overlapOf(area, rects[j]);
+          return cut ? uncovered(area, cut) : [area];
+        });
+        // Remove only rectangles wholly covered by another available area.
+        // No useful square is lost by this pruning.
+        areas = next.filter((area, k) => !next.some((other, n) => n !== k
+          && encloses(other, area) && (n < k || !encloses(area, other))));
+        if (areas.length > 128) return { uncertain: true };
       }
-      return effective;
+      if (areas === null) return null;
+      return areas.find((area) => area.width >= min && area.height >= min)
+        ?? areas.reduce((best, area) => area.width * area.height > best.width * best.height ? area : best,
+          { width: 0, height: 0 });
+    };
+    const obscuredRect = (i) => {
+      if (!obscuredRects.has(i)) obscuredRects.set(i, calculateObscuredRect(i));
+      return obscuredRects.get(i);
     };
 
     // ── Equivalent targets ────────────────────────────────────────────
@@ -525,21 +555,86 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       const destination = destinationOf(elements[i]);
       if (!destination) return false;
       if (!adequateDestinations) {
-        adequateDestinations = new Set();
+        adequateDestinations = new Map();
         elements.forEach((other, j) => {
           if (!laidOut[j] || undersized[j] || other.ownerDocument !== elements[i].ownerDocument) return;
           const d = destinationOf(other);
-          if (d) adequateDestinations.add(d);
+          if (d) {
+            if (!adequateDestinations.has(d)) adequateDestinations.set(d, []);
+            adequateDestinations.get(d).push(j);
+          }
         });
       }
-      return adequateDestinations.has(destination);
+      let uncertain = false;
+      for (const j of adequateDestinations.get(destination) ?? []) {
+        if (j === i) continue;
+        // An original bounding box cannot prove a usable alternative.
+        // Otherwise two separately obscured links rescue one another even
+        // when neither retains the required square for pointer activation.
+        const area = obscuredRect(j);
+        if (area?.uncertain) { uncertain = true; continue; }
+        if (!area || (area.width >= min && area.height >= min)) return 'pass';
+      }
+      return uncertain ? 'incomplete' : null;
     };
 
-    return elements.map((element, i) => {
+    // Scripted functions have no URL identity. Matching names, declared
+    // controls or handler text identify plausible alternatives, not proven
+    // equivalence: a human must verify that both controls do the same thing.
+    // Build these indexes only when a failing scripted control needs them.
+    let alternativeKeys = null;
+    const names = new Map();
+    const nameOf = (element) => {
+      if (!names.has(element)) names.set(element, helpers.accessibleName?.(element)?.trim() ?? '');
+      return names.get(element);
+    };
+    const signatures = (element) => {
+      const keys = [];
+      const name = nameOf(element);
+      if (name) keys.push(`name:${name}`);
+      const handler = element.getAttribute('onclick')?.trim();
+      if (handler) keys.push(`handler:${handler}`);
+      const controls = element.getAttribute('aria-controls')?.trim().split(/\s+/).sort().join(' ');
+      if (controls) keys.push(`controls:${controls}`);
+      return keys;
+    };
+    const plausibleAlternative = (i) => {
+      if (destinationOf(elements[i])) return false; // URL equivalence was judged above
+      const own = signatures(elements[i]);
+      if (!own.length) return false;
+      if (!alternativeKeys) {
+        alternativeKeys = new Map();
+        elements.forEach((other, j) => {
+          if (!laidOut[j] || undersized[j] || destinationOf(other)) return;
+          const area = obscuredRect(j);
+          if (area && !area.uncertain && (area.width < min || area.height < min)) return;
+          for (const key of signatures(other)) {
+            if (!alternativeKeys.has(key)) alternativeKeys.set(key, []);
+            alternativeKeys.get(key).push(j);
+          }
+        });
+      }
+      return own.some((key) => alternativeKeys.get(key)?.some((j) => j !== i));
+    };
+    const alternativeReview = () => ({
+      status: 'incomplete',
+      message: `This control's measured pointer area is below ${min}×${min}px, but a larger control has a matching name, handler or declared target. Check whether it provides the same function and meets the target-size requirement; if so, the Equivalent exception applies.`,
+      fix: 'Verify the larger alternative, or enlarge or separate this target.',
+    });
+    const equivalentReview = () => ({
+      status: 'incomplete',
+      message: `Another link reaches the same destination, but its unobscured pointer area could not be established. Check whether that alternative meets ${min}×${min}px before applying the Equivalent exception.`,
+    });
+
+    const judge = (element, i) => {
       if (!laidOut[i]) return { status: 'pass' }; // not laid out / not a pointer target
       if (!undersized[i]) {
         // Box is big enough — but the pointer only gets the uncovered part.
         const effective = obscuredRect(i);
+        if (effective?.uncertain) return {
+          status: 'incomplete',
+          message: 'Several targets overlap this control. The remaining pointer area could not be resolved within the geometry budget; check whether it contains the required target size.',
+        };
         if (!effective || (effective.width >= min && effective.height >= min)) return { status: 'pass' };
         if (isInTextLine(element)) return { status: 'pass' };
         // A target the pointer never actually hits is a keyboard
@@ -565,6 +660,10 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           return !tested; // nothing probe-able → don't know → don't silence
         })();
         if (!everHit) return { status: 'pass' };
+        const equivalent = equivalentElsewhere(i);
+        if (equivalent === 'pass') return { status: 'pass' };
+        if (equivalent === 'incomplete') return equivalentReview();
+        if (plausibleAlternative(i)) return alternativeReview();
         // The spacing exception cannot apply: the obscuring target is at
         // distance zero. UA-control cannot either: the browser sized the
         // box, but the author's layout took part of it away.
@@ -583,7 +682,7 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       // The same exception for every other native control, proved from the
       // sheets; an open proof (unreadable sheet) reviews at the end instead
       // of asserting, and only if nothing else rescues the target first.
-      const uaProof = uaSized(element);
+      const uaProof = uaSized(element, sizingRulesByRoot);
       if (uaProof === 'yes') return { status: 'pass' };
       if (isInTextLine(element)) return { status: 'pass' };
       if (spacingException) {
@@ -643,7 +742,15 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           // crowding from its second line or not at all.
           return reachableRects(other, rects[j]).some(within);
         };
-        const crowded = elements.some(crowds);
+        // A target can crowd this circle only if its rectangle reaches the
+        // center's min-radius neighborhood. The larger radius also covers
+        // the circle of any undersized neighbor, whose center lies in its
+        // rectangle. This index is a superset, retaining the exact tests.
+        const center = centers[i];
+        const crowded = [...nearbyCandidates(i, {
+          left: center.x - min, right: center.x + min,
+          top: center.y - min, bottom: center.y + min,
+        })].some((j) => crowds(elements[j], j));
         if (!crowded) return { status: 'pass' };
         // Deliberately NOT applied to the target itself. A crowder that
         // can't be clicked breaks the premise of the exception, because it
@@ -652,7 +759,10 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
         // dismissed, and suppressing it would hide a real defect behind a
         // transient overlay, which is the wrong way round.
       }
-      if (equivalentElsewhere(i)) return { status: 'pass' }; // Equivalent exception, proved by href
+      const equivalent = equivalentElsewhere(i);
+      if (equivalent === 'pass') return { status: 'pass' }; // Same destination and adequate usable area
+      if (equivalent === 'incomplete') return equivalentReview();
+      if (plausibleAlternative(i)) return alternativeReview();
       const rect = rects[i];
       if (uaProof === 'open') {
         return {
@@ -667,7 +777,13 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
           : `This target is ${px(rect.width)}×${px(rect.height)}px — below the ${min}×${min}px minimum, hard to hit for users with motor impairments.`,
         fix: `Increase the element’s size or padding to at least ${min}×${min}px${spacingException ? ', or add spacing between the targets' : ''}.`,
       };
-    });
+    };
+    const outcomes = [];
+    for (let i = 0; i < elements.length; i++) {
+      if (i % 64 === 0) await yieldToMain();
+      outcomes.push(judge(elements[i], i));
+    }
+    return outcomes;
   },
   };
 }

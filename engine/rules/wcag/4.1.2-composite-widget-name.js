@@ -19,7 +19,7 @@ export default {
   tags: ['wcag2a', 'wcag412'],
   help: 'Tabs, menu items, options and tree items need an accessible name',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
-  selector: '[role="tab"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="treeitem"]',
+  selector: '[role]',
   evaluate(element, { accessibleName }) {
     // This rule owns every element whose EFFECTIVE role is one of the six,
     // <button role="tab"> and <a href role="tab"> included: button-name and

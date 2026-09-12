@@ -1,5 +1,6 @@
 // WCAG SC 1.3.1 Info and Relationships (Level A)
 // Child roles that only make sense inside a specific container role.
+import { effectiveRole } from '../../lib/roles.js';
 // Explicit roles only — native elements (li outside ul) are covered by
 // listitem-parent/dlitem-parent.
 //
@@ -33,7 +34,6 @@ export const REQUIRED_PARENT = {
   gridcell: ['row'],
 };
 
-const IMPLICIT_CONTAINER = { ul: 'list', ol: 'list', menu: 'list', table: 'table', tbody: 'rowgroup', thead: 'rowgroup', tfoot: 'rowgroup', tr: 'row', figure: 'figure' };
 
 export default {
   id: 'aria-required-parent',
@@ -42,10 +42,11 @@ export default {
   tags: ['wcag2a', 'wcag131'],
   help: 'ARIA child roles must be inside their required container role',
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html',
-  selector: Object.keys(REQUIRED_PARENT).map((role) => `[role="${role}"]`).join(', '),
+  selector: '[role]',
   evaluate(element) {
-    const role = element.getAttribute('role').trim().split(/\s+/)[0].toLowerCase();
+    const role = effectiveRole(element);
     const containers = REQUIRED_PARENT[role];
+    if (!containers) return { status: 'pass' };
     // The container named in the message and fix: the structure's root, not
     // the group that may sit between it and the item.
     const named = containers.filter((container) => container !== 'group');
@@ -54,9 +55,7 @@ export default {
     // Judging by DOM ancestry alone failed every remotely-owned child.
     if (element.id) {
       const owner = element.getRootNode().querySelector?.(`[aria-owns~="${CSS.escape(element.id)}"]`);
-      const ownerRole = owner && (
-        owner.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase()
-        ?? IMPLICIT_CONTAINER[owner.tagName.toLowerCase()]);
+      const ownerRole = owner && effectiveRole(owner);
       if (ownerRole && containers.includes(ownerRole)) return { status: 'pass' };
     }
     // FLAT-TREE ancestry, not light-DOM ancestry: assistive technology sees
@@ -72,9 +71,7 @@ export default {
     for (let parent = flatParent(element); parent; parent = flatParent(parent)) {
       // A <slot> is rendering plumbing with no tree presence of its own.
       if (parent.tagName === 'SLOT' && !parent.hasAttribute('role')) continue;
-      const parentRole =
-        parent.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase() ??
-        IMPLICIT_CONTAINER[parent.tagName.toLowerCase()];
+      const parentRole = effectiveRole(parent);
       // A permitted context (the structure's root, or a group for the roles
       // whose ARIA context lists it) satisfies the requirement outright.
       if (containers.includes(parentRole)) return { status: 'pass' };
@@ -83,7 +80,7 @@ export default {
       // children owned by the next real ancestor — li[role=presentation]
       // between a tablist and its tabs is the canonical pattern.
       if (parentRole === 'presentation' || parentRole === 'none') continue;
-      if (parentRole) break; // a different role interrupts the required structure
+      if (parentRole && parentRole !== 'generic') break; // a different role interrupts the required structure
     }
     return {
       status: 'fail',

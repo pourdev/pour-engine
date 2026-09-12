@@ -8,7 +8,12 @@ export default {
   helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html',
   selector: 'map area[href]',
   visibleOnly: false,
-  evaluate(element, { accessibleName }) {
+  evaluate(element, { accessibleName, isVisible }) {
+    const map = element.closest('map');
+    const images = [...element.getRootNode().querySelectorAll('img[usemap], object[usemap]')];
+    const active = map?.name && images.some((image) =>
+      image.getAttribute('usemap') === `#${map.name}` && isVisible(image));
+    if (!active) return { status: 'pass' };
     if (accessibleName(element)) return { status: 'pass' };
     return {
       status: 'fail',

@@ -68,6 +68,10 @@ export default {
     for (const { name, value } of attributesOf(element)) {
       if (!name.startsWith('aria-')) continue;
       const attr = name.slice(5);
+      // ARIA defines unknown current/invalid tokens as true, not discarded.
+      // Empty/undefined current means false. Syntax alone cannot show a
+      // state mismatch here. https://www.w3.org/TR/wai-aria-1.2/#aria-current
+      if (name === 'aria-current' || name === 'aria-invalid') continue;
       if (!KNOWN.has(attr)) {
         unknown.push(name);
       } else if (ENUMS[name] && value.trim() === '') {

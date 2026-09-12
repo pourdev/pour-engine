@@ -4,7 +4,7 @@
 import config from '../config/project.config.js';
 import rules from './rules/index.js';
 import wcagCatalog from './wcag22.js';
-import { isVisible, isRendered, cssPath, htmlSnippet, ownText, collectRoots } from './lib/dom.js';
+import { isVisible, isRendered, cssPath, htmlSnippet, ownText, collectRoots, resetDOMCaches, releaseDOMCaches } from './lib/dom.js';
 import { accessibleName } from './lib/accessible-name.js';
 import { resetAuditCaches } from './lib/contrast.js';
 
@@ -116,18 +116,23 @@ export async function run(context = document, options = {}, onProgress) {
   // Per-audit caches (resolved backgrounds, opacities) must start fresh —
   // the page may have changed since the last run.
   resetAuditCaches();
+  resetDOMCaches();
   // Every queryable root — the page plus all open shadow trees — collected
   // once so rules see web-component content without re-walking per rule.
   const roots = collectRoots(context.querySelectorAll ? context : document);
   // Universal-selector rules (aria attribute checks) share one full scan
   // instead of each re-enumerating every element on the page.
   let universalScan = null;
+  const query = (root, selector) => [
+    ...(root.nodeType === 1 && root.matches(selector) ? [root] : []),
+    ...root.querySelectorAll(selector),
+  ];
   const elementsFor = (selector) => {
     if (selector === '*') {
-      universalScan ??= roots.flatMap((root) => [...root.querySelectorAll('*')]);
+      universalScan ??= roots.flatMap((root) => query(root, '*'));
       return universalScan;
     }
-    return roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+    return roots.flatMap((root) => query(root, selector));
   };
   let completed = 0;
   // Running totals so the UI can count issues up live as rules finish —
@@ -161,6 +166,16 @@ export async function run(context = document, options = {}, onProgress) {
     lastYield = performance.now();
   };
 
+  const checkAbort = () => {
+    if (options.signal?.aborted) throw new DOMException('Audit stopped', 'AbortError');
+  };
+  // Bulk rules use the same task budget and cancellation as per-node rules.
+  const helpers = { ...ruleHelpers, yieldToMain: async () => {
+    checkAbort();
+    await yieldToRenderer();
+    checkAbort();
+  } };
+  try {
   for (const rule of activeRules) {
     // Between rules is the abort granularity we have — the same boundary
     // the renderer yield uses.
@@ -186,7 +201,7 @@ export async function run(context = document, options = {}, onProgress) {
     if (rule.evaluateAll) {
       // Awaiting a plain array is a no-op, so sync evaluateAll rules are
       // untouched — async ones (the deferred-reference probe) resolve here.
-      outcomes = await rule.evaluateAll(elements, ruleHelpers);
+      outcomes = await rule.evaluateAll(elements, helpers);
     } else {
       // Evaluate sequentially with periodic yields so ONE heavy rule on a
       // huge element set can't freeze the page for its whole duration —
@@ -204,7 +219,7 @@ export async function run(context = document, options = {}, onProgress) {
             running: true,
           }));
         }
-        outcomes[i] = await rule.evaluate(elements[i], ruleHelpers);
+        outcomes[i] = await rule.evaluate(elements[i], helpers);
       }
     }
 
@@ -214,14 +229,19 @@ export async function run(context = document, options = {}, onProgress) {
     // large pages.
     const buckets = { fail: [], incomplete: [] };
     let passCount = 0;
-    elements.forEach((element, i) => {
+    let skippedCount = 0;
+    for (let i = 0; i < elements.length; i++) {
+      if ((i & 127) === 0) await helpers.yieldToMain();
+      const element = elements[i];
       const status = outcomes[i].status;
       if (status === 'pass') passCount += 1;
+      else if (status === 'skipped') skippedCount += 1;
       else buckets[status]?.push(toResultNode(element, outcomes[i]));
-    });
+    }
 
     const ruleResult = {
       id: rule.id,
+      ...(skippedCount ? { skippedCount } : {}),
       // Human display name ("Form field labels"); the id stays the
       // machine handle everywhere (selectors, exports, docs anchors).
       name: rule.name ?? rule.id,
@@ -241,7 +261,8 @@ export async function run(context = document, options = {}, onProgress) {
     if (buckets.fail.length) liveTypeCounts[rule.impact] = (liveTypeCounts[rule.impact] ?? 0) + 1;
     if (buckets.incomplete.length) liveTypeCounts.review += 1;
     const ms = Math.round((performance.now() - ruleStarted) * 10) / 10;
-    results.ruleTimings.push({ rule: rule.id, ms, elements: elements.length });
+    results.ruleTimings.push({ rule: rule.id, ms, elements: elements.length, ...(skippedCount ? { skippedCount } : {}) });
+    if (skippedCount) results.skippedChecks = (results.skippedChecks ?? 0) + skippedCount;
     onProgress?.({
       done: ++completed,
       total: activeRules.length,
@@ -263,4 +284,9 @@ export async function run(context = document, options = {}, onProgress) {
 
   results.durationMs = Math.round(performance.now() - auditStarted);
   return results;
+  } finally {
+    releaseDOMCaches();
+    yieldChannel?.port1.close();
+    yieldChannel?.port2.close();
+  }
 }

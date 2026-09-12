@@ -20,10 +20,15 @@ export default {
     const maxScale = content.match(/maximum-scale\s*=\s*([\d.]+)/i);
     const cappedZoom = maxScale && parseFloat(maxScale[1]) < 2;
     if (!disablesZoom && !cappedZoom) return { status: 'pass' };
+    // Asserted the way ACT rule b4f0c3 asserts it, under its assumption that
+    // the page provides no other way to enlarge the text (technique G178).
+    // The message names that assumption so a reviewer who knows the page
+    // has its own text-size control can dismiss the finding.
+    // https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/
     return {
       status: 'fail',
-      message: 'This viewport meta tag stops low-vision users from zooming the page.',
-      fix: 'Remove user-scalable=no and any maximum-scale below 2 from the viewport meta tag.',
+      message: 'This viewport meta tag stops users zooming the page, so text cannot be enlarged with the browser. 1.4.4 is met only if the page provides its own control that enlarges all text to 200% (technique G178); this finding assumes it does not, since the tag cannot show it.',
+      fix: 'Remove user-scalable=no and any maximum-scale below 2 from the viewport meta tag. If the page has its own text-size control that reaches 200%, record that and dismiss this finding.',
     };
   },
 };

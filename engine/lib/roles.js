@@ -1,6 +1,7 @@
 // ARIA 1.2 role model: implicit roles for HTML elements, and which aria-*
 // attributes each role supports (flattened with inheritance). Attribute
 // names are stored without the "aria-" prefix.
+import { isInert } from './dom.js';
 
 /** Every attribute name in the ARIA 1.2 vocabulary (without the prefix).
  *  aria-attr-valid judges membership; aria-allowed-attr judges role fit —
@@ -222,7 +223,7 @@ function presentationDiscarded(element) {
   // A global property is exposed whatever the element's state, so it
   // discards the role on its own, disabled or not.
   if ([...GLOBAL_ARIA].some((name) => element.hasAttribute(`aria-${name}`))) return true;
-  if (element.matches(':disabled') || element.closest('[inert]')) return false;
+  if (element.matches(':disabled') || isInert(element)) return false;
   if (element.tabIndex >= 0) return true;
   return element.matches('a[href], button, input, select, textarea, summary, [contenteditable="true"]');
 }
@@ -231,11 +232,13 @@ export function effectiveRole(element) {
   const explicit = element.getAttribute('role')?.trim().split(/\s+/) ?? [];
   for (const token of explicit) {
     const role = token.toLowerCase();
+    if (role === 'image') return 'img'; // supported synonym for the image role
     if (!ROLE_ARIA[role]) continue;
     if ((role === 'presentation' || role === 'none') && presentationDiscarded(element)) {
       return implicitRole(element);
     }
     return role;
   }
-  return explicit.length ? null : implicitRole(element); // unknown explicit role: don't judge
+  // ARIA 9.1: unrecognized tokens leave native semantics intact.
+  return implicitRole(element);
 }

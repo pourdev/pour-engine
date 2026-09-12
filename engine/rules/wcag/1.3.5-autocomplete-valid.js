@@ -97,19 +97,32 @@ export default {
       .split(/\s+/)
       .filter(Boolean);
     const invalid = tokens.filter((token) => !isKnown(token));
-    if (invalid.length) {
+    const fault = invalid.length ? null : (tokens.length ? grammarFault(tokens) : null);
+    if (!invalid.length && !fault) return { status: 'pass' };
+    // Asserted the way ACT rule 73f2c2 asserts it, under its assumption that
+    // an autocomplete attribute sits on a field collecting information about
+    // the user, which is what the attribute is for. A search box is the one
+    // common field that carries the attribute and collects nothing about the
+    // user, so it is asked about rather than failed. The message names the
+    // assumption so a reviewer can dismiss the finding on a field 1.3.5 does
+    // not cover. https://www.w3.org/WAI/standards-guidelines/act/rules/73f2c2/
+    const problem = invalid.length
+      ? `autocomplete contains unknown token(s): ${invalid.join(', ')}, so browsers and assistive tools cannot identify this field's purpose from it`
+      : `autocomplete="${element.getAttribute('autocomplete').trim()}" is not a valid autofill value: ${fault}. Browsers discard the whole value, so no purpose is exposed`;
+    const fix = invalid.length
+      ? 'Use tokens from the HTML input-purposes list, e.g. autocomplete="email" or autocomplete="given-name".'
+      : 'Use one field name from the HTML autofill list, optionally preceded by section-*, then shipping or billing, and (for tel, email and impp only) a contact type, e.g. autocomplete="shipping tel" or autocomplete="home email".';
+    if (element.type === 'search') {
       return {
-        status: 'fail',
-        message: `autocomplete contains unknown token(s): ${invalid.join(', ')} — browsers and assistive tools can't identify this field's purpose.`,
-        fix: 'Use tokens from the HTML input-purposes list, e.g. autocomplete="email" or autocomplete="given-name".',
+        status: 'incomplete',
+        message: `${problem}. 1.3.5 covers fields that collect information about the user, which a search box usually does not; if this one does, correct the value.`,
+        fix,
       };
     }
-    const fault = tokens.length ? grammarFault(tokens) : null;
-    if (!fault) return { status: 'pass' };
     return {
       status: 'fail',
-      message: `autocomplete="${element.getAttribute('autocomplete').trim()}" is not a valid autofill value: ${fault}. Browsers discard the whole value, so no purpose is exposed.`,
-      fix: 'Use one field name from the HTML autofill list, optionally preceded by section-*, then shipping or billing, and (for tel, email and impp only) a contact type, e.g. autocomplete="shipping tel" or autocomplete="home email".',
+      message: `${problem}. 1.3.5 covers fields that collect information about the user, which is what an autocomplete attribute is for; if this field collects nothing about the user, the criterion does not apply and this finding can be dismissed.`,
+      fix,
     };
   },
 };

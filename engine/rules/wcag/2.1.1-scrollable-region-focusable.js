@@ -92,13 +92,13 @@ export default {
     // An explicit negative tabindex is the author OPTING OUT of the tab
     // order, and the browser honours it: measured in Chrome 151, a scroller
     // with tabindex="-1" is skipped by Tab even though the same scroller
-    // without the attribute would be auto-focused. Nothing inside is
-    // tabbable either, so the overflowed content is unreachable by keyboard
-    // in every engine — assertable, not browser-dependent.
+    // without the attribute would be auto-focused. That does not prove
+    // keyboard inoperability: external controls may scroll the region or
+    // move focus into it programmatically.
     if (element.hasAttribute('tabindex')) {
       return {
-        status: 'fail',
-        message: 'This region scrolls, holds nothing tabbable, and its tabindex="-1" removes the region itself from the tab order — keyboard users cannot reach the overflowed content in any browser.',
+        status: 'incomplete',
+        message: 'This region scrolls, has no detected tabbable content and is removed from sequential focus by a negative tabindex. Check whether keyboard-operable controls elsewhere scroll it or move focus into it; without such a mechanism, the overflowed content may be unreachable.',
         fix: 'Change tabindex="-1" to tabindex="0" (plus role="region" and an aria-label describing it), or make something inside it tabbable.',
       };
     }

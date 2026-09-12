@@ -1,5 +1,6 @@
 // WCAG SC 1.1.1 Non-text Content (Level A)
 import { labelledByName } from '../../lib/accessible-name.js';
+import { effectiveRole } from '../../lib/roles.js';
 
 export default {
   id: 'svg-img-alt',
@@ -11,24 +12,20 @@ export default {
   // <img> itself is handled by image-alt; this covers SVG (with or without a
   // role) and role="img" divs/spans. Top-level plain <svg> is included
   // because browsers expose it to AT as a graphic even without a role.
-  selector: 'svg[role="img"], svg[role="graphics-document"], svg[role="graphics-symbol"], [role="img"]:not(img):not(svg), svg:not([role])',
+  selector: 'svg, [role]',
   evaluate(element, { accessibleName }) {
-    // A non-svg role="img" host names from author only, and the role makes
-    // its subtree presentational (ARIA: children presentational) — so a
-    // descendant <svg><title> or text content never reaches AT as a name,
-    // even though a generic contents walk would find it.
-    if (element.tagName.toLowerCase() !== 'svg' && element.getAttribute('role') === 'img') {
-      const authorName = labelledByName(element)
-        || element.getAttribute('aria-label')?.trim()
-        || element.getAttribute('title')?.trim();
-      if (authorName) return { status: 'pass' };
-      return {
-        status: 'fail',
-        message: 'This element is marked as an image but has no accessible name — for role="img", content inside it (including an inner SVG’s <title>) does not count as a name.',
-        fix: 'Add aria-label="…" or aria-labelledby pointing at visible text.',
-      };
-    }
-    if (accessibleName(element)) return { status: 'pass' };
+    if (element.tagName === 'IMG') return { status: 'pass' }; // image-alt owns native images
+    const svg = element.tagName.toLowerCase() === 'svg';
+    const explicitGraphic = effectiveRole(element) === 'img'
+      || ['graphics-document', 'graphics-symbol'].includes(element.getAttribute('role')?.trim());
+    if (!svg && !explicitGraphic) return { status: 'pass' };
+    if (svg && element.hasAttribute('role') && !explicitGraphic) return { status: 'pass' };
+    // Graphic roles name from author, not arbitrary descendant text.
+    // SVG adds its own direct title as a native naming source.
+    const nativeTitle = svg && [...element.children].find((child) => child.tagName.toLowerCase() === 'title');
+    const name = labelledByName(element) || element.getAttribute('aria-label')?.trim()
+      || (nativeTitle && accessibleName(nativeTitle)) || element.getAttribute('title')?.trim();
+    if (name) return { status: 'pass' };
     if (!element.getAttribute('role') && element.tagName.toLowerCase() === 'svg') {
       if (element.parentNode instanceof SVGElement) return { status: 'pass' }; // nested svg: part of the outer graphic
       // Inside a control that already has a name, the svg is effectively
