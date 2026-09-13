@@ -1,18 +1,18 @@
-// WCAG SC 4.1.2 Name, Role, Value (Level A)
-// ARIA 1.2 marks dialog/alertdialog as name-required roles, and dialogs are
-// NOT name-from-content — the body text is the dialog's content, never its
-// name. An open, unnamed modal announces as just "dialog", leaving
-// screen-reader users with no idea what interrupted them (cookie-consent
-// modals are the canonical offender).
+// A dialog with no accessible name is announced as just "dialog". ARIA 1.2
+// requires authors to name one, but WCAG 4.1.2 is written for user interface
+// components, defined as controls, and a dialog is a container of controls
+// whose own names 4.1.2 already covers. So the pattern is an ARIA authoring
+// failure, not a WCAG one: demoted from 4.1.2 to best practice on 2026-09-13
+// after rnib.org.uk's unnamed cookie banner was challenged.
 import { labelledByName } from '../../lib/accessible-name.js';
 
 export default {
   id: 'dialog-name',
   name: 'Dialog names',
   impact: 'serious',
-  tags: ['wcag2a', 'wcag412'],
-  help: 'Dialogs must have an accessible name',
-  helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html',
+  tags: ['best-practice'],
+  help: 'Dialogs should have an accessible name',
+  helpUrl: 'https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/',
   // Default visibility filter: a closed <dialog> is display:none, so only
   // dialogs the user can actually encounter are judged.
   selector: 'dialog, [role="dialog"], [role="alertdialog"]',

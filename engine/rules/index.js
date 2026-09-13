@@ -76,7 +76,9 @@ import scrollableRegionFocusable from './wcag/2.1.1-scrollable-region-focusable.
 import tableHeaders from './wcag/1.3.1-table-headers.js';
 import contrastEnhanced from './wcag/1.4.6-contrast-enhanced.js';
 import targetSizeEnhanced from './wcag/2.5.5-target-size-enhanced.js';
-import dialogName from './wcag/4.1.2-dialog-name.js';
+// Demoted to best-practice 2026-09-13: ARIA requires a dialog name, but 4.1.2
+// covers controls and a dialog is their container (see the rule file).
+import dialogName from './best-practice/dialog-name.js';
 import controlContrast from './wcag/1.4.3-control-contrast.js';
 import nonTextContrast from './wcag/1.4.11-non-text-contrast.js';
 import textSpacing from './wcag/1.4.12-text-spacing.js';
