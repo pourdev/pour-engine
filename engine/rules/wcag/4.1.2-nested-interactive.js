@@ -1,5 +1,5 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
-import { isInert } from '../../lib/dom.js';
+import { isInert, flatDescendants, flatTreeParent, outOfSequentialFocus } from '../../lib/dom.js';
 // Deliberately excludes bare [tabindex]: a focusable container (e.g. a
 // scrollable region with tabindex="0") holding links is correct markup.
 const INTERACTIVE =
@@ -28,8 +28,14 @@ export default {
     const NATIVE = 'a[href], button, input, select, textarea, summary, audio[controls], video[controls]';
     // Negative tabindex removes sequential focus navigation, not focusability.
     // https://html.spec.whatwg.org/multipage/interaction.html#attr-tabindex
-    const candidates = [...element.querySelectorAll(INTERACTIVE)].filter((el) =>
-      !el.matches(':disabled') && !isInert(el)
+    // The FLAT tree: a custom element's shadow tree can hold the real
+    // control (material.io's cookie banner: div role="button" holding an
+    // <mwc-button tabindex="-1"> whose shadow tree renders a <button>).
+    // Sequential focusability follows the host: a negative tabindex on a
+    // shadow host takes its whole scope out of the tab order (HTML focus
+    // navigation scopes), so such a control is the negative-tabindex shape.
+    const candidates = flatDescendants(element).filter((el) =>
+      el.matches?.(INTERACTIVE) && !el.matches(':disabled') && !isInert(el)
       && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el)
       // aria-hidden content that Tab reaches is aria-hidden-focus's finding.
       // aria-hidden content with a negative tabindex is not, yet a click or a
@@ -38,23 +44,29 @@ export default {
       // interaction with the user or indirectly via programmatic means", so
       // it stays a candidate here.
       // https://www.w3.org/TR/wai-aria-1.2/#aria-hidden
-      && !(el.closest('[aria-hidden="true"]') && !(el.hasAttribute('tabindex') && el.tabIndex < 0))
+      && !(el.closest('[aria-hidden="true"]') && !outOfSequentialFocus(el, element))
       && (el.matches(NATIVE) || el.hasAttribute('tabindex')));
     // A child requiring review must not conceal a later definite finding.
-    const nested = candidates.find((el) => !(el.hasAttribute('tabindex') && el.tabIndex < 0)) ?? candidates[0];
+    const nested = candidates.find((el) => !outOfSequentialFocus(el, element)) ?? candidates[0];
     if (!nested) return { status: 'pass' };
     // A programmatically focusable child must not silently pass. In an
     // ARIA widget its name and role can survive presentational-descendant
     // processing, so nesting alone does not prove a 4.1.2 failure.
     // Native links/buttons separately forbid interactive descendants.
     // https://www.w3.org/TR/wai-aria-1.2/#tree_exclusion
-    if (nested.hasAttribute('tabindex') && nested.tabIndex < 0
-      && !element.matches('a[href], button')) {
+    if (outOfSequentialFocus(nested, element) && !element.matches('a[href], button')) {
+      let host = null;
+      for (let node = flatTreeParent(nested); node && node !== element; node = flatTreeParent(node)) {
+        if (node.shadowRoot && node.hasAttribute('tabindex') && node.tabIndex < 0) { host = node; break; }
+      }
+      const child = `<${nested.tagName.toLowerCase()}>`;
       return {
         status: 'incomplete',
-        message: nested.closest('[aria-hidden="true"]')
-          ? `This control contains an element (<${nested.tagName.toLowerCase()}>) that is hidden from assistive technology but can still receive focus from a click or a script. Focus landing there lands on content a screen reader cannot see. Check whether it can take focus, and if it can, remove it from focus or from aria-hidden.`
-          : `This control contains an element (<${nested.tagName.toLowerCase()}>) with a negative tabindex. It can still receive focus. Check that both controls expose the intended name and role, and that focusing and activating the child works correctly.`,
+        message: host
+          ? `This control contains a custom element (<${host.tagName.toLowerCase()}>) whose shadow tree holds another control (${child}). The host's negative tabindex keeps it out of the tab order, but a click or a script can still focus it. Check that both controls expose the intended name and role, and that focusing and activating the child works correctly.`
+          : nested.closest('[aria-hidden="true"]')
+            ? `This control contains an element (${child}) that is hidden from assistive technology but can still receive focus from a click or a script. Focus landing there lands on content a screen reader cannot see. Check whether it can take focus, and if it can, remove it from focus or from aria-hidden.`
+            : `This control contains an element (${child}) with a negative tabindex. It can still receive focus. Check that both controls expose the intended name and role, and that focusing and activating the child works correctly.`,
       };
     }
     // <summary> is the one outer control HTML does not forbid this on: its

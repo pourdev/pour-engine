@@ -150,6 +150,13 @@ function visibleContentText(element, includeHidden, inLabelledBy, visited) {
  *  the generated content decorative and contributes nothing, which is how
  *  the same syntax silences icon glyphs. */
 function generatedContent(element, pseudo, includeHidden) {
+  // SVG elements generate no ::before/::after box: the computed style still
+  // reports the content, but nothing is painted and Chromium's accessible
+  // name leaves it out (measured 2026-09-13: an icon font's ::before "h" on
+  // the <svg> inside an icon-only button paints 0 pixels and Chromium names
+  // the button ""; the same rule on a <span> paints and names it "h"). Naming
+  // the button "h" from it hid a nameless close button on channel4.com.
+  if (element.namespaceURI === 'http://www.w3.org/2000/svg') return '';
   const style = getComputedStyle(element, pseudo);
   // Generated nodes follow the same hidden-content exclusion as ordinary
   // descendants. A hover label can exist in computed content while its

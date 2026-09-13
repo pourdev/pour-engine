@@ -31,6 +31,47 @@ export function flatTreeParent(node) {
   return node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host ?? null;
 }
 
+/** Every element beneath `element` in the FLAT tree: light descendants,
+ *  open shadow trees, and what slots pull in. Closed shadow roots stay
+ *  unreachable, as everywhere in the engine. */
+export function flatDescendants(element) {
+  const found = [];
+  const seen = new Set();
+  const visit = (scope) => {
+    for (const el of scope.querySelectorAll('*')) {
+      if (seen.has(el)) continue;
+      seen.add(el);
+      found.push(el);
+      if (el.shadowRoot) visit(el.shadowRoot);
+      if (el.tagName === 'SLOT') {
+        for (const assigned of el.assignedElements({ flatten: true })) {
+          if (!seen.has(assigned)) { seen.add(assigned); found.push(assigned); }
+          visit(assigned);
+        }
+      }
+    }
+  };
+  if (element.shadowRoot) visit(element.shadowRoot);
+  visit(element);
+  return found;
+}
+
+/** Focusable but left out of sequential (Tab) navigation: a negative
+ *  tabindex on the element itself, or on a shadow host between it and
+ *  `within`. HTML leaves a focus navigation scope owner "whose tabindex value
+ *  is a negative integer" out of the tabindex-ordered focus navigation scope,
+ *  and its scope's contents go with it (measured in Chromium 2026-09-13: Tab
+ *  skips the <button> in an mwc-button host with tabindex="-1", while a click
+ *  or focus() still lands on it). */
+export function outOfSequentialFocus(element, within = null) {
+  const negative = (el) => el.hasAttribute('tabindex') && el.tabIndex < 0;
+  if (negative(element)) return true;
+  for (let node = flatTreeParent(element); node && node !== within; node = flatTreeParent(node)) {
+    if (node.shadowRoot && negative(node)) return true;
+  }
+  return false;
+}
+
 /**
  * Rendered on screen — ignores aria-hidden. For purely visual rules
  * (contrast, target size): sighted users see aria-hidden content too.

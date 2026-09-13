@@ -1,6 +1,6 @@
 // WCAG SC 1.4.3 Contrast (Minimum) (Level AA)
 import {
-  parseColor, contrastRatio, composite, effectiveBackground, backgroundObscured,
+  parseColor, contrastRatio, composite, effectiveBackground, backgroundObscured, paintsNothing, textSamplePoint,
   backgroundImageSource, backgroundImagePaintRect, imagePaintRectInBox, imageLuminanceRange,
   sampledGradientRange, gradientStops, rangeVerdict, rangeWithBackdrop, isLargeText, cumulativeOpacity,
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
@@ -261,6 +261,75 @@ function unaccountedScrim(element, imageCarrier) {
     const color = parseColor(getComputedStyle(layer).backgroundColor);
     return color && color.a > 0;
   });
+}
+
+/**
+ * The nearest layer in the browser's hit-test stack that is NOT an ancestor
+ * of the text and paints between the glyphs and the ancestor carrying the
+ * walked background-image. The ancestor walk (backgroundImageSource) is
+ * structurally blind to it: react.dev lays a light card gradient
+ * (position: absolute; inset: 0) inside a section whose own background is a
+ * dark conic gradient, and the walk sampled that dark section behind dark
+ * text (1.18:1) while the pixels under the glyphs read 13.8:1 (2026-09-13
+ * verdict crawl). Returns { image, css, overlays } when such a layer paints
+ * an image or gradient (the real backdrop to sample, with the translucent
+ * ancestor colours passed on the way as overlays), { covered } when it is an
+ * opaque colour or a replaced element (the walked image never shows behind
+ * the glyphs; the colour paths below resolve it), and null when the stack
+ * reaches the carrier first, cannot be read, or the text is off screen.
+ */
+function coveringLayer(element, imageCarrier) {
+  const doc = element.ownerDocument;
+  const win = doc.defaultView;
+  // undefined: the hit-test cannot answer (off screen, retargeted, unread);
+  // null: it answered, and nothing covers the walked image.
+  if (typeof doc.elementsFromPoint !== 'function') return undefined;
+  const point = textSamplePoint(element);
+  if (!point || point.x < 0 || point.y < 0 || point.x >= win.innerWidth || point.y >= win.innerHeight) return undefined;
+  const stack = doc.elementsFromPoint(point.x, point.y);
+  const start = stack.indexOf(element);
+  if (start === -1) return undefined;
+  const overlays = [];
+  for (const layer of stack.slice(start + 1)) {
+    if (layer === imageCarrier) return null;
+    if (layer.contains(element)) {
+      const own = parseColor(getComputedStyle(layer).backgroundColor);
+      if (own && own.a > 0 && own.a < 1) overlays.push(own);
+      continue;
+    }
+    // Paint inside a shadow tree is retargeted to its host: unknowable here.
+    if (layer.shadowRoot) return undefined;
+    if (/^(img|video|canvas|picture)$/i.test(layer.tagName)) return { covered: layer };
+    const style = getComputedStyle(layer);
+    if (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage)) return { image: layer, css: style.backgroundImage, overlays };
+    const color = parseColor(style.backgroundColor);
+    if (color && color.a >= 1) return { covered: layer };
+  }
+  return null;
+}
+
+/**
+ * Scroll-independent stand-in for coveringLayer when the hit-test is blind:
+ * is there a positioned element inside the image carrier, not an ancestor of
+ * the text, painting an image or an opaque colour over the text's sample
+ * point? It paints above the carrier's background, and whether it lies
+ * behind the glyphs or over them is paint order this engine does not model,
+ * so the caller asks rather than asserts the walked image.
+ */
+function positionedPaintInside(carrier, element) {
+  const point = textSamplePoint(element);
+  if (!point) return false;
+  for (const node of carrier.querySelectorAll('*')) {
+    if (node.contains(element) || element.contains(node)) continue;
+    const style = getComputedStyle(node);
+    if (style.position !== 'absolute' && style.position !== 'fixed') continue;
+    const paints = (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage))
+      || (parseColor(style.backgroundColor)?.a ?? 0) >= 1;
+    if (!paints || node.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true }) === false) continue;
+    const box = node.getBoundingClientRect();
+    if (point.x >= box.left && point.x < box.right && point.y >= box.top && point.y < box.bottom) return true;
+  }
+  return false;
 }
 
 /** An image layer with no opaque pixels: it covers the background without
@@ -753,7 +822,22 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     // A background image on an ancestor: sample its pixels and bracket —
     // but only when it's actually painted under this text. Icon-in-padding
     // images (external-link arrows etc.) don't affect the text's contrast.
-    const imageSource = backgroundImageSource(element);
+    let imageSource = backgroundImageSource(element);
+    // Where the browser's hit-test can answer, it outranks the ancestor walk:
+    // a non-ancestor layer painted between the text and the walked image is
+    // the backdrop instead (see coveringLayer). The element's own image is
+    // the walk's by construction and is left alone.
+    if (imageSource && imageSource.element !== element) {
+      const cover = coveringLayer(element, imageSource.element);
+      if (cover?.image) imageSource = { css: cover.css, element: cover.image, overlays: cover.overlays };
+      else if (cover) imageSource = null;
+      else if (cover === undefined && positionedPaintInside(imageSource.element, element)) {
+        return {
+          status: 'incomplete',
+          message: 'This text sits in a section with a background image or gradient, and a positioned element inside that section paints its own background where the text is. Which of the two is behind the glyphs depends on paint order, and the text is off screen where the browser cannot be asked, so check the contrast by eye.',
+        };
+      }
+    }
     if (imageSource) {
       if (ownMultiply) return { status: 'incomplete', message: 'This text multiplies against an image or gradient. Its contrast depends on the pixels behind each glyph; check it by eye.' };
       const { relation, intrinsic, dimensionless, isGradient, sizedSmall, paint } = await imageVsText(imageSource, element, doc);

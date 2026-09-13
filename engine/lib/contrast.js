@@ -318,7 +318,7 @@ const transparentImages = new Set();
 /** True when every layer of this computed background-image is a url() known
  *  to paint nothing — so the layer cannot change what is behind it. Any
  *  gradient, or any unsampled image, makes that unknowable. */
-function paintsNothing(backgroundImage) {
+export function paintsNothing(backgroundImage) {
   if (backgroundImage.includes('gradient(')) return false;
   const urls = [...backgroundImage.matchAll(/url\(["']?(.*?)["']?\)/g)].map((m) => m[1]);
   return urls.length > 0 && urls.every((url) => transparentImages.has(url));
@@ -585,7 +585,7 @@ export function backgroundObscured(element) {
  *  hit-testing. A Range around the first non-blank text node beats the
  *  element's own rect centre: wide containers with left-aligned text would
  *  hit-test empty space. Falls back to the element rect. */
-function textSamplePoint(element) {
+export function textSamplePoint(element) {
   for (const node of element.childNodes) {
     if (node.nodeType !== 3 || !node.textContent.trim()) continue;
     const range = element.ownerDocument.createRange();
