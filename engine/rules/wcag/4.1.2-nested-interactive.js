@@ -31,7 +31,14 @@ export default {
     const candidates = [...element.querySelectorAll(INTERACTIVE)].filter((el) =>
       !el.matches(':disabled') && !isInert(el)
       && !(el.tagName === 'INPUT' && el.type === 'hidden') && isRendered(el)
-      && !el.closest('[aria-hidden="true"]')
+      // aria-hidden content that Tab reaches is aria-hidden-focus's finding.
+      // aria-hidden content with a negative tabindex is not, yet a click or a
+      // script still moves focus onto it, and ARIA 1.2 says authors SHOULD NOT
+      // hide an element that "may receive focus, either directly via
+      // interaction with the user or indirectly via programmatic means", so
+      // it stays a candidate here.
+      // https://www.w3.org/TR/wai-aria-1.2/#aria-hidden
+      && !(el.closest('[aria-hidden="true"]') && !(el.hasAttribute('tabindex') && el.tabIndex < 0))
       && (el.matches(NATIVE) || el.hasAttribute('tabindex')));
     // A child requiring review must not conceal a later definite finding.
     const nested = candidates.find((el) => !(el.hasAttribute('tabindex') && el.tabIndex < 0)) ?? candidates[0];
@@ -45,7 +52,9 @@ export default {
       && !element.matches('a[href], button')) {
       return {
         status: 'incomplete',
-        message: `This control contains an element (<${nested.tagName.toLowerCase()}>) with a negative tabindex. It can still receive focus. Check that both controls expose the intended name and role, and that focusing and activating the child works correctly.`,
+        message: nested.closest('[aria-hidden="true"]')
+          ? `This control contains an element (<${nested.tagName.toLowerCase()}>) that is hidden from assistive technology but can still receive focus from a click or a script. Focus landing there lands on content a screen reader cannot see. Check whether it can take focus, and if it can, remove it from focus or from aria-hidden.`
+          : `This control contains an element (<${nested.tagName.toLowerCase()}>) with a negative tabindex. It can still receive focus. Check that both controls expose the intended name and role, and that focusing and activating the child works correctly.`,
       };
     }
     // <summary> is the one outer control HTML does not forbid this on: its

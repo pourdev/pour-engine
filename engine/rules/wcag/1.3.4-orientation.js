@@ -66,19 +66,19 @@ function quarterTurn(style, win) {
 /** Walk the sheet in cascade order, keeping the LAST relevant declaration
  *  per root, orientation and property, so a later declaration in the same
  *  orientation block undoes an earlier lock. */
-function scanRules(rules, orientationContext, active, state, doc) {
+function scanRules(rules, orientationContext, active, state, doc, query) {
   const win = doc.defaultView;
   for (const rule of rules ?? []) {
     if (rule.type === win.CSSRule.SUPPORTS_RULE) {
       // An unsupported branch cannot apply in either orientation.
-      if (win.CSS.supports(rule.conditionText)) scanRules(rule.cssRules, orientationContext, active, state, doc);
+      if (query.supports(rule.conditionText)) scanRules(rule.cssRules, orientationContext, active, state, doc, query);
       continue;
     }
     if (rule.type === win.CSSRule.MEDIA_RULE) {
       const condition = rule.conditionText ?? rule.media.mediaText;
       const orientation = /orientation\s*:\s*(portrait|landscape)/i.exec(condition)?.[1];
       const context = orientation ? { condition, orientation } : orientationContext;
-      scanRules(rule.cssRules, context, active && win.matchMedia(condition).matches, state, doc);
+      scanRules(rule.cssRules, context, active && query.media(condition), state, doc, query);
       continue;
     }
     if (orientationContext && rule.style) {
@@ -104,7 +104,7 @@ function scanRules(rules, orientationContext, active, state, doc) {
     // Layers and other grouping rules retain the surrounding media state.
     // Unknown conditional groups cannot establish an active restriction.
     if (rule.cssRules) scanRules(rule.cssRules, orientationContext,
-      active && rule.conditionText === undefined, state, doc);
+      active && rule.conditionText === undefined, state, doc, query);
   }
 }
 
@@ -121,13 +121,30 @@ export default {
     const doc = element.ownerDocument;
     const win = doc.defaultView;
     const state = new Map();
+    // Each media and supports condition is asked once per audit. Framework
+    // stylesheets repeat a handful of breakpoints thousands of times: ethz.ch
+    // carries 10,604 @media blocks over 98 distinct conditions, and asking
+    // matchMedia for every block cost this rule about half of its 10 ms there
+    // (measured 2026-09-13). The answers cannot change within one pass.
+    const mediaAnswers = new Map();
+    const supportsAnswers = new Map();
+    const query = {
+      media: (condition) => {
+        if (!mediaAnswers.has(condition)) mediaAnswers.set(condition, win.matchMedia(condition).matches);
+        return mediaAnswers.get(condition);
+      },
+      supports: (condition) => {
+        if (!supportsAnswers.has(condition)) supportsAnswers.set(condition, win.CSS.supports(condition));
+        return supportsAnswers.get(condition);
+      },
+    };
     for (const sheet of doc.styleSheets) {
       if (sheet.disabled) continue;
       const media = sheet.media?.mediaText;
-      if (media && !win.matchMedia(media).matches) continue;
+      if (media && !query.media(media)) continue;
       let rules;
       try { rules = sheet.cssRules; } catch { continue; } // cross-origin: unreadable, skip
-      scanRules(rules, null, true, state, doc);
+      scanRules(rules, null, true, state, doc, query);
     }
     const findings = [];
     for (const [key, entry] of state) {
