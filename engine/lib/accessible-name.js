@@ -16,8 +16,24 @@ const TEXT_INPUT = new Set(['text', 'search', 'url', 'tel', 'email', 'password',
  *  labels through ElementInternals, so they are not reachable here). */
 const LABELABLE = new Set(['input', 'select', 'textarea', 'button', 'meter', 'output', 'progress']);
 
+/** A name made only of characters nothing can speak is no name. Private
+ *  Use Area code points (U+E000 to U+F8FF and the two supplementary planes)
+ *  carry no interoperable meaning by definition (Unicode, chapter 23:
+ *  "their interpretation is not specified"); icon fonts put their glyphs
+ *  there, so a button whose only content is an icon's ::before glyph
+ *  (postgresql.org's search and theme buttons, Font Awesome U+F002 and
+ *  U+F0EB, 2026-09-14) has a name string the browser exposes and a screen
+ *  reader announces as nothing. WCAG's name is "text by which software can
+ *  identify a component within Web content to the user"; a private-use
+ *  glyph identifies nothing to anyone. Zero-width and joiner characters
+ *  are stripped for the same reason. Every other character, symbols and
+ *  emoji included, still names: "×" is spoken. */
+function speakable(name) {
+  return name.replace(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}\u200B-\u200D\u2060\uFEFF]/gu, '').trim() ? name : '';
+}
+
 export function accessibleName(element) {
-  return computeName(element, false, false, new Set());
+  return speakable(computeName(element, false, false, new Set()));
 }
 
 /** The name aria-labelledby contributes, resolved the way accname requires:
@@ -26,12 +42,12 @@ export function accessibleName(element) {
  *  too, and reading textContent instead reports those elements as nameless.
  *  Rules that only need "is it labelled?" call this directly. */
 export function labelledByName(element) {
-  return referencedName(element, new Set()) ?? '';
+  return speakable(referencedName(element, new Set()) ?? '');
 }
 
 /** Native label text, excluding the control being named from recursion. */
 export function nativeLabelName(element, label) {
-  return computeName(label, false, hiddenForName(label), new Set([element]));
+  return speakable(computeName(label, false, hiddenForName(label), new Set([element])));
 }
 
 // Accname 2A: only a reference whose root is itself hidden includes its
