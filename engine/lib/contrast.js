@@ -101,6 +101,14 @@ export function contrastRatio(foreground, background) {
  * (no text threshold lives up there), and "21:1" reads better than
  * "21.0:1" — a trailing zero implies precision the eye can use.
  */
+/** Serialise a judged colour for the report and the checker link. Composited
+ *  channels keep up to two decimals: rounding them to integers changes the
+ *  pair enough that the checker scores a different ratio than the audit
+ *  reported (4.21 vs 4.19 on a 70%-opacity footer). Shared by the text and
+ *  the form-control contrast rules (2026-09-17). */
+const channelText = (value) => String(Math.round(value * 100) / 100);
+export const asRgb = (color) => `rgb(${channelText(color.r)}, ${channelText(color.g)}, ${channelText(color.b)})`;
+
 export function showRatio(ratio) {
   const text = ratio >= 10
     ? (Math.floor(ratio * 10) / 10).toFixed(1)

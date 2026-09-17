@@ -5,7 +5,7 @@
 import {
   parseColor, contrastRatio, composite, effectiveBackground, isLargeText,
   backgroundImageSource, cumulativeOpacity, opacityAnimating, restingOpacity, showRatio,
-  hasPaintEffects, opacityGroupPaint, splitBackgroundLayers, sampledGradientRange,
+  hasPaintEffects, opacityGroupPaint, splitBackgroundLayers, sampledGradientRange, asRgb,
 } from '../../lib/contrast.js';
 
 export default {
@@ -108,7 +108,7 @@ export default {
         if (group?.unresolved) { unresolvedGroup = true; return null; }
         if (group) {
           const ratio = contrastRatio(group.foreground, group.background);
-          return ratio >= required ? null : { what, ratio };
+          return ratio >= required ? null : { what, ratio, fg: group.foreground, bg: group.background };
         }
       }
       const painted = opacity * ownOpacity;
@@ -116,7 +116,7 @@ export default {
       const fg = faded.a < 1 ? composite(faded, background) : faded;
       const ratio = contrastRatio(fg, background);
       if (ratio >= required) return null;
-      return { what, ratio };
+      return { what, ratio, fg, bg: background };
     };
 
     const failures = [];
@@ -151,8 +151,11 @@ export default {
     return {
       status: 'fail',
       message: `This field's ${worst.what} has ${showRatio(worst.ratio)}:1 contrast against the field background — below the ${required}:1 minimum.`,
-      fix: `Darken the ${worst.what.includes('placeholder') ? 'placeholder colour (::placeholder)' : 'text colour'} until it reaches ${required}:1 against the field background.`,
-      data: { ratio: Number(showRatio(worst.ratio)), required },
+      fix: `Darken the ${worst.what.includes('placeholder') ? 'placeholder colour (::placeholder)' : 'text colour'} until it reaches ${required}:1 against the field background (currently ${asRgb(worst.fg)} on ${asRgb(worst.bg)}).`,
+      // The judged pair, as the text rule reports it, so the UIs can link
+      // out to the checker with it (the link was missing on this rule's
+      // findings until 2026-09-17: it carried the ratio and nothing else).
+      data: { foreground: asRgb(worst.fg), background: asRgb(worst.bg), ratio: Number(showRatio(worst.ratio)), required },
     };
   },
 };

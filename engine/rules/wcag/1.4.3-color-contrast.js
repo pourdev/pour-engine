@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop } from '../../lib/contrast.js';
+  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -20,12 +20,6 @@ const extentOf = (rect) => (rect ? { width: rect.right - rect.left, height: rect
  *  every character that carries grouping, rating or code meaning. */
 const SEPARATOR_GLYPHS = /^([|¦·•∙‧/⁄\\‐‑‒–—―⁃«»‹›-])\1*$/;
 
-/** Serialise a judged colour for the report and the checker link. Composited
- *  channels keep up to two decimals: rounding them to integers changes the
- *  pair enough that the checker scores a different ratio than the audit
- *  reported (4.21 vs 4.19 on a 70%-opacity footer). */
-const channelText = (value) => String(Math.round(value * 100) / 100);
-const asRgb = (color) => `rgb(${channelText(color.r)}, ${channelText(color.g)}, ${channelText(color.b)})`;
 
 /** The one case a full-page veil still can't be judged for the author: the
  *  resting page and the dimmed one land on opposite sides of the threshold,

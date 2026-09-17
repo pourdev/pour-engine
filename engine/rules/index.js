@@ -42,13 +42,13 @@ import audioControl from './wcag/1.4.2-audio-control.js';
 import pauseStopHide from './wcag/2.2.2-pause-stop-hide.js';
 import mediaCaptions from './wcag/1.2.2-media-captions.js';
 import ariaAttrValid from './wcag/4.1.2-aria-attr-valid.js';
-// Reviews rather than asserts: an unsupported ARIA attribute breaks an ARIA
-// author MUST (1.2 §8.6) but is INERT, so name, role and value all survive
-// and no success criterion provably fails. It sits in the WCAG scope anyway,
-// because a real authoring error that a browser silently discards should not
-// be invisible in a default audit, and it asks whether the state is real
-// instead of claiming a failure (see the note in the rule file).
+// An unsupported ARIA attribute breaks an ARIA author MUST (1.2 §8.6) but is
+// INERT, so name, role and value survive: asserted at minor since 2026-09-17
+// (it reviewed before). Where the DOM proves the element really has the
+// state (a native readonly, required, disabled or checked beside the aria-
+// attribute) the finding is aria-state-unreachable's, at moderate.
 import ariaAllowedAttr from './wcag/4.1.2-aria-allowed-attr.js';
+import ariaStateUnreachable from './wcag/4.1.2-aria-state-unreachable.js';
 import ariaFieldName from './wcag/4.1.2-aria-field-name.js';
 // Asks instead of asserting: a prohibited name on a generic element is a
 // real ARIA MUST violation the browser silently drops, so it runs in the
@@ -191,6 +191,7 @@ export default [
   mediaCaptions,
   ariaAttrValid,
   ariaAllowedAttr,
+  ariaStateUnreachable,
   ariaFieldName,
   ariaLabelMisuse,
   roleRequiredAria,
