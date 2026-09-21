@@ -46,6 +46,27 @@ const HANDLED_ELSEWHERE = new Set(['label', 'labelledby']);
 // Those are aria-state-unreachable's, which imports this.
 export const NATIVE_STATE = { readonly: 'readonly', required: 'required', disabled: 'disabled', checked: 'checked' };
 
+// What the author most likely meant, for the attributes that turn up most
+// on real pages, so the fix names the repair and not just the fault. Each
+// says where ARIA 1.2 puts the attribute (its "Used in Roles" list) and what
+// serves the same purpose on this role. An attribute with no entry gets the
+// general advice. Added 2026-09-21 after inclusion.hsbc.com marked the
+// chosen language with aria-selected on a link, where "move it to the
+// control that toggles this one" pointed nowhere: the repair there is
+// aria-current.
+const HINT = {
+  selected: (role) => (role === 'cell'
+    ? 'A table whose cells can be selected is a grid: aria-selected needs role="grid" on the table, which makes its cells gridcells.'
+    : `aria-selected belongs to option, tab, row and gridcell. To mark the current item in a set of ${role === 'link' ? 'links' : 'items'}, such as the current page, language or step, use aria-current, which is global and allowed on this role.`),
+  expanded: (role) => (role === 'textbox' || role === 'searchbox'
+    ? 'A text field that opens a list of suggestions is a combobox: aria-expanded needs role="combobox", which ARIA in HTML allows on a text input, with aria-controls pointing at the list.'
+    : 'aria-expanded belongs on the control that opens and closes the content, a button in most cases, and not on the content or its container. Put it on that control; if this element is itself what the user presses, it should be a button.'),
+  checked: (role) => (role === 'button'
+    ? 'A button that stays on or off takes aria-pressed, not aria-checked.'
+    : 'aria-checked belongs to checkbox, radio, switch, option and the checkable menu items. For something the user ticks, use a native checkbox or radio input.'),
+  pressed: () => 'aria-pressed belongs to button alone. If this element switches something on and off, make it a button element.',
+};
+
 /** The element's role and the non-global aria- attributes (names without
  *  the prefix) that role does not support, or null when there are none or
  *  the role is not modelled. Shared with aria-state-unreachable. */
@@ -64,6 +85,15 @@ export function unsupportedAria(element) {
   if (!allowed) return null; // role not modelled: don't guess
   const names = ariaAttrs.filter((name) => !GLOBAL_ARIA.has(name) && !allowed.includes(name));
   return names.length ? { role, names } : null;
+}
+
+/** The repair for each unsupported attribute: its own hint where there is
+ *  one, the general advice for the rest. */
+function repair(attrs, role) {
+  const hinted = attrs.filter((name) => HINT[name]).map((name) => HINT[name](role));
+  const rest = attrs.filter((name) => !HINT[name]).map((name) => `aria-${name}`);
+  if (rest.length) hinted.push(`Move ${rest.join('/')} to the element whose role supports it.`);
+  return hinted.join(' ');
 }
 
 export default {
@@ -86,7 +116,7 @@ export default {
     return {
       status: 'fail',
       message: `${names.join(', ')} is not supported on role "${role}" (ARIA 1.2 §8.6), so user agents drop it and assistive technology never sees it. Nothing is announced wrongly, but nothing is announced at all. If the element really has that state, it is invisible to a screen reader; if it does not, the attribute is stray and no one is affected, but ARIA 1.2 still says authors MUST NOT write it.`,
-      fix: `Move ${names.join('/')} to the element whose role supports it, usually the control that toggles this one, or remove it if the element has no such state. Adding a role to this element to make the attribute legal is rarely right: the host language restricts which roles each element may take.`,
+      fix: `${repair(disallowed, role)} If the element has no such state, remove the attribute. Adding a role to this element to make the attribute legal is rarely right: the host language restricts which roles each element may take.`,
     };
   },
 };

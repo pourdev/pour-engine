@@ -10,6 +10,40 @@
 // Keep this in step with 3.1.2-valid-lang-parts.js.
 const LANG_PATTERN = /^([a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*|[xXiI](-[a-zA-Z0-9]{1,8})+)$/;
 
+/** Elements that hold no words and draw nothing. */
+const WORDLESS = 'script, style, template, link, meta, base';
+
+/**
+ * Does this document hold nothing a language could apply to? 3.1.1 asks
+ * that "the default human language of each Web page can be programmatically
+ * determined", and a document with no words has no human language to
+ * determine: the placeholder about:blank frame a page parks for later, a
+ * frame a script has not written into yet. Its html element has no lang
+ * because it has no anything, and the frame's real fault, where it has one,
+ * is its missing title (4.1.2, frame-title). 3.1.2 draws the same line:
+ * a lang can only fail through words it governs.
+ *
+ * Blank is kept narrow so a doubtful document keeps its failure: no title
+ * text (a title is spoken), no text in the body, and no element in the
+ * body beyond scripts and metadata. Any other element counts as
+ * content, since an image, a control, a nested frame or a custom element
+ * can all carry words this check does not look for. An application shell
+ * waiting on its script (<div id="root"></div>) is therefore not blank.
+ */
+function blankDocument(element) {
+  const doc = element.ownerDocument;
+  if (doc.title?.trim()) return false;
+  const body = doc.body;
+  if (!body) return true;
+  // Direct children only: once every element child is wordless, the one
+  // place left for words is a text node of the body itself, and a
+  // script's source is not words.
+  return [...body.childNodes].every((node) => {
+    if (node.nodeType === 3) return !node.data.trim();
+    return node.nodeType !== 1 || node.matches(WORDLESS);
+  });
+}
+
 export default {
   id: 'html-lang',
   name: 'Page language',
@@ -20,6 +54,7 @@ export default {
   selector: 'html',
   visibleOnly: false,
   evaluate(element) {
+    if (blankDocument(element)) return { status: 'pass' };
     const lang = element.getAttribute('lang')?.trim();
     if (!element.hasAttribute('lang')) {
       return {
