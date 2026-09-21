@@ -144,6 +144,7 @@ let chainEffectCache = new WeakMap();
 let uncoveredEffectCache = new WeakMap();
 let blendBackdropCache = new WeakMap();
 let labelReferrersCache = new WeakMap();
+let stackingContextCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -159,6 +160,7 @@ export function resetAuditCaches() {
   uncoveredEffectCache = new WeakMap();
   blendBackdropCache = new WeakMap();
   labelReferrersCache = new WeakMap();
+  stackingContextCache = new WeakMap();
 }
 
 /**
@@ -1276,7 +1278,7 @@ export function textShadowNegligible(cssText, fontSize) {
  * uncertain path keeps the FULL box, erring toward review, never past a
  * real overlap. Returns null when the clip leaves nothing paintable.
  */
-function paintableRect(element, rect) {
+export function paintableRect(element, rect) {
   let { left, top, right, bottom } = rect;
   let mode = getComputedStyle(element).position;
   for (let a = element.parentElement; a; a = a.parentElement) {
@@ -1323,6 +1325,163 @@ export function mediaRects(doc) {
     }
   }
   return mediaRectsCache;
+}
+
+/** Properties whose non-initial value makes a stacking context, and which
+ *  will-change makes one for by being named. */
+const CONTEXT_PROPERTIES = ['transform', 'translate', 'rotate', 'scale', 'filter', 'backdropFilter', 'perspective',
+  'clipPath', 'maskImage', 'webkitMaskImage', 'maskBorderSource', 'viewTransitionName'];
+const WILL_CHANGE_CONTEXTS = /(^|,\s*)(transform|translate|rotate|scale|opacity|filter|backdrop-filter|perspective|clip-path|mask|mask-image|mask-border|isolation|mix-blend-mode|z-index|contain|view-transition-name)\s*(,|$)/;
+
+/**
+ * Does this element create a stacking context? The list is CSS's own (CSS
+ * Positioned Layout 3, and the properties that say so in their own
+ * specifications): the root; fixed and sticky; a positioned element, or a
+ * flex or grid item, with a z-index; opacity under 1; a transform, filter,
+ * perspective, clip-path or mask; a blend mode or isolation; containment
+ * of layout or paint, a container, content-visibility; a view transition
+ * name; and will-change naming any of those. It is kept complete on
+ * purpose: missing one and inventing one both put an element in the wrong
+ * layer, so beneathOpaqueAncestor asks for a whole chain it can read.
+ */
+function createsStackingContext(element) {
+  let known = stackingContextCache.get(element);
+  if (known !== undefined) return known;
+  const parent = element.parentElement;
+  const style = getComputedStyle(element);
+  known = !parent
+    || style.position === 'fixed' || style.position === 'sticky'
+    || (style.zIndex !== 'auto' && (style.position !== 'static'
+      || /flex|grid/.test(getComputedStyle(parent).display)))
+    || parseFloat(style.opacity) < 1
+    || CONTEXT_PROPERTIES.some((name) => style[name] && style[name] !== 'none')
+    || (style.mixBlendMode && style.mixBlendMode !== 'normal')
+    || style.isolation === 'isolate'
+    || /layout|paint|strict|content/.test(style.contain ?? '')
+    || (style.containerType && style.containerType !== 'normal')
+    || (style.contentVisibility && style.contentVisibility !== 'visible')
+    || WILL_CHANGE_CONTEXTS.test(style.willChange ?? '');
+  stackingContextCache.set(element, known);
+  return known;
+}
+
+/** The top layer paints over every stacking context and is outside the
+ *  ordering read below. */
+function inTopLayer(element) {
+  for (const selector of [':modal', ':popover-open', ':fullscreen']) {
+    try { if (element.closest(selector)) return true; }
+    catch { /* a selector this browser does not know matches nothing */ }
+  }
+  return false;
+}
+
+/**
+ * Where an element paints within the stacking context `root`, as a rank to
+ * compare (CSS 2.1 Appendix E): child contexts with a negative z-index,
+ * then in-flow content, then positioned content and z-index 0 contexts in
+ * tree order, then positive z-index contexts. A context nested in another
+ * is carried by the outermost, which is the one `root` orders; with no
+ * context between, a positioned box is ordered by itself, so the nearest
+ * positioned ancestor speaks for its in-flow content. Null when the walk
+ * leaves the tree before reaching `root` (a shadow boundary).
+ */
+function paintRank(element, root) {
+  let context = null;
+  let positioned = null;
+  let node = element;
+  for (; node && node !== root; node = node.parentElement) {
+    if (createsStackingContext(node)) context = node;
+    else if (!positioned && getComputedStyle(node).position !== 'static') positioned = node;
+  }
+  if (node !== root) return null;
+  if (context) {
+    // z-index orders only a positioned box or a flex or grid item. A
+    // context made some other way (a transform, say) sits at zero.
+    const style = getComputedStyle(context);
+    const applies = style.zIndex !== 'auto' && (style.position !== 'static'
+      || /flex|grid/.test(getComputedStyle(context.parentElement ?? context).display));
+    const z = applies ? parseInt(style.zIndex, 10) || 0 : 0;
+    return { node: context, layer: z < 0 ? 0 : z > 0 ? 3 : 2, z };
+  }
+  return positioned ? { node: positioned, layer: 2, z: 0 } : { node: null, layer: 1, z: 0 };
+}
+
+/** Is the whole box inside the ancestor's border box, rounded corners
+ *  allowed for? Null radii that cannot be read are taken as not inside. */
+function insideRoundedBox(box, outer, style) {
+  if (box.left < outer.left || box.right > outer.right || box.top < outer.top || box.bottom > outer.bottom) return false;
+  const radius = (css, width) => {
+    const first = (css ?? '').split(' ')[0];
+    const value = parseFloat(first);
+    if (!Number.isFinite(value)) return null;
+    return first.endsWith('%') ? (value / 100) * width : value;
+  };
+  const corners = [
+    [style.borderTopLeftRadius, box.left - outer.left, box.top - outer.top],
+    [style.borderTopRightRadius, outer.right - box.right, box.top - outer.top],
+    [style.borderBottomLeftRadius, box.left - outer.left, outer.bottom - box.bottom],
+    [style.borderBottomRightRadius, outer.right - box.right, outer.bottom - box.bottom],
+  ];
+  for (const [css, dx, dy] of corners) {
+    const r = radius(css, outer.width);
+    if (r === null) return false;
+    // The box's corner lies in this corner's square and outside its arc.
+    if (dx < r && dy < r && (r - dx) ** 2 + (r - dy) ** 2 > r ** 2) return false;
+  }
+  return true;
+}
+
+/**
+ * Can this media not be the text's backdrop, because an opaque ancestor of
+ * the text provably paints over it? Hit-test-blind media (pointer-events:
+ * none) sharing the text's space is a hazard the browser cannot be asked
+ * about, and the rule abstains on it. But a solid card laid over a
+ * decorative graphic in a z-index -1 layer sent every line of the card to a
+ * person (a consultancy's landing page, fifteen reviews that all pass by
+ * eye, 2026-09-21). Two facts of CSS paint order settle it:
+ *   - an ancestor that creates a stacking context paints as one unit, its
+ *     background first and its descendants over it, so nothing from
+ *     outside can come between that background and the text;
+ *   - media outside that ancestor is then wholly over it or wholly under
+ *     it, and which is read from their ranks in the lowest stacking
+ *     context they share.
+ * Under it, and with the ancestor's background opaque, unclipped, at full
+ * opacity, unblended and covering the text's box, the media cannot show
+ * behind the text. Everything else (media inside the ancestor, an order
+ * that comes down to in-flow interleaving, the top layer, a shadow
+ * boundary, a radius that cannot be read) is left unproven, and the rule
+ * abstains as before.
+ */
+export function beneathOpaqueAncestor(element, media) {
+  if (inTopLayer(element) || inTopLayer(media)) return false;
+  const box = element.getBoundingClientRect();
+  for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.contains(media)) return false; // from here up the media is inside
+    if (!createsStackingContext(ancestor)) continue;
+    const style = getComputedStyle(ancestor);
+    const color = parseColor(style.backgroundColor);
+    if (!color || color.a < 1) continue;
+    if (cumulativeOpacity(ancestor) < 1) continue;
+    if (style.mixBlendMode !== 'normal') continue;
+    if ((style.clipPath && style.clipPath !== 'none')
+      || [style.maskImage, style.webkitMaskImage].some((mask) => mask && mask !== 'none')) continue;
+    if (!/^(border-box|padding-box)$/.test(style.backgroundClip)) continue;
+    if (!insideRoundedBox(box, ancestor.getBoundingClientRect(), style)) continue;
+    // The lowest stacking context holding both.
+    let shared = ancestor.parentElement;
+    while (shared && !(createsStackingContext(shared) && shared.contains(media))) shared = shared.parentElement;
+    if (!shared) return false;
+    const over = paintRank(ancestor, shared);
+    const under = paintRank(media, shared);
+    if (!over || !under || !over.node || over.node === under.node) return false;
+    if (under.layer !== over.layer) return under.layer < over.layer;
+    if (under.layer === 1) return false; // both in flow: interleaving, unproven
+    if (under.z !== over.z) return under.z < over.z;
+    // Same layer and z-index: tree order, earlier paints first.
+    return Boolean(under.node.compareDocumentPosition(over.node) & 4 /* FOLLOWING */)
+      && !under.node.contains(over.node);
+  }
+  return false;
 }
 
 /**

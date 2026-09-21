@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers } from '../../lib/contrast.js';
+  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -1257,10 +1257,13 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
       const box = element.getBoundingClientRect();
       const near = (r) => Math.min(box.right, r.right) - Math.max(box.left, r.left) >= 3
         && Math.min(box.bottom, r.bottom) - Math.max(box.top, r.top) >= 3;
+      // Asked last, and only of media that would otherwise send this text
+      // to a person: can paint order prove an opaque ancestor lies over it?
       const overMedia = mediaRects(doc).some(({ element: media, rect: mediaRect, hitTestBlind }) =>
         (!blindOnly || hitTestBlind) && near(mediaRect)
         && !media.contains(element) && !element.contains(media)
-        && textIntersects(element, mediaRect));
+        && textIntersects(element, mediaRect)
+        && !beneathOpaqueAncestor(element, media));
       if (overMedia) {
         return {
           status: 'incomplete',
