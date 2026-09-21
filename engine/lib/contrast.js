@@ -143,6 +143,7 @@ let firstLineRulesCache = new WeakMap();
 let chainEffectCache = new WeakMap();
 let uncoveredEffectCache = new WeakMap();
 let blendBackdropCache = new WeakMap();
+let labelReferrersCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -157,6 +158,34 @@ export function resetAuditCaches() {
   chainEffectCache = new WeakMap();
   uncoveredEffectCache = new WeakMap();
   blendBackdropCache = new WeakMap();
+  labelReferrersCache = new WeakMap();
+}
+
+/**
+ * Who names themselves from each id through aria-labelledby, per root
+ * (document or shadow root): how many of the referrers are inactive widgets
+ * and how many are anything else. Counted once per audit, because the
+ * contrast rule asks for every element with text of its own and a query
+ * over the whole page for each would make that walk quadratic. `isInactive`
+ * is the rule's own reading of a switched-off widget, so this library does
+ * not carry a second one.
+ */
+export function labelReferrers(root, isInactive) {
+  let referrers = labelReferrersCache.get(root);
+  if (!referrers) {
+    referrers = new Map();
+    for (const referrer of root.querySelectorAll('[aria-labelledby]')) {
+      const inactive = isInactive(referrer);
+      for (const id of referrer.getAttribute('aria-labelledby').split(/\s+/)) {
+        if (!id) continue;
+        const count = referrers.get(id) ?? { inactive: 0, other: 0 };
+        count[inactive ? 'inactive' : 'other'] += 1;
+        referrers.set(id, count);
+      }
+    }
+    labelReferrersCache.set(root, referrers);
+  }
+  return referrers;
 }
 
 const flatParentOf = (node) => node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host ?? null;
@@ -778,6 +807,21 @@ function pseudoLayers(host) {
       continue;
     }
     if (rect.empty) continue; // placed, and covers nothing
+    // A mask or a clip-path cuts the box down to a shape, and how much of
+    // the box that shape leaves is not computed here. The box covering the
+    // text then proves nothing about the paint doing so: a struck-through
+    // price drawn as a text-sized red ::after masked to one diagonal stroke
+    // was read as black text on red, 3.21:1, where the pixels are black on
+    // white at 18.88:1 (twelve false failures on one retailer's home page,
+    // 2026-09-21). Where the box misses the text it still paints nothing
+    // there, so the rect is kept, and the walk turns the layer into a film
+    // only when it covers the sample point.
+    const mask = style.maskImage || style.webkitMaskImage;
+    if ((mask && mask !== 'none') || (style.clipPath && style.clipPath !== 'none')) {
+      const alphaBound = Math.min(1, opacityFactor * (style.backgroundImage !== 'none' ? 1 : color.a));
+      if (alphaBound > 0) layers.push({ rect, shaped: alphaBound });
+      continue;
+    }
     let layerColor = color;
     if (layerColor && opacityFactor < 1) layerColor = { ...layerColor, a: layerColor.a * opacityFactor };
     // Gradient and image paint rides along as CSS so callers can sample it,
@@ -829,6 +873,7 @@ export function pseudoBackdropForText(element) {
   let image = null;
   let settled = false; // an opaque colour or an image hit: deeper layers are covered
   let film = 0;
+  let shaped = false; // some of that film is a masked or clipped box over the text
   // Paint (an opaque background-color or a background-image) on an element
   // BETWEEN the text and a pseudo's host makes the pseudo's place in the
   // stack unprovable from here: CSS paint order can put an out-of-flow
@@ -859,6 +904,15 @@ export function pseudoBackdropForText(element) {
       if (settled) continue;
       const { rect, color, imageCss } = layer;
       if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) continue;
+      // A masked or clipped box over the text: paint of unknown extent,
+      // bounded by its alpha like any other film. It is placed, so opaque
+      // paint nearer the text says nothing about it and `crossed` is not
+      // consulted.
+      if (layer.shaped) {
+        film = 1 - (1 - film) * (1 - layer.shaped);
+        shaped = true;
+        continue;
+      }
       // Gradient/image paint is bracketable by sampling, so hand it to the
       // caller rather than giving up on the whole element. The pseudo's box
       // and image geometry travel with it: covering the sample point is a
@@ -884,9 +938,10 @@ export function pseudoBackdropForText(element) {
         || (parseColor(style.backgroundColor)?.a ?? 0) >= 1) crossed = true;
     }
   }
-  if (image) return { image, ...(film > 0 && { film }), ...(beyondPaint && { beyondPaint }) };
-  if (acc) return { color: acc, ...(film > 0 && { film }), ...(beyondPaint && { beyondPaint }) };
-  return film > 0 ? { film } : null;
+  const filmed = film > 0 && { film, ...(shaped && { shaped }) };
+  if (image) return { image, ...filmed, ...(beyondPaint && { beyondPaint }) };
+  if (acc) return { color: acc, ...filmed, ...(beyondPaint && { beyondPaint }) };
+  return filmed || null;
 }
 
 /**

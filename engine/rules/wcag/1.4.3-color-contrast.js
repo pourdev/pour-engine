@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop } from '../../lib/contrast.js';
+  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -72,6 +72,116 @@ function inactiveComponentText(element) {
   }
   const ariaDisabled = element.closest('[aria-disabled="true"]');
   return Boolean(ariaDisabled && ariaDisabled.matches(ARIA_DISABLED_HOSTS));
+}
+
+/** A widget switched off: natively disabled, which :disabled sees through
+ *  an ancestor <fieldset disabled> where .disabled does not, or
+ *  aria-disabled="true" on a role that honours it. Groups are left out: a
+ *  disabled fieldset keeps its first legend active (above), and a caption
+ *  it takes through aria-labelledby is read the same way. */
+function inactiveWidget(widget) {
+  if (widget.matches('fieldset, optgroup, [role="group"], [role="toolbar"], [role="application"]')) return false;
+  if (widget.matches(':disabled')) return true;
+  const ariaDisabled = widget.closest('[aria-disabled="true"]');
+  return Boolean(ariaDisabled && ariaDisabled.matches(ARIA_DISABLED_HOSTS));
+}
+
+/** What a label does not hold: blocks of content, or controls of its own. */
+const MORE_THAN_A_LABEL = 'p, div, ul, ol, dl, table, section, article, aside, nav, header, footer, form, '
+  + 'h1, h2, h3, h4, h5, h6, a[href], button, input, select, textarea';
+
+/**
+ * Is this text the label of an inactive control? The browser greys
+ * <label>My name <input disabled></label> as one unit, and that unit is
+ * what the glossary calls a user interface component: "a part of the
+ * content that is perceived by users as a single control for a distinct
+ * function". So the label is "part of an inactive user interface
+ * component" with its control. ACT afw4f7 and 09o5cg say so in their
+ * applicability, which leaves out text whose ancestor "is used in the
+ * accessible name of an inheriting semantic widget that is disabled"
+ * (engine repository issue #5, reported with the fixtures by Jeff Witt).
+ *
+ * A label reaches its widget two ways: the <label> element's own
+ * association, and aria-labelledby on the widget. Both are held to the
+ * same two limits, because the exemption is for a label and nothing wider:
+ *   - every widget that takes its name from this element is inactive. A
+ *     caption shared by a disabled field and a live one still labels the
+ *     live one, and a heading that also names a region is still a heading.
+ *   - a referenced ancestor must be label-sized. aria-labelledby aimed at a
+ *     whole card does not make the card's paragraphs part of the control.
+ * Text inside the widget itself is inactiveComponentText's, above.
+ */
+function labelsInactiveComponent(element) {
+  const referrers = labelReferrers(element.getRootNode(), inactiveWidget);
+  const sharedWithLive = (node) => Boolean(node.id && referrers.get(node.id)?.other);
+  const label = element.closest('label');
+  if (label?.control && inactiveWidget(label.control) && !sharedWithLive(label)) return true;
+  if (!referrers.size) return false;
+  for (let node = element; node; node = node.parentElement) {
+    const count = node.id && referrers.get(node.id);
+    if (!count || !count.inactive || count.other) continue;
+    if (node === element || !node.querySelector(MORE_THAN_A_LABEL)) return true;
+  }
+  return false;
+}
+
+/** User-perceived characters, so a flag or a skin-toned emoji counts as
+ *  one. Falls back to code points where Intl.Segmenter is missing. */
+function graphemes(text) {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map((part) => part.segment);
+  }
+  return [...text];
+}
+
+/** A character the browser draws from a colour font: one whose default
+ *  presentation is emoji, or any emoji asked for in colour with U+FE0F.
+ *  A check mark or a telephone with no selector is drawn as text, in the
+ *  element's colour, and is judged as text. */
+const drawnInColour = (grapheme) => /\p{Emoji_Presentation}/u.test(grapheme)
+  || (grapheme.includes('️') && /\p{Emoji}/u.test(grapheme));
+
+/** The controls a lone glyph stands in as an icon for. */
+const ICON_HOSTS = 'button, a[href], summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"]';
+
+/**
+ * Is this text a glyph and not words? WCAG defines text as characters
+ * "expressing something in human language", and its note on non-text
+ * content names emoticons. Three shapes are provable from the markup, and
+ * no others are taken: punctuation and symbols are part of written
+ * language (a price band in pound signs, the asterisk on a required field,
+ * the prompt in a code sample), so text without a letter in it is still
+ * judged as text.
+ *   - colour emoji only. Beyond the definition, the measurement is void:
+ *     a colour glyph paints its own colours and ignores `color`, so the
+ *     ratio describes paint that is not there.
+ *   - private-use characters only: an icon-font glyph. Unicode gives these
+ *     no meaning in any language.
+ *   - a single Latin letter or symbol that is all a control shows, where
+ *     the author named the control through aria-label or aria-labelledby
+ *     and the name does not contain the character. The X in <button
+ *     aria-label="Close">X</button> is a drawn cross, and the author's own
+ *     name for it is the evidence (ACT afw4f7 Passed Example 7). A letter
+ *     from another script is left alone: one CJK character is a word.
+ * Returns what the glyph is, and whether it is the whole face of a
+ * control, which decides what it owes under 1.4.11 (see the wrapper).
+ */
+function glyphNotWords(element, text, accessibleName) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const parts = graphemes(trimmed).filter((part) => /\S/.test(part));
+  if (parts.every(drawnInColour)) return { emoji: true, what: 'this text is emoji, which the browser draws in its own colours whatever the text colour is' };
+  const host = element.closest(ICON_HOSTS);
+  const faceOfControl = Boolean(host && host.textContent.trim() === trimmed);
+  if (/^[\p{Co}\s]+$/u.test(trimmed)) {
+    return { faceOfControl, what: 'this text is an icon-font glyph (a private-use character), not words' };
+  }
+  if (parts.length !== 1 || !faceOfControl) return null;
+  if (!/^(\p{Script=Latin}|[^\p{L}\p{N}])/u.test(trimmed)) return null;
+  if (!host.hasAttribute('aria-label') && !host.hasAttribute('aria-labelledby')) return null;
+  const name = accessibleName(host);
+  if (!name || name.toLowerCase().includes(trimmed.toLowerCase())) return null;
+  return { faceOfControl, what: `the single character "${trimmed}" stands in for an icon: the ${host.tagName.toLowerCase()} is named "${name}", which does not contain it` };
 }
 
 /** A control the keyboard cannot reach either: with pointer-events: none
@@ -516,8 +626,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   async evaluate(element, { ownText }) {
     if (!ownText(element)) return { status: 'pass' }; // no text of its own to judge
 
-    // The criterion exempts "inactive user interface components".
-    if (inactiveComponentText(element)) return { status: 'pass' };
+    // The criterion exempts "inactive user interface components": the text
+    // inside one, and the label that is greyed out with it.
+    if (inactiveComponentText(element) || labelsInactiveComponent(element)) return { status: 'pass' };
 
     // A shadow HOST's own text renders through its shadow tree: when a
     // <slot> projects it, the text inherits styles from the slot's
@@ -974,7 +1085,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
     }
     const filmIncomplete = {
       status: 'incomplete',
-      message: 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
+      message: pseudoResolved?.shaped
+        ? 'A pseudo-element with its own background covers this text, but a mask or clip-path cuts it down to a shape, so how much of it paints over or behind the text can\'t be computed. Check the contrast by eye.'
+        : 'A pseudo-element with its own background paints in this element\'s chain, but its position can\'t be computed — so whether it sits behind this text is unknown. Check the contrast by eye.',
     };
     // Sampled pixels, veils and text-shadow halos can't be film-bracketed
     // (the film may sit between the sample and the glyphs): those verdicts
@@ -1388,7 +1501,30 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
   const judge = rule.evaluate.bind(rule);
   rule.evaluate = async (element, helpers) => {
     const verdict = await judge(element, helpers);
-    if (verdict.status === 'fail' && element.closest('[aria-hidden="true"]')) {
+    if (verdict.status !== 'fail') return verdict;
+    // A miss on a glyph that is not words: see glyphNotWords. Every fail
+    // path passes through here, so this is said once. A glyph still owes
+    // 3:1 under 1.4.11 when it is needed to identify a control, so one that
+    // is the whole face of a control and measures under 3:1 fails whichever
+    // criterion it is read under, and keeps its failure. Anything else is a
+    // question of which criterion applies, and goes to a person. Emoji
+    // always does, its ratio being a number for paint that is not there.
+    const glyph = glyphNotWords(element, helpers.ownText(element), helpers.accessibleName);
+    if (glyph) {
+      const ratio = verdict.data?.ratio;
+      if (!glyph.emoji && glyph.faceOfControl && ratio < 3) {
+        verdict.message += ' Read as an icon and not as text, it still falls short: 1.4.11 asks 3:1 of what identifies a control.';
+      }
+      else {
+        return {
+          status: 'incomplete',
+          message: glyph.emoji
+            ? `The text colour misses the contrast minimum, but ${glyph.what}, so that ratio does not describe what is seen. If the emoji carries meaning, judge it by eye against 1.4.11 non-text contrast (3:1).`
+            : `Contrast is ${ratio ? `${ratio}:1, below the ${verdict.data.required}:1 minimum for text` : 'below the minimum for text'}, but ${glyph.what}. 1.4.3 covers text in a human language; a glyph that works as a graphic is judged under 1.4.11 non-text contrast (3:1) where it is needed to understand the content. Decide by eye which this is.`,
+        };
+      }
+    }
+    if (element.closest('[aria-hidden="true"]')) {
       verdict.message += ' aria-hidden hides this from screen readers, not from sighted users; contrast is judged for the people who see it.';
     }
     return verdict;
