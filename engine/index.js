@@ -4,6 +4,7 @@
 import config from '../config/project.config.js';
 import rules from './rules/index.js';
 import wcagCatalog from './wcag22.js';
+import { ruleMatchesTags, tierFromTags, manualReviewChecklist, requirementsForRule, standardFor } from './wcag3.js';
 import { isVisible, isRendered, cssPath, htmlSnippet, ownText, collectRoots, resetDOMCaches, releaseDOMCaches } from './lib/dom.js';
 import { accessibleName } from './lib/accessible-name.js';
 import { resetAuditCaches } from './lib/contrast.js';
@@ -12,12 +13,6 @@ export const name = config.engine.name;
 export const version = config.engine.version;
 
 const ruleHelpers = { isVisible, isRendered, cssPath, htmlSnippet, ownText, accessibleName };
-
-/** Does this rule match the requested tag selection? Empty/absent = all rules. */
-function ruleMatchesTags(rule, tags) {
-  if (!tags?.length) return true;
-  return rule.tags.some((tag) => tags.includes(tag));
-}
 
 /** Which WCAG version/level was requested, judged from the selected tags. */
 function scopeFromTags(tags) {
@@ -87,7 +82,11 @@ function toResultNode(element, outcome) {
  * @param {Document|Element} context - what to scan
  * @param {{ tags?: string[], exclude?: string, signal?: AbortSignal }} options -
  *   rule selection by tag (wcag2a…wcag22aa, best-practice), empty selects
- *   every rule; exclude is a CSS selector — elements matching it, or inside
+ *   every rule; a WCAG 3 tier tag (wcag3-bronze, -silver, -gold) selects
+ *   the rules mapped to that tier's draft requirements and reframes the
+ *   report against the WCAG 3.0 Working Draft: results.standard is
+ *   stamped draft, the manual checklist becomes the tier's provisions,
+ *   and each rule result carries the requirements it maps to (wcag3); exclude is a CSS selector — elements matching it, or inside
  *   a match (including across shadow boundaries), are left out of every
  *   rule; signal aborts the run between rules (throws AbortError)
  * @param {(progress: object) => void} [onProgress] - called before each rule
@@ -98,15 +97,17 @@ function toResultNode(element, outcome) {
  */
 export async function run(context = document, options = {}, onProgress) {
   const auditStarted = performance.now();
+  const tier = tierFromTags(options.tags);
   const results = {
     testEngine: { name, version },
     timestamp: new Date().toISOString(),
     url: context.location?.href ?? context.ownerDocument?.location?.href ?? '',
+    standard: tier ? standardFor(tier) : null,
     violations: [],
     passes: [],
     incomplete: [],
     inapplicable: [],
-    manualReview: manualReviewCriteria(options.tags),
+    manualReview: tier ? manualReviewChecklist(tier) : manualReviewCriteria(options.tags),
     ruleTimings: [],
   };
 
@@ -251,6 +252,9 @@ export async function run(context = document, options = {}, onProgress) {
       description: rule.help,
       helpUrl: rule.helpUrl,
     };
+    // In a WCAG 3 audit, the draft requirements this rule speaks to (empty
+    // for a best-practice rule, which maps to none).
+    if (tier) ruleResult.wcag3 = requirementsForRule(rule.id);
     if (!elements.length) results.inapplicable.push({ ...ruleResult, nodes: [] });
     if (buckets.fail.length) results.violations.push({ ...ruleResult, nodes: buckets.fail });
     if (buckets.incomplete.length) results.incomplete.push({ ...ruleResult, nodes: buckets.incomplete });

@@ -1,5 +1,5 @@
 // WCAG SC 1.4.1 Use of Color (Level A)
-import { parseColor, contrastRatio, composite, effectiveBackground, backgroundImageSource } from '../../lib/contrast.js';
+import { parseColor, contrastRatio, composite, effectiveBackground, backgroundImageSource, asRgb } from '../../lib/contrast.js';
 
 // Split a computed list value ("a, b(c, d), e") on the commas OUTSIDE
 // parentheses: gradients and colour functions carry commas of their own.
@@ -274,6 +274,17 @@ export default {
     // WCAG technique G183: 3:1 against the surrounding text is a sufficient
     // colour difference for identifying a link.
     if (ratio >= 3) return { status: 'pass' };
+    // The pair the ratio was taken from, for the highlight card and the
+    // checker link: the link's colour and the prose's, as judged (composited
+    // where translucent), plus the background where it is a known solid.
+    const backdrop = effectiveBackground(parent);
+    const data = {
+      link: asRgb(linkColor),
+      surrounding: asRgb(textColor),
+      ...(backdrop && (backdrop.a ?? 1) === 1 ? { background: asRgb(backdrop) } : {}),
+      ratio: Number(ratio.toFixed(2)),
+      required: 3,
+    };
 
     // 2026-08-25 overnight audit: text-decoration propagates from an
     // ancestor to its inline descendants and a descendant's "none" cannot
@@ -371,6 +382,7 @@ export default {
         ? 'This link has no underline and its colour differs from the surrounding text in hue alone, with no luminance difference: the distinction disappears entirely without colour vision, the exact failure F73 describes.'
         : `This link has no underline and only ${shown}:1 colour difference from the surrounding text, below the 3:1 WCAG technique G183 asks for when colour is the only thing marking a link.`,
       fix: 'Underline links inside text (text-decoration: underline), or add a non-colour indicator.',
+      data,
     };
   },
 };

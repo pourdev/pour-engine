@@ -577,7 +577,7 @@ async function sampledVerdict(source, foreground, required, doc, overlays = [], 
  * 1.4.3 Contrast (Minimum), AA — 4.5:1, or 3:1 for large text
  * 1.4.6 Contrast (Enhanced), AAA — 7:1, or 4.5:1 for large text
  */
-export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
+export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }) {
   // When the colour pair already clears the LARGE-scale minimum, the miss
   // is about scale, not colour: name the boundary (14pt bold / 18pt, bold
   // meaning BOLD_WEIGHT and up), or
@@ -608,6 +608,9 @@ export function createContrastRule({ id, tags, help, helpUrl, thresholds }) {
 
   const rule = {
   id,
+  // The display name both callers pass: dropped here until 2026-09-21, so
+  // the UI titled these two rules by their ids.
+  name,
   impact: 'serious',
   tags,
   help,

@@ -111,6 +111,21 @@ pour engine therefore reports on **every** in-scope criterion, one of two ways:
    in-scope criteria (filtered by the requested WCAG version and level)
    that automation can't judge, for a host to render however it wants.
 
+### WCAG 3 Working Draft
+
+A tier tag, `wcag3-bronze`, `wcag3-silver` or `wcag3-gold`, reports against
+the WCAG 3.0 Working Draft of 10 September 2026 instead (`wcag3.js`). The
+rules are still WCAG 2 rules: each is matched, by reading both documents,
+to the draft requirement its failure also fails, and a rule with no such
+requirement does not run (`UNMAPPED_RULES` gives each reason). Where the
+draft leaves a value to be determined, text contrast among them, the
+rule's WCAG 2 value stands in. `results.standard` is stamped draft,
+`manualReview` becomes the tier's provisions, and each rule result carries
+`wcag3`. The draft's tiers build on conformance and leave their counts to
+be decided, so pour reads them as: Bronze, the core requirements and the
+content assertions; Silver, plus every supplemental requirement; Gold,
+plus the assertions about the organization. WCAG 2 stays the default.
+
 The checklist accounts for the criteria; it does not mean every page state
 or possible failure has been tested. A snapshot audit still needs human
 assessment, including interaction states and any checks reported as skipped.
