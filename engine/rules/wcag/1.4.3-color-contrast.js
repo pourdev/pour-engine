@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor } from '../../lib/contrast.js';
+  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor, lazyWithheldBackground } from '../../lib/contrast.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -1508,6 +1508,16 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
   rule.evaluate = async (element, helpers) => {
     const verdict = await judge(element, helpers);
     if (verdict.status !== 'fail') return verdict;
+    // The background this was measured against is a placeholder: the page
+    // holds its background image back until a lazy loader marks it loaded,
+    // which happens before the visitor scrolls it into view. A failure has
+    // to be shown against the paint the visitor sees.
+    if (lazyWithheldBackground(element)) {
+      return {
+        status: 'incomplete',
+        message: 'This text sits in a section whose background image is lazy-loaded and has not loaded yet, so it was measured against a background visitors never see. Scroll the page to this text and run the audit again, or check it by eye.',
+      };
+    }
     // A miss on a glyph that is not words: see glyphNotWords. Every fail
     // path passes through here, so this is said once. A glyph still owes
     // 3:1 under 1.4.11 when it is needed to identify a control, so one that

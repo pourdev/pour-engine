@@ -145,6 +145,7 @@ let uncoveredEffectCache = new WeakMap();
 let blendBackdropCache = new WeakMap();
 let labelReferrersCache = new WeakMap();
 let stackingContextCache = new WeakMap();
+let backgroundRulesCache = new WeakMap();
 const HAS_IMAGE = Symbol('background-image in chain');
 
 export function resetAuditCaches() {
@@ -161,6 +162,7 @@ export function resetAuditCaches() {
   blendBackdropCache = new WeakMap();
   labelReferrersCache = new WeakMap();
   stackingContextCache = new WeakMap();
+  backgroundRulesCache = new WeakMap();
 }
 
 /**
@@ -981,6 +983,14 @@ export function filmedContrastBounds(foreground, background, film) {
   };
 }
 
+/** A layer's own opacity. 0 is a real value, not a missing one: consent
+ *  dimmers commonly fade to opacity 0 and stay in the DOM once dismissed
+ *  (CSS Color 4, the opacity property: 0 is fully transparent). */
+const opacityOf = (style) => {
+  const opacity = parseFloat(style.opacity);
+  return Number.isNaN(opacity) ? 1 : opacity;
+};
+
 /** A layer qualifies as a scrim over `element` when it is translucent paint
  *  (or a backdrop-filter) covering most of the viewport and the whole
  *  element — the shape of a modal/loading veil, not a badge or header.
@@ -994,7 +1004,7 @@ function scrimIn(layersAbove, element, win) {
     if (layer.contains(element) || element.contains(layer)) continue;
     const style = getComputedStyle(layer);
     const color = parseColor(style.backgroundColor);
-    const alpha = (color ? color.a : 0) * (parseFloat(style.opacity) || 1);
+    const alpha = (color ? color.a : 0) * opacityOf(style);
     const hasBackdropFilter = style.backdropFilter && style.backdropFilter !== 'none';
     // Fully opaque covers simply hide the text (nothing to judge through);
     // near-invisible tints don't meaningfully change presented contrast.
@@ -1027,7 +1037,7 @@ export function scrimPaint(layers) {
     if (style.backgroundImage !== 'none') return null;
     const color = parseColor(style.backgroundColor);
     if (!color) return null;
-    const alpha = color.a * (parseFloat(style.opacity) || 1);
+    const alpha = color.a * opacityOf(style);
     if (alpha <= 0) continue;
     paints.push({ ...color, a: alpha });
   }
@@ -1179,7 +1189,7 @@ export function opaquePanelRects(doc) {
         // hazard that scrolling cannot escape.
         if (!panelRectsCache.veil && (style.position === 'fixed' || style.position === 'sticky')
           && style.visibility !== 'hidden') {
-          const alpha = (color ? color.a : 0) * (parseFloat(style.opacity) || 1);
+          const alpha = (color ? color.a : 0) * opacityOf(style);
           const hasBackdropFilter = style.backdropFilter && style.backdropFilter !== 'none';
           const coversViewport = rect.width >= 0.9 * win.innerWidth && rect.height >= 0.9 * win.innerHeight;
           if (coversViewport && (hasBackdropFilter || (alpha >= 0.15 && alpha < 1))) {
@@ -1986,6 +1996,71 @@ function rootHasFirstLineRules(root) {
   }
   firstLineRulesCache.set(root, has);
   return has;
+}
+
+/**
+ * The stylesheet rules behind lazy-loaded backgrounds, per root per audit:
+ * `gates` hold background images back until a loader marks the element
+ * loaded (`background-image: none` on a selector that excludes a lazy-load
+ * class, as in `.section:not(.lazyloaded) { background-image: none }`), and
+ * `images` give an element a background image of its own. Rules under a
+ * media or support condition count only while it holds; an unreadable
+ * cross-origin sheet contributes nothing.
+ */
+const LAZY_EXCLUSION = /:not\(\s*\.[\w-]*lazy[\w-]*\s*\)/i;
+const PAINTS_IMAGE = /url\(|gradient\(|image-set\(|var\(/i;
+function backgroundRules(root) {
+  let found = backgroundRulesCache.get(root);
+  if (found) return found;
+  found = { gates: [], images: [] };
+  const win = (root.ownerDocument ?? root).defaultView;
+  const scan = (rules) => {
+    for (const rule of rules) {
+      if (rule.styleSheet) {
+        if (rule.media?.mediaText && !win.matchMedia(rule.media.mediaText).matches) continue;
+        try { scan(rule.styleSheet.cssRules); } catch { /* unreadable import */ }
+        continue;
+      }
+      if (rule.media) {
+        if (!win.matchMedia(rule.media.mediaText).matches) continue;
+      } else if (win.CSSSupportsRule && rule instanceof win.CSSSupportsRule) {
+        if (!win.CSS.supports(rule.conditionText)) continue;
+      }
+      if (rule.selectorText && rule.style) {
+        const image = rule.style.getPropertyValue('background-image').trim();
+        if (image === 'none' && LAZY_EXCLUSION.test(rule.selectorText)) found.gates.push(rule.selectorText);
+        else if (PAINTS_IMAGE.test(image || rule.style.getPropertyValue('background'))) found.images.push(rule.selectorText);
+      }
+      if (rule.cssRules) scan(rule.cssRules);
+    }
+  };
+  for (const sheet of [...(root.styleSheets ?? []), ...(root.adoptedStyleSheets ?? [])]) {
+    try { scan(sheet.cssRules); } catch { /* cross-origin */ }
+  }
+  backgroundRulesCache.set(root, found);
+  return found;
+}
+
+const matchesAny = (node, selectors) => selectors.some((selector) => {
+  try { return node.matches(selector); } catch { return false; }
+});
+
+/**
+ * Is the background behind this text still to be lazy-loaded? True when an
+ * element on its chain is given a background image by the page's styles, a
+ * lazy-load gate matches it, and it computes no background image now. Page
+ * builders defer section backgrounds this way until the section nears the
+ * viewport, so text the visitor has not scrolled to yet is measured against
+ * a placeholder they never see: the loader restores the image first.
+ */
+export function lazyWithheldBackground(element) {
+  for (let node = element; node?.nodeType === 1; node = flatParentOf(node)) {
+    const { gates, images } = backgroundRules(node.getRootNode());
+    if (!gates.length || !matchesAny(node, gates)) continue;
+    if (getComputedStyle(node).backgroundImage !== 'none') continue;
+    if (PAINTS_IMAGE.test(node.style?.backgroundImage ?? '') || matchesAny(node, images)) return true;
+  }
+  return false;
 }
 
 /**
