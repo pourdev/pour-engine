@@ -4,7 +4,7 @@
 import config from '../config/project.config.js';
 import rules from './rules/index.js';
 import wcagCatalog from './wcag22.js';
-import { ruleMatchesTags, tierFromTags, manualReviewChecklist, requirementsForRule, standardFor } from './wcag3.js';
+import { ruleMatchesTags, checkSetFromTags, manualReviewChecklist, requirementsForRule, standardFor } from './wcag3.js';
 import { isVisible, isRendered, cssPath, htmlSnippet, ownText, collectRoots, resetDOMCaches, releaseDOMCaches } from './lib/dom.js';
 import { accessibleName } from './lib/accessible-name.js';
 import { resetAuditCaches } from './lib/contrast.js';
@@ -82,10 +82,11 @@ function toResultNode(element, outcome) {
  * @param {Document|Element} context - what to scan
  * @param {{ tags?: string[], exclude?: string, signal?: AbortSignal }} options -
  *   rule selection by tag (wcag2a…wcag22aa, best-practice), empty selects
- *   every rule; a WCAG 3 tier tag (wcag3-bronze, -silver, -gold) selects
- *   the rules mapped to that tier's draft requirements and reframes the
- *   report against the WCAG 3.0 Working Draft: results.standard is
- *   stamped draft, the manual checklist becomes the tier's provisions,
+ *   every rule; a WCAG 3 check set tag (wcag3-core, wcag3-supplemental)
+ *   selects the rules matched to that set's draft requirements and
+ *   reframes the report against the WCAG 3.0 Working Draft:
+ *   results.standard is stamped draft, the manual checklist becomes the
+ *   set's requirements,
  *   and each rule result carries the requirements it maps to (wcag3); exclude is a CSS selector — elements matching it, or inside
  *   a match (including across shadow boundaries), are left out of every
  *   rule; signal aborts the run between rules (throws AbortError)
@@ -97,17 +98,17 @@ function toResultNode(element, outcome) {
  */
 export async function run(context = document, options = {}, onProgress) {
   const auditStarted = performance.now();
-  const tier = tierFromTags(options.tags);
+  const checkSet = checkSetFromTags(options.tags);
   const results = {
     testEngine: { name, version },
     timestamp: new Date().toISOString(),
     url: context.location?.href ?? context.ownerDocument?.location?.href ?? '',
-    standard: tier ? standardFor(tier) : null,
+    standard: checkSet ? standardFor(checkSet) : null,
     violations: [],
     passes: [],
     incomplete: [],
     inapplicable: [],
-    manualReview: tier ? manualReviewChecklist(tier) : manualReviewCriteria(options.tags),
+    manualReview: checkSet ? manualReviewChecklist(checkSet) : manualReviewCriteria(options.tags),
     ruleTimings: [],
   };
 
@@ -254,7 +255,7 @@ export async function run(context = document, options = {}, onProgress) {
     };
     // In a WCAG 3 audit, the draft requirements this rule speaks to (empty
     // for a best-practice rule, which maps to none).
-    if (tier) ruleResult.wcag3 = requirementsForRule(rule.id);
+    if (checkSet) ruleResult.wcag3 = requirementsForRule(rule.id);
     if (!elements.length) results.inapplicable.push({ ...ruleResult, nodes: [] });
     if (buckets.fail.length) results.violations.push({ ...ruleResult, nodes: buckets.fail });
     if (buckets.incomplete.length) results.incomplete.push({ ...ruleResult, nodes: buckets.incomplete });

@@ -1,8 +1,11 @@
 // WCAG SC 2.4.7 Focus Visible (Level AA)
-// A stylesheet that strips focus outlines without providing a replacement
-// indicator is the classic 2.4.7 failure (F78). Cross-origin sheets are
-// unreadable and skipped; a replacement indicator can live in a different
-// rule entirely — so this flags for review, it never asserts a fail.
+// A stylesheet or style attribute that strips focus outlines without
+// providing a replacement indicator is the classic 2.4.7 failure (F78).
+// Cross-origin sheets are unreadable and skipped; a replacement indicator can
+// live in a different rule entirely — so this flags for review, it never
+// asserts a fail.
+import { isRendered } from '../../lib/dom.js';
+
 // The focus pseudo-classes themselves, and nothing else: :focus-within is a
 // PARENT's state and stripping ":focus" out of it would leave "-within".
 const FOCUS_TOKEN = /:focus(?:-visible)?(?![\w-])/g;
@@ -33,7 +36,8 @@ function focusSuppressors(doc) {
   // human question.
   let sheet = null;
   const inspect = (rule) => {
-    if (!rule.selectorText || !/:focus/.test(rule.selectorText)) return;
+    if (!rule.selectorText) return;
+    if (!/:focus/.test(rule.selectorText)) { inspectResting(rule); return; }
     // `:focus:not(:focus-visible) { outline: none }` is the PUBLISHED pattern
     // for showing the ring to keyboard users only: it strips the indicator
     // precisely in the state where the browser has decided not to show focus,
@@ -65,7 +69,38 @@ function focusSuppressors(doc) {
         provider.order > suspect.order && covered(subject, provider)));
       if (!restored) suspects.push(suspect.selector);
     }
+    allProviders.push(...sheet.providers);
   };
+  // A rule with no focus state in it removes the indicator too: author
+  // styles outrank the browser's own :focus-visible ring whatever their
+  // specificity, so `* { outline: none }` or `a, button { outline: 0 }`
+  // leaves a focused link with no ring (measured in Chromium 2026-09-24).
+  // Such a rule matters only where it reaches something Tab lands on, and a
+  // box-shadow or border in the same rule is not a replacement: it is there
+  // at rest, so it marks nothing when focus arrives.
+  const resting = [];
+  const allProviders = [];
+  const tabbable = (el) => !el.disabled && (el.tabIndex >= 0 || el.isContentEditable) && isRendered(el);
+  const reachesTabbable = (part) => {
+    if (part.includes('::')) return false; // a pseudo-element's outline is not the control's ring
+    try { return [...doc.querySelectorAll(part)].some(tabbable); } catch { return false; }
+  };
+  const inspectResting = (rule) => {
+    const style = rule.style;
+    if (!style || !rule.selectorText) return;
+    const styles = [style, ...[...(rule.cssRules ?? [])]
+      .filter((child) => child.style && !child.selectorText).map((child) => child.style)];
+    if (!styles.map(outlineOf).some(removesOutline)) return;
+    const parts = subjects(rule.selectorText).filter(reachesTabbable);
+    if (parts.length) resting.push({ selector: rule.selectorText, subjects: parts });
+  };
+  // A focus rule outranks a resting one only when its specificity is
+  // higher, which order in the sheet cannot change. `a:focus-visible` always
+  // beats `a`; a bare `:focus-visible` (0,1,0) beats only selectors made of
+  // type names and `*`, and ties or loses to `.btn` or `.nav .btn`.
+  const typeOnly = (subject) => !/[#.[:]/.test(subject);
+  const outranked = (subject) => allProviders.some((provider) => provider.subjects.some((p) =>
+    p === subject || ((p === '' || p === '*') && typeOnly(subject))));
   // Inspect each rule, THEN descend into any children. Testing `rule.cssRules`
   // first and skipping used to walk straight past every plain style rule:
   // since CSS Nesting shipped, a CSSStyleRule carries its own cssRules list,
@@ -83,6 +118,14 @@ function focusSuppressors(doc) {
     sheet = { order: 0, suspects: [], providers: [] };
     try { scan(styleSheet.cssRules); } catch { /* cross-origin sheet */ }
     settle();
+  }
+  for (const suspect of resting) {
+    if (!suspect.subjects.every(outranked)) suspects.push(suspect.selector);
+  }
+  // A style attribute outranks every selector, so no focus rule without
+  // !important gives the ring back to `<a style="outline: none">`.
+  for (const el of doc.querySelectorAll('[style]')) {
+    if (removesOutline(outlineOf(el.style)) && tabbable(el)) suspects.push(`the style attribute of <${el.localName}>`);
   }
   return suspects;
 }
@@ -102,7 +145,7 @@ export default {
     const shown = suspects.slice(0, 3).join(', ');
     return {
       status: 'incomplete',
-      message: `${suspects.length} CSS rule(s) remove the focus outline without setting a replacement in the same rule (e.g. ${shown}) — if no other rule provides a visible indicator, keyboard users lose their place. Tab through the page to check.`,
+      message: `${suspects.length} CSS rule(s) or style attribute(s) remove the focus outline with no replacement found (e.g. ${shown}). If nothing else draws a visible indicator, keyboard users lose their place. Tab through the page to check.`,
     };
   },
 };

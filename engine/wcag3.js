@@ -7,21 +7,18 @@
 // surface that shows it must say so. WCAG 2 stays the default everywhere.
 //
 // The draft replaces success criteria and A/AA/AAA with three kinds of
-// provision under each guideline: core requirements (all must be met to
-// conform), supplemental requirements (beyond conformance) and assertions
-// (documented statements about an organization's practice, which no tool
-// can check). Its Reporting section (4.1.4, Exploratory) lays out tiers
-// that build on conformance: Bronze and Silver add a to-be-decided number
-// of supplemental requirements and content assertions, Gold adds the
-// assertions about the organization. Until the draft fixes those numbers,
-// pour reads the tiers this way, and says so:
-//   Bronze: the core requirements, plus the content assertions to make
-//   Silver: Bronze plus every supplemental requirement
-//   Gold:   Silver plus the assertions about the organization
-//
-// The draft tags each assertion Content or Organization in principle but
-// not yet one by one; an assertion about a style guide, policy or process
-// the organization keeps is read as Organization, any other as Content.
+// provision under each guideline: core requirements, supplemental
+// requirements and assertions (documented statements about how content is
+// made or how an organization works, which no tool can check). To conform
+// (3.2), every core requirement must be met; supplemental requirements and
+// assertions are not needed to conform. The draft's Reporting section (4,
+// Exploratory) puts Bronze, Silver and Gold above conformance, each taking
+// a number of supplemental requirements and assertions still to be
+// decided, so none of them is a set of checks a tool can run. pour offers
+// two check sets instead, and no tier:
+//   core:         the rules matched to core requirements
+//   supplemental: those rules plus the ones matched to supplemental
+//                 requirements
 //
 // No rule here was written for WCAG 3. The rules test WCAG 2 criteria;
 // RULE_REQUIREMENTS names, rule by rule, the draft requirement that a
@@ -41,28 +38,32 @@ export const draftInfo = {
   note: 'An unfinished standard. Findings come from WCAG 2 rules matched to draft requirements, with WCAG 2 values where the draft has none yet. Not for conformance claims.',
 };
 
-export const TIERS = ['bronze', 'silver', 'gold'];
-export const TIER_LABELS = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
-
-// Which provision types each tier takes in. Cumulative, as in the draft.
-const TIER_TYPES = {
-  bronze: new Set(['core', 'content']),
-  silver: new Set(['core', 'content', 'supplemental']),
-  gold: new Set(['core', 'content', 'supplemental', 'organization']),
+// The check sets, cumulative, and the provision types each takes in.
+export const CHECK_SETS = ['core', 'supplemental'];
+const SET_TYPES = {
+  core: new Set(['core']),
+  supplemental: new Set(['core', 'supplemental']),
 };
+const SET_SCOPES = {
+  core: 'core requirements',
+  supplemental: 'core and supplemental requirements',
+};
+// Names the first WCAG 3 draft mode gave these sets, read the way they ran
+// then, so a saved setting, a script or a tag list that still uses one
+// selects the same rules. They are never shown.
+const RENAMED_SETS = { bronze: 'core', silver: 'supplemental', gold: 'supplemental' };
 
 const TYPE_LABELS = {
   core: 'Core',
   supplemental: 'Supplemental',
-  content: 'Assertion',
-  organization: 'Assertion',
+  assertion: 'Assertion',
 };
 
 // Every requirement and assertion of the draft, in document order, under
 // its guideline. The one recommended practice (2.7.2.7) is left out: the
-// draft says recommended practices are not needed to conform or to reach
-// any tier. Guidelines with nothing past Exploratory (2.1.2 Figure
-// captions, 2.12.2 Control text) have no provisions to list.
+// draft says recommended practices are not needed to conform. Guidelines
+// with nothing past Exploratory (2.1.2 Figure captions, 2.12.2 Control
+// text) have no provisions to list.
 const RAW = [
   g('2.1.1', 'Image alternatives'),
   p('2.1.1.1', 'Images detectable', 'core', 'x2-1-1-1-images-detectable'),
@@ -81,9 +82,9 @@ const RAW = [
   p('2.1.4.7', 'Speaker language identified in transcripts', 'supplemental', 'x2-1-4-7-speaker-language-identified-in-transcripts'),
   p('2.1.4.8', 'Sounds identified in transcripts', 'core', 'x2-1-4-8-sounds-identified-in-transcripts'),
   p('2.1.4.9', 'Visual information identified in transcripts', 'core', 'x2-1-4-9-visual-information-identified-in-transcripts'),
-  p('2.1.4.10', 'Transcripts style guide', 'organization', 'x2-1-4-10-transcripts-style-guide'),
-  p('2.1.4.11', 'Transcripts usability testing', 'content', 'x2-1-4-11-transcripts-usability-testing'),
-  p('2.1.4.12', 'Transcripts reviewed by content authors', 'content', 'x2-1-4-12-transcripts-reviewed-by-content-authors'),
+  p('2.1.4.10', 'Transcripts style guide', 'assertion', 'x2-1-4-10-transcripts-style-guide'),
+  p('2.1.4.11', 'Transcripts usability testing', 'assertion', 'x2-1-4-11-transcripts-usability-testing'),
+  p('2.1.4.12', 'Transcripts reviewed by content authors', 'assertion', 'x2-1-4-12-transcripts-reviewed-by-content-authors'),
   g('2.1.5', 'Captions'),
   p('2.1.5.1', 'Captions adjustable', 'supplemental', 'x2-1-5-1-captions-adjustable'),
   p('2.1.5.2', 'Captions available (prerecorded)', 'core', 'x2-1-5-2-captions-available-prerecorded'),
@@ -98,9 +99,9 @@ const RAW = [
   p('2.1.5.11', 'Speakers identified in captions', 'supplemental', 'x2-1-5-11-speakers-identified-in-captions'),
   p('2.1.5.12', 'Speaker language identified in captions', 'supplemental', 'x2-1-5-12-speaker-language-identified-in-captions'),
   p('2.1.5.13', 'Sounds identified in captions', 'core', 'x2-1-5-13-sounds-identified-in-captions'),
-  p('2.1.5.14', 'Captions style guide', 'organization', 'x2-1-5-14-captions-style-guide'),
-  p('2.1.5.15', 'Captions usability testing', 'content', 'x2-1-5-15-captions-usability-testing'),
-  p('2.1.5.16', 'Captions reviewed by content authors', 'content', 'x2-1-5-16-captions-reviewed-by-content-authors'),
+  p('2.1.5.14', 'Captions style guide', 'assertion', 'x2-1-5-14-captions-style-guide'),
+  p('2.1.5.15', 'Captions usability testing', 'assertion', 'x2-1-5-15-captions-usability-testing'),
+  p('2.1.5.16', 'Captions reviewed by content authors', 'assertion', 'x2-1-5-16-captions-reviewed-by-content-authors'),
   g('2.1.6', 'Audio descriptions'),
   p('2.1.6.1', 'Audio descriptions available (prerecorded)', 'core', 'x2-1-6-1-audio-descriptions-available-prerecorded'),
   p('2.1.6.2', 'Audio descriptions equivalent (prerecorded)', 'core', 'x2-1-6-2-audio-descriptions-equivalent-prerecorded'),
@@ -114,13 +115,13 @@ const RAW = [
   p('2.1.6.10', 'Speaker language identified in audio descriptions', 'supplemental', 'x2-1-6-10-speaker-language-identified-in-audio-descriptions'),
   p('2.1.6.11', 'Sounds identified in audio descriptions', 'core', 'x2-1-6-11-sounds-identified-in-audio-descriptions'),
   p('2.1.6.12', 'Visual information identified in audio descriptions', 'core', 'x2-1-6-12-visual-information-identified-in-audio-descriptions'),
-  p('2.1.6.13', 'Audio descriptions style guide', 'organization', 'x2-1-6-13-audio-descriptions-style-guide'),
-  p('2.1.6.14', 'Audio descriptions usability testing', 'content', 'x2-1-6-14-audio-descriptions-usability-testing'),
-  p('2.1.6.15', 'Audio descriptions reviewed by content authors', 'content', 'x2-1-6-15-audio-descriptions-reviewed-by-content-authors'),
+  p('2.1.6.13', 'Audio descriptions style guide', 'assertion', 'x2-1-6-13-audio-descriptions-style-guide'),
+  p('2.1.6.14', 'Audio descriptions usability testing', 'assertion', 'x2-1-6-14-audio-descriptions-usability-testing'),
+  p('2.1.6.15', 'Audio descriptions reviewed by content authors', 'assertion', 'x2-1-6-15-audio-descriptions-reviewed-by-content-authors'),
   g('2.1.7', 'Sign language'),
   p('2.1.7.1', 'Sign language available (prerecorded)', 'supplemental', 'x2-1-7-1-sign-language-available-prerecorded'),
   p('2.1.7.2', 'Sign language controllable', 'supplemental', 'x2-1-7-2-sign-language-controllable'),
-  p('2.1.7.3', 'Sign language policy (live)', 'organization', 'x2-1-7-3-sign-language-policy-live'),
+  p('2.1.7.3', 'Sign language policy (live)', 'assertion', 'x2-1-7-3-sign-language-policy-live'),
   g('2.1.8', 'Single sense'),
   p('2.1.8.1', 'Hue not relied on', 'core', 'x2-1-8-1-hue-not-relied-on'),
   p('2.1.8.2', 'Graphical object contrast sufficient', 'core', 'x2-1-8-2-graphical-object-contrast-sufficient'),
@@ -128,8 +129,8 @@ const RAW = [
   p('2.1.8.4', 'Sound not relied on', 'core', 'x2-1-8-4-sound-not-relied-on'),
   p('2.1.8.5', 'Spatial audio not relied on', 'core', 'x2-1-8-5-spatial-audio-not-relied-on'),
   g('2.1.9', 'Accessible media player'),
-  p('2.1.9.1', 'Accessible video player selected', 'content', 'x2-1-9-1-accessible-video-player-selected'),
-  p('2.1.9.2', 'Accessible audio player selected', 'content', 'x2-1-9-2-accessible-audio-player-selected'),
+  p('2.1.9.1', 'Accessible video player selected', 'assertion', 'x2-1-9-1-accessible-video-player-selected'),
+  p('2.1.9.2', 'Accessible audio player selected', 'assertion', 'x2-1-9-2-accessible-audio-player-selected'),
   g('2.2.1', 'Text appearance'),
   p('2.2.1.1', 'Blocks of text readable (minimum)', 'core', 'x2-2-1-1-blocks-of-text-readable-minimum'),
   p('2.2.1.2', 'Text style readable (minimum)', 'core', 'x2-2-1-2-text-style-readable-minimum'),
@@ -154,13 +155,13 @@ const RAW = [
   p('2.2.3.5', 'Diacritics available', 'core', 'x2-2-3-5-diacritics-available'),
   p('2.2.3.6', 'No nested clauses', 'supplemental', 'x2-2-3-6-no-nested-clauses'),
   p('2.2.3.7', 'No unnecessary words', 'supplemental', 'x2-2-3-7-no-unnecessary-words'),
-  p('2.2.3.8', 'Clear language review', 'organization', 'x2-2-3-8-clear-language-review'),
-  p('2.2.3.9', 'Visual aids review', 'organization', 'x2-2-3-9-visual-aids-review'),
+  p('2.2.3.8', 'Clear language review', 'assertion', 'x2-2-3-8-clear-language-review'),
+  p('2.2.3.9', 'Visual aids review', 'assertion', 'x2-2-3-9-visual-aids-review'),
   g('2.3.1', 'Keyboard focus appearance'),
   p('2.3.1.1', 'Default focus indicator used', 'supplemental', 'x2-3-1-1-default-focus-indicator-used'),
   p('2.3.1.2', 'Focus indicator contrast sufficient', 'core', 'x2-3-1-2-focus-indicator-contrast-sufficient'),
   p('2.3.1.3', 'Focus indicator size sufficient', 'supplemental', 'x2-3-1-3-focus-indicator-size-sufficient'),
-  p('2.3.1.4', 'Focus indicator style guide', 'organization', 'x2-3-1-4-focus-indicator-style-guide'),
+  p('2.3.1.4', 'Focus indicator style guide', 'assertion', 'x2-3-1-4-focus-indicator-style-guide'),
   g('2.3.2', 'Pointer focus appearance'),
   p('2.3.2.1', 'Pointer activation indicated (minimum)', 'core', 'x2-3-2-1-pointer-activation-indicated-minimum'),
   p('2.3.2.2', 'Pointer activation indicated (enhanced)', 'supplemental', 'x2-3-2-2-pointer-activation-indicated-enhanced'),
@@ -174,9 +175,9 @@ const RAW = [
   p('2.3.3.2', 'Focus retained', 'supplemental', 'x2-3-3-2-focus-retained'),
   p('2.3.3.3', 'Focus order meaningful', 'core', 'x2-3-3-3-focus-order-meaningful'),
   g('2.3.4', 'Expected behavior'),
-  p('2.3.4.1', 'Consistent interactions', 'content', 'x2-3-4-1-consistent-interactions'),
+  p('2.3.4.1', 'Consistent interactions', 'assertion', 'x2-3-4-1-consistent-interactions'),
   p('2.3.4.2', 'Consistent control location', 'supplemental', 'x2-3-4-2-consistent-control-location'),
-  p('2.3.4.3', 'Conventional pattern used', 'content', 'x2-3-4-3-conventional-pattern-used'),
+  p('2.3.4.3', 'Conventional pattern used', 'assertion', 'x2-3-4-3-conventional-pattern-used'),
   g('2.3.5', 'Control information'),
   p('2.3.5.1', 'Interactive element contrast sufficient', 'core', 'x2-3-5-1-interactive-element-contrast-sufficient'),
   p('2.3.5.2', 'Interactive element names available', 'core', 'x2-3-5-2-interactive-element-names-available'),
@@ -197,7 +198,7 @@ const RAW = [
   g('2.4.2', 'Physical or cognitive effort when using keyboard'),
   p('2.4.2.1', 'Navigation keys described', 'supplemental', 'x2-4-2-1-navigation-keys-described'),
   p('2.4.2.2', 'No repetitive adjacent interactive elements', 'supplemental', 'x2-4-2-2-no-repetitive-adjacent-interactive-elements'),
-  p('2.4.2.3', 'Keyboard effort comparable', 'content', 'x2-4-2-3-keyboard-effort-comparable'),
+  p('2.4.2.3', 'Keyboard effort comparable', 'assertion', 'x2-4-2-3-keyboard-effort-comparable'),
   g('2.4.3', 'Pointer input'),
   p('2.4.3.1', 'Pointer activation controllable', 'core', 'x2-4-3-1-pointer-activation-controllable'),
   p('2.4.3.2', 'Simple pointer input available', 'core', 'x2-4-3-2-simple-pointer-input-available'),
@@ -207,7 +208,7 @@ const RAW = [
   g('2.4.4', 'Speech and voice input'),
   p('2.4.4.1', 'Speech not relied on', 'core', 'x2-4-4-1-speech-not-relied-on'),
   p('2.4.4.2', 'Real-time text available', 'core', 'x2-4-4-2-real-time-text-available'),
-  p('2.4.4.3', 'Generated speech testing', 'content', 'x2-4-4-3-generated-speech-testing'),
+  p('2.4.4.3', 'Generated speech testing', 'assertion', 'x2-4-4-3-generated-speech-testing'),
   g('2.4.5', 'Input operation'),
   p('2.4.5.1', 'Hover or focus content dismissible', 'core', 'x2-4-5-1-hover-or-focus-content-dismissible'),
   p('2.4.5.2', 'Hover content persistent', 'core', 'x2-4-5-2-hover-content-persistent'),
@@ -231,7 +232,7 @@ const RAW = [
   p('2.5.2.1', 'Errors preventable', 'core', 'x2-5-2-1-errors-preventable'),
   p('2.5.2.2', 'Submission status notified', 'supplemental', 'x2-5-2-2-submission-status-notified'),
   p('2.5.2.3', 'Data entry validated', 'supplemental', 'x2-5-2-3-data-entry-validated'),
-  p('2.5.2.4', 'Error prevention review', 'content', 'x2-5-2-4-error-prevention-review'),
+  p('2.5.2.4', 'Error prevention review', 'assertion', 'x2-5-2-4-error-prevention-review'),
   g('2.6.1', 'Avoid physical harm'),
   p('2.6.1.1', 'No flashing over threshold', 'core', 'x2-6-1-1-no-flashing-over-threshold'),
   p('2.6.1.2', 'No flashing over threshold (no exceptions)', 'supplemental', 'x2-6-1-2-no-flashing-over-threshold-no-exceptions'),
@@ -240,12 +241,12 @@ const RAW = [
   p('2.6.1.5', 'Trigger warning available', 'core', 'x2-6-1-5-trigger-warning-available'),
   p('2.6.1.6', 'Haptic stimulation adjustable', 'core', 'x2-6-1-6-haptic-stimulation-adjustable'),
   p('2.6.1.7', 'Audio shifting adjustable', 'core', 'x2-6-1-7-audio-shifting-adjustable'),
-  p('2.6.1.8', 'Safe content review', 'content', 'x2-6-1-8-safe-content-review'),
+  p('2.6.1.8', 'Safe content review', 'assertion', 'x2-6-1-8-safe-content-review'),
   g('2.7.1', 'Recognizable layouts'),
-  p('2.7.1.1', 'Conventional layout review', 'content', 'x2-7-1-1-conventional-layout-review'),
+  p('2.7.1.1', 'Conventional layout review', 'assertion', 'x2-7-1-1-conventional-layout-review'),
   g('2.7.2', 'User orientation'),
   p('2.7.2.1', 'Page/view title available', 'core', 'x2-7-2-1-page-view-title-available'),
-  p('2.7.2.2', 'Location within product review', 'content', 'x2-7-2-2-location-within-product-review'),
+  p('2.7.2.2', 'Location within product review', 'assertion', 'x2-7-2-2-location-within-product-review'),
   p('2.7.2.3', 'All steps listed', 'core', 'x2-7-2-3-all-steps-listed'),
   p('2.7.2.4', 'Current step indicated', 'core', 'x2-7-2-4-current-step-indicated'),
   p('2.7.2.5', 'Page/view change notified', 'core', 'x2-7-2-5-page-view-change-notified'),
@@ -257,8 +258,8 @@ const RAW = [
   p('2.7.3.4', 'Heading structure available', 'supplemental', 'x2-7-3-4-heading-structure-available'),
   p('2.7.3.5', 'Order detectable', 'core', 'x2-7-3-5-order-detectable'),
   p('2.7.3.6', 'Blocks of content available (enhanced)', 'supplemental', 'x2-7-3-6-blocks-of-content-available-enhanced'),
-  p('2.7.3.7', 'Clear structure review', 'organization', 'x2-7-3-7-clear-structure-review'),
-  p('2.7.3.8', 'Key information usability testing', 'content', 'x2-7-3-8-key-information-usability-testing'),
+  p('2.7.3.7', 'Clear structure review', 'assertion', 'x2-7-3-7-clear-structure-review'),
+  p('2.7.3.8', 'Key information usability testing', 'assertion', 'x2-7-3-8-key-information-usability-testing'),
   g('2.7.4', 'No obstruction'),
   p('2.7.4.1', 'Overlay content dismissible', 'core', 'x2-7-4-1-overlay-content-dismissible'),
   g('2.8.1', 'Consistency'),
@@ -271,12 +272,12 @@ const RAW = [
   g('2.9.2', 'Adequate time'),
   p('2.9.2.1', 'Timeout adjustable', 'supplemental', 'x2-9-2-1-timeout-adjustable'),
   p('2.9.2.2', 'No time limits', 'supplemental', 'x2-9-2-2-no-time-limits'),
-  p('2.9.2.3', 'No unnecessary time limits', 'content', 'x2-9-2-3-no-unnecessary-time-limits'),
+  p('2.9.2.3', 'No unnecessary time limits', 'assertion', 'x2-9-2-3-no-unnecessary-time-limits'),
   p('2.9.2.4', 'Time limits conveyed', 'supplemental', 'x2-9-2-4-time-limits-conveyed'),
   g('2.9.3', 'Avoid deception'),
   p('2.9.3.1', 'Preselections visible', 'core', 'x2-9-3-1-preselections-visible'),
-  p('2.9.3.2', 'Deceptive practices usability testing', 'content', 'x2-9-3-2-deceptive-practices-usability-testing'),
-  p('2.9.3.3', 'Deceptive messaging expert review', 'content', 'x2-9-3-3-deceptive-messaging-expert-review'),
+  p('2.9.3.2', 'Deceptive practices usability testing', 'assertion', 'x2-9-3-2-deceptive-practices-usability-testing'),
+  p('2.9.3.3', 'Deceptive messaging expert review', 'assertion', 'x2-9-3-3-deceptive-messaging-expert-review'),
   g('2.9.4', 'Retain information'),
   p('2.9.4.1', 'Going back supported', 'supplemental', 'x2-9-4-1-going-back-supported'),
   p('2.9.4.2', 'No redundant entry', 'supplemental', 'x2-9-4-2-no-redundant-entry'),
@@ -286,22 +287,22 @@ const RAW = [
   p('2.9.5.2', 'Information requirements available at start', 'supplemental', 'x2-9-5-2-information-requirements-available-at-start'),
   p('2.9.5.3', 'Process instructions available', 'supplemental', 'x2-9-5-3-process-instructions-available'),
   g('2.9.6', 'Unnecessary steps'),
-  p('2.9.6.1', 'Usability testing for unnecessary steps', 'content', 'x2-9-6-1-usability-testing-for-unnecessary-steps'),
+  p('2.9.6.1', 'Usability testing for unnecessary steps', 'assertion', 'x2-9-6-1-usability-testing-for-unnecessary-steps'),
   g('2.10.1', 'Risk'),
   p('2.10.1.1', 'Consequences of choices explained', 'core', 'x2-10-1-1-consequences-of-choices-explained'),
   p('2.10.1.2', 'Consequences explained before agreement', 'supplemental', 'x2-10-1-2-consequences-explained-before-agreement'),
-  p('2.10.1.3', 'Diverse disabilities considered', 'content', 'x2-10-1-3-diverse-disabilities-considered'),
-  p('2.10.1.4', 'Algorithm inclusivity review', 'organization', 'x2-10-1-4-algorithm-inclusivity-review'),
+  p('2.10.1.3', 'Diverse disabilities considered', 'assertion', 'x2-10-1-3-diverse-disabilities-considered'),
+  p('2.10.1.4', 'Algorithm inclusivity review', 'assertion', 'x2-10-1-4-algorithm-inclusivity-review'),
   g('2.10.2', 'Algorithms'),
-  p('2.10.2.1', 'Inclusive data set', 'content', 'x2-10-2-1-inclusive-data-set'),
-  p('2.10.2.2', 'No harm from algorithms', 'content', 'x2-10-2-2-no-harm-from-algorithms'),
+  p('2.10.2.1', 'Inclusive data set', 'assertion', 'x2-10-2-1-inclusive-data-set'),
+  p('2.10.2.2', 'No harm from algorithms', 'assertion', 'x2-10-2-2-no-harm-from-algorithms'),
   g('2.11.1', 'Help available'),
   p('2.11.1.1', 'Consistent help available', 'supplemental', 'x2-11-1-1-consistent-help-available'),
   p('2.11.1.2', 'Contextual help available', 'supplemental', 'x2-11-1-2-contextual-help-available'),
   p('2.11.1.3', 'Disabled controls explained', 'supplemental', 'x2-11-1-3-disabled-controls-explained'),
   p('2.11.1.4', 'Sensory characteristics not relied on', 'core', 'x2-11-1-4-sensory-characteristics-not-relied-on'),
-  p('2.11.1.5', 'Supported decision-making review', 'content', 'x2-11-1-5-supported-decision-making-review'),
-  p('2.11.1.6', 'Help usability testing', 'content', 'x2-11-1-6-help-usability-testing'),
+  p('2.11.1.5', 'Supported decision-making review', 'assertion', 'x2-11-1-5-supported-decision-making-review'),
+  p('2.11.1.6', 'Help usability testing', 'assertion', 'x2-11-1-6-help-usability-testing'),
   g('2.11.2', 'Feedback'),
   p('2.11.2.1', 'Feedback mechanism available', 'supplemental', 'x2-11-2-1-feedback-mechanism-available'),
   g('2.12.1', 'Assistive technology control'),
@@ -437,13 +438,20 @@ export const UNMAPPED_RULES = {
   'on-input-navigation': 'The draft\'s change notifications (2.7.2.5, 2.12.5) cover different triggers from a change of context on input.',
 };
 
-/** The WCAG 3 tier a tag list asks for: wcag3-bronze, -silver or -gold,
- *  the highest when several are present; null for a WCAG 2 audit. */
-export function tierFromTags(tags) {
+/** The check set a value names, 'core' or 'supplemental', or null. */
+export function checkSetOf(value) {
+  const name = String(value ?? '').toLowerCase();
+  return CHECK_SETS.includes(name) ? name : RENAMED_SETS[name] ?? null;
+}
+
+/** The WCAG 3 check set a tag list asks for, wcag3-core or
+ *  wcag3-supplemental, the larger when both are present; null for a
+ *  WCAG 2 audit. */
+export function checkSetFromTags(tags) {
   let found = null;
   for (const tag of tags ?? []) {
-    const tier = /^wcag3-(bronze|silver|gold)$/.exec(tag)?.[1];
-    if (tier && (!found || TIERS.indexOf(tier) > TIERS.indexOf(found))) found = tier;
+    const set = /^wcag3-/.test(tag) ? checkSetOf(tag.slice(6)) : null;
+    if (set && (!found || CHECK_SETS.indexOf(set) > CHECK_SETS.indexOf(found))) found = set;
   }
   return found;
 }
@@ -456,33 +464,35 @@ export function requirementsForRule(ruleId) {
   });
 }
 
-/** Does the tier take in any requirement this rule tests? */
-export function ruleInTier(ruleId, tier) {
-  const types = TIER_TYPES[tier];
+/** Does the check set take in any requirement this rule tests? */
+export function ruleInCheckSet(ruleId, set) {
+  const types = SET_TYPES[set];
   return Boolean(types) && (RULE_REQUIREMENTS[ruleId] ?? [])
     .some((num) => types.has(provisionByNum.get(num).type));
 }
 
 /**
  * Rule selection shared by every runner. A tag list selects the rules that
- * carry any of its tags; a WCAG 3 tier tag also selects the rules its
- * requirements map to. An empty or absent list selects every rule.
+ * carry any of its tags; a WCAG 3 check set tag also selects the rules
+ * matched to its requirements. An empty or absent list selects every rule.
  */
 export function ruleMatchesTags(rule, tags) {
   if (!tags?.length) return true;
   if (rule.tags.some((tag) => tags.includes(tag))) return true;
-  const tier = tierFromTags(tags);
-  return Boolean(tier) && ruleInTier(rule.id, tier);
+  const set = checkSetFromTags(tags);
+  return Boolean(set) && ruleInCheckSet(rule.id, set);
 }
 
 /**
- * The tier as a human checklist, shaped like the WCAG 2 manual-review
- * entries: `level` carries the provision type and `principle` the
- * guideline. Every provision in the tier is listed, since no rule was
+ * The check set's requirements as a human checklist, shaped like the WCAG 2
+ * manual-review entries: `level` carries the provision type and `principle`
+ * the guideline. Every requirement in the set is listed, since no rule was
  * written for any of them; the ones a rule speaks to are 'partial'.
+ * Assertions are in neither set: they are not needed to conform, and only
+ * the people who make the content can make them.
  */
-export function manualReviewChecklist(tier) {
-  const types = TIER_TYPES[tier];
+export function manualReviewChecklist(set) {
+  const types = SET_TYPES[set];
   if (!types) return [];
   const partly = new Set(Object.values(RULE_REQUIREMENTS).flat());
   return provisions
@@ -498,12 +508,13 @@ export function manualReviewChecklist(tier) {
     }));
 }
 
-/** The results header for a WCAG 3 audit. */
-export function standardFor(tier) {
-  return { ...draftInfo, tier, tierLabel: TIER_LABELS[tier] };
+/** The results header for a WCAG 3 audit: the draft, the check set and
+ *  what it covers, as "core requirements". */
+export function standardFor(set) {
+  return { ...draftInfo, checkSet: set, scope: SET_SCOPES[set] };
 }
 
 export default {
-  draftInfo, TIERS, TIER_LABELS, provisions, RULE_REQUIREMENTS, UNMAPPED_RULES,
-  tierFromTags, requirementsForRule, ruleInTier, ruleMatchesTags, manualReviewChecklist, standardFor,
+  draftInfo, CHECK_SETS, provisions, RULE_REQUIREMENTS, UNMAPPED_RULES,
+  checkSetOf, checkSetFromTags, requirementsForRule, ruleInCheckSet, ruleMatchesTags, manualReviewChecklist, standardFor,
 };
