@@ -29,12 +29,12 @@ const TARGETS = 'a[href], button, input, select, [role="button"], [role="link"]'
  * These are keyboard affordances, not pointer targets — and their phantom
  * rects must not count as "crowding" for the real targets around them.
  */
-import { isInert } from '../../lib/dom.js';
+import { isInert, containsNode } from '../../lib/dom.js';
 
 // A web component's internal link and its enclosing light-DOM link are
 // not independent pointer targets. DOM contains() stops at shadow roots.
 function containsComposed(ancestor, element) {
-  if (ancestor.contains(element)) return true;
+  if (containsNode(ancestor, element)) return true;
   if (ancestor.getRootNode() === element.getRootNode() && !element.assignedSlot) return false;
   for (let node = element; node; node = node.assignedSlot ?? node.parentElement ?? node.getRootNode()?.host) {
     if (node === ancestor) return true;
@@ -145,7 +145,7 @@ function reachableRects(element, rect) {
     // Anything above it that is part of the same control is not an
     // obstruction: a button's own icon paints over the button, an overlay
     // label over its input. Only a genuinely separate element blocks it.
-    if (stack.slice(0, index).every((layer) => layer.contains(element) || element.contains(layer))) {
+    if (stack.slice(0, index).every((layer) => containsNode(layer, element) || containsNode(element, layer))) {
       reachable.push(fragment);
     }
   }
@@ -438,8 +438,8 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
       if (!win || typeof doc.elementsFromPoint !== 'function'
         || x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) return false;
       for (const layer of doc.elementsFromPoint(x, y)) {
-        const inJ = elements[j] === layer || elements[j].contains(layer);
-        const inI = elements[i] === layer || elements[i].contains(layer);
+        const inJ = elements[j] === layer || containsNode(elements[j], layer);
+        const inI = elements[i] === layer || containsNode(elements[i], layer);
         if (inJ && !inI) return true;
         if (inI && !inJ) return false;
       }
@@ -504,7 +504,7 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     const calculateObscuredRect = (i) => {
       let areas = null;
       for (const j of nearbyCandidates(i)) {
-        if (elements[j].contains(elements[i]) || elements[i].contains(elements[j])) continue; // same control, nested markup
+        if (containsNode(elements[j], elements[i]) || containsNode(elements[i], elements[j])) continue; // same control, nested markup
         if (encloses(rects[j], rects[i]) || encloses(rects[i], rects[j])) continue; // one control drawn twice
         // Two links to the same place are one control in two boxes (a
         // card's image link over its title link): clicks in the overlap

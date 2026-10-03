@@ -1,6 +1,7 @@
 // WAI forms tutorial: radio/checkbox groups need a group label — each
 // input's own label isn't enough to convey what the group asks.
 import { accessibleName, labelledByName } from '../../lib/accessible-name.js';
+import { containsNode } from '../../lib/dom.js';
 export default {
   id: 'fieldset-legend',
   name: 'Grouped field labels',
@@ -41,7 +42,7 @@ export default {
       // it empty (2026-08-25 overnight audit).
       const group = first.closest('fieldset, [role="group"], [role="radiogroup"]');
       const legend = group?.querySelector(':scope > legend');
-      const grouped = group && indexes.every((index) => group.contains(elements[index])) && (
+      const grouped = group && indexes.every((index) => containsNode(group, elements[index])) && (
         (legend && accessibleName(legend))
         || labelledByName(group)
         || group.getAttribute('aria-label')?.trim()

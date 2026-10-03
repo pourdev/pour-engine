@@ -20,6 +20,8 @@
 // aria-labelledby or aria-label has a title by another route and is left
 // alone. Sections with little text, or none, are the UI-component case the
 // criterion excludes.
+import { childrenOf } from '../../lib/dom.js';
+
 const HEADING = 'h1, h2, h3, h4, h5, h6, [role="heading"]';
 const SUBSTANTIVE = 'img, svg, video, audio, canvas, iframe, input, select, textarea, button';
 const SKIP = 'script, style, template, noscript';
@@ -70,7 +72,7 @@ export default {
     // corpus page and helped nobody.
     const item = element.closest('article');
     if (item && item.parentElement && !item.querySelector(HEADING)) {
-      const items = (node) => [...node.children].filter((child) => child.matches('article') || child.querySelector(':scope > article')).length;
+      const items = (node) => [...childrenOf(node)].filter((child) => child.matches('article') || child.querySelector(':scope > article')).length;
       const container = item.parentElement;
       if (items(container) >= 3 || (container.parentElement && items(container.parentElement) >= 3)) return { status: 'pass' };
     }

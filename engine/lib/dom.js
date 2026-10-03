@@ -149,12 +149,12 @@ function siblingPosition(element, index) {
   if (!positions) {
     const counts = new Map();
     positions = new WeakMap();
-    for (const child of parent.children) {
+    for (const child of childrenOf(parent)) {
       const position = (counts.get(child.tagName) ?? 0) + 1;
       counts.set(child.tagName, position);
       positions.set(child, { position, repeated: false });
     }
-    for (const child of parent.children) positions.get(child).repeated = counts.get(child.tagName) > 1;
+    for (const child of childrenOf(parent)) positions.get(child).repeated = counts.get(child.tagName) > 1;
     index.parents.set(parent, positions);
   }
   return positions.get(element);
@@ -213,6 +213,21 @@ export function attributesOf(element) {
   const own = element.attributes;
   if (own && typeof own.length === 'number' && typeof own.item === 'function') return own;
   return attributesGetter ? attributesGetter.call(element) : [];
+}
+
+/** An element's child elements and a node's contains(), read through the
+ *  prototype for the same reason: a booking form's field named "children"
+ *  (jetblue.com) or a word search's field named "contains" (buchstaben.com)
+ *  takes the place of the form's own property, and the audit threw. A
+ *  select in that place is iterable, so its options cannot be told from
+ *  the children by shape; the prototype is always asked. */
+const childrenGetter = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'children')?.get : null;
+export function childrenOf(element) {
+  return childrenGetter ? childrenGetter.call(element) : element.children;
+}
+const nodeContains = typeof Node !== 'undefined' ? Node.prototype.contains : null;
+export function containsNode(ancestor, node) {
+  return nodeContains ? nodeContains.call(ancestor, node) : ancestor.contains(node);
 }
 
 /** Element's opening markup (attributes) plus a snippet of its own text —

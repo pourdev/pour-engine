@@ -1,5 +1,6 @@
 // WCAG SC 4.1.2 Name, Role, Value (Level A)
 import { cumulativeOpacity } from '../../lib/contrast.js';
+import { containsNode } from '../../lib/dom.js';
 
 const FOCUSABLE = 'a[href], area[href], button, input, select, textarea, summary, iframe, '
   + 'audio[controls], video[controls], [contenteditable]:not([contenteditable="false"]), [tabindex]';
@@ -44,7 +45,7 @@ export default {
     let modal = null;
     try { modal = doc.querySelector('dialog:modal'); } catch { /* older engine */ }
     modal ??= [...doc.querySelectorAll('[aria-modal="true"]')].find(isRendered) ?? null;
-    if (modal && !element.contains(modal) && !modal.contains(element)) {
+    if (modal && !containsNode(element, modal) && !containsNode(modal, element)) {
       return {
         status: 'incomplete',
         message: `This aria-hidden element contains ${focusable.length} focusable element(s) while a modal dialog is open — fine if the modal traps keyboard focus, a failure if Tab can reach them. Check the trap by keyboard.`,

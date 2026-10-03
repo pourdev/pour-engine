@@ -2,6 +2,7 @@
 // Composite roles are meaningless without their required child roles —
 // role="list" with no listitems announces as an empty list.
 import { effectiveRole } from '../../lib/roles.js';
+import { childrenOf } from '../../lib/dom.js';
 // Every row of ARIA 1.2's Required Owned Elements table; verify:aria-tables
 // diffs this map against the spec (2026-09-01, after feed and row were
 // found missing).
@@ -112,7 +113,7 @@ export default {
     const role = effectiveRole(element);
     const required = REQUIRED_CHILDREN[role];
     if (!required) return { status: 'pass' };
-    const children = [...element.children, ...(element.shadowRoot?.children ?? [])]
+    const children = [...childrenOf(element), ...(element.shadowRoot?.children ?? [])]
       .filter((c) => !c.matches('script, style, template'));
     // A completely empty container is a lazy-load placeholder more often
     // than a defect — it announces as an empty list, which is accurate.

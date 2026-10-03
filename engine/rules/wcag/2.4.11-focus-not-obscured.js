@@ -17,7 +17,7 @@
 //
 // Sites that apply the spec's own sufficient technique — scroll-padding for
 // the overlay's edge — are not flagged at all.
-import { isInert } from '../../lib/dom.js';
+import { isInert, containsNode } from '../../lib/dom.js';
 
 const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
 
@@ -105,7 +105,7 @@ export function createFocusObscuredRule({ id, name, tags, help, helpUrl, partial
         if (index <= 0) return null;
         const above = stack.slice(0, index);
         return above.find((layer) =>
-          !layer.contains(element) && !element.contains(layer)
+          !containsNode(layer, element) && !containsNode(element, layer)
           && isObscuringOverlay(layer)
           && (partial ? overlaps : contained)(rect, layer.getBoundingClientRect())) ?? null;
       };

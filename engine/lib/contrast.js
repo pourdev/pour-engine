@@ -1,4 +1,5 @@
 // WCAG contrast math (WCAG 2.x, relative luminance per sRGB).
+import { containsNode } from './dom.js';
 
 // Computed colours do not all come back as `rgb()` any more. A colour the
 // author wrote in a modern syntax is returned in THAT syntax: Chrome and
@@ -610,7 +611,7 @@ export function backgroundObscured(element) {
   if (start === -1) return 'unverifiable';
 
   for (const layer of stack.slice(start + 1)) {
-    if (layer.contains(element)) {
+    if (containsNode(layer, element)) {
       const style = getComputedStyle(layer);
       if (style.backgroundImage !== 'none') return layer;
       const bg = parseColor(style.backgroundColor);
@@ -1001,7 +1002,7 @@ function scrimIn(layersAbove, element, win) {
   const rect = element.getBoundingClientRect();
   const found = [];
   for (const layer of layersAbove) {
-    if (layer.contains(element) || element.contains(layer)) continue;
+    if (containsNode(layer, element) || containsNode(element, layer)) continue;
     const style = getComputedStyle(layer);
     const color = parseColor(style.backgroundColor);
     const alpha = (color ? color.a : 0) * opacityOf(style);
@@ -1100,7 +1101,7 @@ export function paintedBackdrop(element) {
   }
   const layers = [];
   for (const layer of stack.slice(start + 1)) {
-    while (missing.length && !missing[0].contains(layer)) layers.push(missing.shift());
+    while (missing.length && !containsNode(missing[0], layer)) layers.push(missing.shift());
     layers.push(layer);
   }
   layers.push(...missing);
@@ -1466,7 +1467,7 @@ export function beneathOpaqueAncestor(element, media) {
   if (inTopLayer(element) || inTopLayer(media)) return false;
   const box = element.getBoundingClientRect();
   for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
-    if (ancestor.contains(media)) return false; // from here up the media is inside
+    if (containsNode(ancestor, media)) return false; // from here up the media is inside
     if (!createsStackingContext(ancestor)) continue;
     const style = getComputedStyle(ancestor);
     const color = parseColor(style.backgroundColor);
@@ -1479,7 +1480,7 @@ export function beneathOpaqueAncestor(element, media) {
     if (!insideRoundedBox(box, ancestor.getBoundingClientRect(), style)) continue;
     // The lowest stacking context holding both.
     let shared = ancestor.parentElement;
-    while (shared && !(createsStackingContext(shared) && shared.contains(media))) shared = shared.parentElement;
+    while (shared && !(createsStackingContext(shared) && containsNode(shared, media))) shared = shared.parentElement;
     if (!shared) return false;
     const over = paintRank(ancestor, shared);
     const under = paintRank(media, shared);
@@ -1489,7 +1490,7 @@ export function beneathOpaqueAncestor(element, media) {
     if (under.z !== over.z) return under.z < over.z;
     // Same layer and z-index: tree order, earlier paints first.
     return Boolean(under.node.compareDocumentPosition(over.node) & 4 /* FOLLOWING */)
-      && !under.node.contains(over.node);
+      && !containsNode(under.node, over.node);
   }
   return false;
 }

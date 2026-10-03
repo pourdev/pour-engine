@@ -1,5 +1,6 @@
 // WCAG SC 1.4.1 Use of Color (Level A)
 import { parseColor, contrastRatio, composite, effectiveBackground, backgroundImageSource, asRgb } from '../../lib/contrast.js';
+import { containsNode } from '../../lib/dom.js';
 
 // Split a computed list value ("a, b(c, d), e") on the commas OUTSIDE
 // parentheses: gradients and colour functions carry commas of their own.
@@ -326,7 +327,7 @@ export default {
       const range = element.ownerDocument.createRange();
       let sharesLine = false;
       for (let node = walker.nextNode(); node && !sharesLine; node = walker.nextNode()) {
-        if (!node.textContent.trim() || element.contains(node)) continue;
+        if (!node.textContent.trim() || containsNode(element, node)) continue;
         range.selectNodeContents(node);
         for (const r of range.getClientRects()) {
           if (r.width > 0 && mids.some((mid) => r.top <= mid && r.bottom >= mid)) { sharesLine = true; break; }

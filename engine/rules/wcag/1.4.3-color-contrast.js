@@ -7,6 +7,7 @@ import {
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
   showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor, lazyWithheldBackground } from '../../lib/contrast.js';
+import { childrenOf, containsNode } from '../../lib/dom.js';
 
 /** The first url() among a background-image list's layers, or null. */
 const firstLayerUrl = (css) => splitBackgroundLayers(css ?? '').map(backgroundLayerUrl).find(Boolean) ?? null;
@@ -215,7 +216,7 @@ function coveredByTextTwin(element) {
   const index = stack.indexOf(element);
   if (index <= 0) return false;
   return stack.slice(0, index).some((layer) =>
-    !layer.contains(element) && !element.contains(layer) && layer.textContent.trim() === text);
+    !containsNode(layer, element) && !containsNode(element, layer) && layer.textContent.trim() === text);
 }
 
 /** Do any of the element's own text boxes MEANINGFULLY overlap the given
@@ -361,7 +362,7 @@ function unaccountedScrim(element, imageCarrier) {
   const start = stack.indexOf(element);
   if (start === -1) return false;
   return stack.slice(start + 1).some((layer) => {
-    if (layer.contains(element) || layer === imageCarrier) return false; // ancestor chain: already composited
+    if (containsNode(layer, element) || layer === imageCarrier) return false; // ancestor chain: already composited
     const color = parseColor(getComputedStyle(layer).backgroundColor);
     return color && color.a > 0;
   });
@@ -396,7 +397,7 @@ function coveringLayer(element, imageCarrier) {
   const overlays = [];
   for (const layer of stack.slice(start + 1)) {
     if (layer === imageCarrier) return null;
-    if (layer.contains(element)) {
+    if (containsNode(layer, element)) {
       const own = parseColor(getComputedStyle(layer).backgroundColor);
       if (own && own.a > 0 && own.a < 1) overlays.push(own);
       continue;
@@ -424,7 +425,7 @@ function positionedPaintInside(carrier, element) {
   const point = textSamplePoint(element);
   if (!point) return false;
   for (const node of carrier.querySelectorAll('*')) {
-    if (node.contains(element) || element.contains(node)) continue;
+    if (containsNode(node, element) || containsNode(element, node)) continue;
     const style = getComputedStyle(node);
     if (style.position !== 'absolute' && style.position !== 'fixed') continue;
     const paints = (style.backgroundImage !== 'none' && !paintsNothing(style.backgroundImage))
@@ -744,7 +745,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
     // Level 1: B(Cb, Cs) = Cb * Cs. Keep groups, filters and generated paint
     // outside this narrow path; its backdrop is resolved below as usual.
     const ownMultiply = style.mixBlendMode === 'multiply'
-      && styleSource === element && !element.children.length && !element.shadowRoot
+      && styleSource === element && !childrenOf(element).length && !element.shadowRoot
       && parseColor(style.backgroundColor)?.a === 0 && style.backgroundImage === 'none'
       && style.filter === 'none' && (!style.backdropFilter || style.backdropFilter === 'none')
       && (!style.textShadow || style.textShadow === 'none')
@@ -871,7 +872,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
         const near = (r) => Math.min(groupRect.right, r.right) - Math.max(groupRect.left, r.left) >= 3
           && Math.min(groupRect.bottom, r.bottom) - Math.max(groupRect.top, r.top) >= 3;
         const overMedia = mediaRects(doc).some(({ element: media, rect: mediaRect }) =>
-          near(mediaRect) && !media.contains(element) && !element.contains(media) && textIntersects(element, mediaRect));
+          near(mediaRect) && !containsNode(media, element) && !containsNode(element, media) && textIntersects(element, mediaRect));
         if (overMedia) {
           return {
             status: 'incomplete',
@@ -879,7 +880,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
           };
         }
         const flipping = opaquePanelRects(doc).some(({ element: panel, rect, color }) =>
-          near(rect) && !panel.contains(element) && !element.contains(panel) && textIntersects(element, rect)
+          near(rect) && !containsNode(panel, element) && !containsNode(element, panel) && textIntersects(element, rect)
           && (contrastRatio(composite(group.text, color), composite(group.paint, color)) >= required) !== (groupRatio >= required));
         if (flipping) {
           return {
@@ -898,7 +899,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
         let groupScrim = groupPainted?.scrim ?? null;
         if (!groupScrim && groupPainted === 'offscreen') {
           const veil = viewportVeil(doc);
-          if (veil && !veil.contains(element)) groupScrim = [veil];
+          if (veil && !containsNode(veil, element)) groupScrim = [veil];
         }
         if (groupScrim) {
           const groupVeil = scrimPaint(groupScrim);
@@ -1034,7 +1035,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
     // in-viewport, hence never routed through this branch.)
     if (!scrimLayers && painted === 'offscreen') {
       const veil = viewportVeil(doc);
-      if (veil && !veil.contains(element)) scrimLayers = [veil];
+      if (veil && !containsNode(veil, element)) scrimLayers = [veil];
     }
     if (scrimLayers) {
       veilPaint = scrimPaint(scrimLayers);
@@ -1264,7 +1265,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
       // to a person: can paint order prove an opaque ancestor lies over it?
       const overMedia = mediaRects(doc).some(({ element: media, rect: mediaRect, hitTestBlind }) =>
         (!blindOnly || hitTestBlind) && near(mediaRect)
-        && !media.contains(element) && !element.contains(media)
+        && !containsNode(media, element) && !containsNode(element, media)
         && textIntersects(element, mediaRect)
         && !beneathOpaqueAncestor(element, media));
       if (overMedia) {
@@ -1275,7 +1276,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
       }
       const flipping = opaquePanelRects(doc).some(({ element: panel, rect, color, hitTestBlind }) =>
         (!blindOnly || hitTestBlind) && near(rect)
-        && !panel.contains(element) && !element.contains(panel)
+        && !containsNode(panel, element) && !containsNode(element, panel)
         && textIntersects(element, rect)
         && (ownMultiply || (contrastRatio(foreground, color) >= required) !== (direction === 'pass')));
       if (flipping) {
@@ -1308,7 +1309,7 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
           const inside = block.querySelectorAll('*');
           if (inside.length <= 2000) {
             for (const sibling of inside) {
-              if (sibling === element || sibling.contains(element) || element.contains(sibling)) continue;
+              if (sibling === element || containsNode(sibling, element) || containsNode(element, sibling)) continue;
               const siblingStyle = getComputedStyle(sibling);
               if (siblingStyle.position !== 'static' || siblingStyle.visibility === 'hidden') continue;
               const paint = parseColor(siblingStyle.backgroundColor);

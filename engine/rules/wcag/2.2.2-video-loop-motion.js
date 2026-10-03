@@ -21,6 +21,8 @@
 // reason pause-stop-hide skips spinners: flagging every small moving
 // thumbnail would bury the full-bleed hero that matters. Silence there is
 // abstaining, not clearing.
+import { containsNode } from '../../lib/dom.js';
+
 /** A visible, enabled button whose aria-controls names the video or an
  *  ancestor of it, looked up in the video's own document or shadow tree. */
 function pauseControlFor(video, isVisible) {
@@ -31,7 +33,7 @@ function pauseControlFor(video, isVisible) {
     if (control.disabled || !isVisible(control)) continue;
     for (const id of control.getAttribute('aria-controls').split(/\s+/)) {
       const target = id && byId(id);
-      if (target && (target === video || target.contains(video))) return control;
+      if (target && (target === video || containsNode(target, video))) return control;
     }
   }
   return null;
