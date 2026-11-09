@@ -43,15 +43,31 @@ function containsComposed(ancestor, element) {
 }
 
 function outsideHiddenOverflow(element, rect) {
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  // Where the target can be brought to. A scrollable ancestor lets the
+  // reader scroll it anywhere along that ancestor's own box, so past one the
+  // target's reach on that axis is the scroller's box: a list scrolled out of
+  // a panel that hides its overflow (a long table of contents, a row of tags
+  // scrolling sideways) is still in reach and still judged.
+  // The walk stops below the body: the root's and the body's overflow is the
+  // viewport's, and a page that hides it is locking its scroll behind a
+  // dialog for now (a benchmark page, 2026-11-09, under its consent banner),
+  // not parking everything below the fold out of reach; whether the
+  // document reaches a target is isHiddenFromPointer's question.
+  const { body, documentElement } = element.ownerDocument;
+  let { left, right, top, bottom } = rect;
+  for (let parent = element.parentElement; parent && parent !== body && parent !== documentElement; parent = parent.parentElement) {
     const style = getComputedStyle(parent);
     if (style.display === 'contents') continue; // no principal box to clip its children
     const x = /^(hidden|clip)$/.test(style.overflowX);
     const y = /^(hidden|clip)$/.test(style.overflowY);
-    if (!x && !y) continue;
+    const scrollsX = /^(auto|scroll)$/.test(style.overflowX);
+    const scrollsY = /^(auto|scroll)$/.test(style.overflowY);
+    if (!x && !y && !scrollsX && !scrollsY) continue;
     const clip = parent.getBoundingClientRect();
-    if ((x && (clip.width === 0 || rect.right <= clip.left || rect.left >= clip.right))
-      || (y && (clip.height === 0 || rect.bottom <= clip.top || rect.top >= clip.bottom))) return true;
+    if ((x && (clip.width === 0 || right <= clip.left || left >= clip.right))
+      || (y && (clip.height === 0 || bottom <= clip.top || top >= clip.bottom))) return true;
+    if (scrollsX) { left = clip.left; right = clip.right; }
+    if (scrollsY) { top = clip.top; bottom = clip.bottom; }
   }
   return false;
 }
@@ -358,13 +374,17 @@ export function createTargetSizeRule({ id, tags, help, helpUrl, min, spacingExce
     // Inert targets accept no pointer action at all, so they are neither
     // judged nor counted as crowders (bbc.com/news keeps 28 controls of a
     // closed menu in an inert subtree; the browser ignores every click on
-    // them, and so must the size judgment).
+    // them, and so must the size judgment). Nor are targets wholly outside
+    // an ancestor that hides its overflow: the slides a carousel has moved
+    // out of its window are painted nowhere and take no click until it
+    // moves them back (the benchmark's Mars demo, 2026-11-06, where links
+    // on the off-screen slides were failed as crowded by each other).
     const laidOut = [];
     for (let i = 0; i < elements.length; i++) {
       if (i % 64 === 0) await yieldToMain();
       const r = rects[i], element = elements[i];
       laidOut.push(r.width > 0 && r.height > 0 && !element.matches(':disabled') && !isInert(element)
-        && !isHiddenFromPointer(element, r) && !layoutSkipped(element));
+        && !isHiddenFromPointer(element, r) && !layoutSkipped(element) && !outsideHiddenOverflow(element, r));
     }
     const undersized = rects.map((r, i) => laidOut[i] && (r.width < min || r.height < min));
     // One rect fully inside another is one control drawn twice (stretched-

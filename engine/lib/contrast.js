@@ -1,5 +1,5 @@
 // WCAG contrast math (WCAG 2.x, relative luminance per sRGB).
-import { containsNode } from './dom.js';
+import { childrenOf, containsNode } from './dom.js';
 
 // Computed colours do not all come back as `rgb()` any more. A colour the
 // author wrote in a modern syntax is returned in THAT syntax: Chrome and
@@ -136,6 +136,9 @@ export function composite(top, bottom) {
 let backgroundCache = new WeakMap();
 let opacityCache = new WeakMap();
 let opacityAnimatorsCache = null;
+// Nodes read at full opacity while a verdict is re-checked as it would be
+// once a scroll reveal has run (see pendingReveal, withRevealed).
+const revealedNodes = new WeakSet();
 let mediaRectsCache = null;
 let panelRectsCache = null;
 let pseudoCache = new WeakMap();
@@ -477,6 +480,7 @@ export function restingOpacity(element) {
   const animators = opacityAnimators(element.ownerDocument);
   let product = 1;
   for (let node = element; node && node.nodeType === 1; node = node.parentElement ?? node.getRootNode()?.host) {
+    if (revealedNodes.has(node)) continue;
     if (animators.has(node)) {
       const rest = animators.get(node);
       product *= rest === null ? 1 : rest;
@@ -487,6 +491,53 @@ export function restingOpacity(element) {
   return product;
 }
 
+/** The nodes holding this text dim until it scrolls into view: an element
+ *  or flat-tree ancestor below full opacity that declares a transition on
+ *  opacity, around text that starts outside the viewport. That is how a
+ *  scroll reveal is built (an observer flips a class as the element enters
+ *  and the transition fades it in), so the dim state is the one nobody who
+ *  scrolls to the text sees. The page cannot say where the transition will
+ *  land, so a verdict that depends on it is a question for a person. Empty
+ *  when the text starts in view or nothing up the chain is fading.
+ *
+ *  Also empty when a fading node has a sibling of its own kind that is out
+ *  of view too and already at full opacity. Nothing has scrolled to that
+ *  sibling, so its opacity is not a reveal's work: the dim state is one of
+ *  the page's own states, as in a list that keeps every card but the active
+ *  one dim, and it is seen on screen wherever the reader scrolls (a
+ *  benchmark page, 2026-11-09: the inactive cards stayed at 46% in view). */
+export function pendingReveal(element) {
+  const view = element.ownerDocument.defaultView;
+  const outOfView = (rect) => !(rect.bottom > 0 && rect.top < view.innerHeight);
+  if (!view || !outOfView(element.getBoundingClientRect())) return [];
+  const nodes = [];
+  for (let node = element; node && node.nodeType === 1; node = node.parentElement ?? node.getRootNode()?.host) {
+    const style = getComputedStyle(node);
+    if (!((parseFloat(style.opacity) || 0) < 1)) continue;
+    const properties = style.transitionProperty.split(',').map((p) => p.trim());
+    const durations = style.transitionDuration.split(',').map((d) => parseFloat(d) || 0);
+    // The duration list repeats to the length of the property list.
+    if (!properties.some((p, i) => (p === 'opacity' || p === 'all') && durations[i % durations.length] > 0)) continue;
+    const parent = node.parentElement;
+    const settled = parent && [...childrenOf(parent)].some((other) => other !== node && other.tagName === node.tagName
+      && (parseFloat(getComputedStyle(other).opacity) || 0) >= 1 && outOfView(other.getBoundingClientRect()));
+    if (settled) return [];
+    nodes.push(node);
+  }
+  return nodes;
+}
+
+/** Runs judge() with these nodes read at full opacity, the state a scroll
+ *  reveal brings them to, and restores the reading after. */
+export async function withRevealed(nodes, judge) {
+  for (const node of nodes) revealedNodes.add(node);
+  opacityCache = new WeakMap();
+  try { return await judge(); } finally {
+    for (const node of nodes) revealedNodes.delete(node);
+    opacityCache = new WeakMap();
+  }
+}
+
 /** Product of the element's and its flat-tree ancestors' opacity, memoized
  *  per audit. Near-zero means the element isn't visually presented at all. */
 export function cumulativeOpacity(element) {
@@ -494,7 +545,7 @@ export function cumulativeOpacity(element) {
   let cached = opacityCache.get(element);
   if (cached === undefined) {
     const parent = element.parentElement ?? element.getRootNode()?.host ?? null;
-    cached = (parseFloat(getComputedStyle(element).opacity) || 0) * cumulativeOpacity(parent);
+    cached = (revealedNodes.has(element) ? 1 : (parseFloat(getComputedStyle(element).opacity) || 0)) * cumulativeOpacity(parent);
     opacityCache.set(element, cached);
   }
   return cached;
@@ -503,6 +554,7 @@ export function cumulativeOpacity(element) {
 /** One node's own opacity at rest: the landing value of a running
  *  animation on it, otherwise its computed opacity. */
 function nodeRestingOpacity(node) {
+  if (revealedNodes.has(node)) return 1;
   const animators = opacityAnimators(node.ownerDocument);
   if (animators.has(node)) {
     const rest = animators.get(node);

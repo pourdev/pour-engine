@@ -6,7 +6,7 @@ import {
   opacityAnimating, restingOpacity, mediaRects, inZeroClipSubtree,
   paintedBackdrop, opaquePanelRects, viewportVeil, textShadowHalo, textShadowNegligible,
   pseudoBackdropForText, filmedContrastBounds, backgroundColorSource, scrimPaint, applyOverlays,
-  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor, lazyWithheldBackground } from '../../lib/contrast.js';
+  showRatio, asRgb, splitBackgroundLayers, backgroundLayerUrl, sampleGridFor, opacityGroupPaint, pseudoTextColors, BOLD_WEIGHT, hasPaintEffects, isolatedBlendBackdrop, labelReferrers, beneathOpaqueAncestor, lazyWithheldBackground, pendingReveal, withRevealed } from '../../lib/contrast.js';
 import { childrenOf, containsNode } from '../../lib/dom.js';
 
 /** The first url() among a background-image list's layers, or null. */
@@ -1518,6 +1518,21 @@ export function createContrastRule({ id, name, tags, help, helpUrl, thresholds }
         status: 'incomplete',
         message: 'This text sits in a section whose background image is lazy-loaded and has not loaded yet, so it was measured against a background visitors never see. Scroll the page to this text and run the audit again, or check it by eye.',
       };
+    }
+    // Text held faint until it scrolls into view (see pendingReveal): when it
+    // meets the minimum at the opacity the reveal fades it to, the failure
+    // is a state no visitor who scrolls there sees, so it goes to a person.
+    // Text that still fails at full opacity keeps its failure.
+    const fading = pendingReveal(element);
+    if (fading.length) {
+      const revealed = await withRevealed(fading, () => judge(element, helpers));
+      if (revealed.status !== 'fail') {
+        const dim = Math.round(fading.reduce((product, node) => product * (parseFloat(getComputedStyle(node).opacity) || 0), 1) * 100);
+        return {
+          status: 'incomplete',
+          message: `This text starts out of view at ${dim}% opacity under an element that transitions its opacity, the way a scroll reveal fades content in. At full opacity it meets the minimum. Scroll to it and check that it ends at full opacity.`,
+        };
+      }
     }
     // A miss on a glyph that is not words: see glyphNotWords. Every fail
     // path passes through here, so this is said once. A glyph still owes
