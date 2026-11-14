@@ -101,3 +101,5 @@ accessibility-tooling ecosystem already shares, so reports interoperate
 with existing pipelines.
 
 MIT — see [LICENSE](LICENSE).
+
+pour is a registered trade mark in the UK, number UK00004432542. The MIT licence covers the code, not the name: forks are welcome under a name of their own.
